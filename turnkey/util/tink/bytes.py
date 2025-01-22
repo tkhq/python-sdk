@@ -17,11 +17,11 @@ import re
 # @throws {!Error}
 # @static
 #
-def fromHex(hex: str) -> bytearray:
-    if len(hex) % 2 != 0:
+def from_hex(hex_str: str) -> bytes:
+    if len(hex_str) % 2 != 0:
         raise "Hex string length must be multiple of 2"
     arr: bytearray = bytearray()
-    for i, c in enumerate(hex):
+    for i, c in enumerate(hex_str):
         if i % 2 == 0:
             arr.append(int(c, 16))
     return arr
@@ -33,9 +33,9 @@ def fromHex(hex: str) -> bytearray:
 # @return hex the output
 # @static
 #
-def toHex(bytes: bytearray) -> str:
+def to_hex(bytes_array: bytes) -> str:
     result: str = ""
-    for i in bytes:
+    for i in bytes_array:
         hex_byte: str = hex(i)
         result += hex_byte if len(hex_byte) > 1 else "0" + hex_byte
     return result
@@ -49,9 +49,9 @@ def toHex(bytes: bytearray) -> str:
 #     characters.
 # @return Stringification of the array.
 #
-def toByteString(bytes: bytearray) -> str:
+def to_byte_string(bytes_array: bytes) -> str:
     result: str = ""
-    for b in bytes:
+    for b in bytes_array:
         result += chr(b)
     return result
 
@@ -63,7 +63,7 @@ def toByteString(bytes: bytearray) -> str:
 # @return base64 output
 # @static
 #
-def toBase64(bytes: bytearray, opt_webSafe: bool = True) -> str:
-    encoded: str = re.sub(r'/=/g', '', base64.b64encode(toByteString(bytes)))
-    return encoded if not opt_webSafe else re.sub(r'/\//g', "_", re.sub(r'/\+/g', "-", encoded))
+def to_base64(bytes_array: bytearray, opt_web_safe: bool = False) -> str:
+    return re.sub(r'=', '', to_byte_string(base64.b64encode(bytes_array, ["-", "_"] if opt_web_safe else None)))
+
 
