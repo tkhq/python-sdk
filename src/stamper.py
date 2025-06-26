@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from base64 import urlsafe_b64encode
 import requests
 
-ENDPOINT = "https://api.turnkey.com/public/v1/whoami"
+ENDPOINT = "https://api.turnkey.com/public/v1/query/whoami"
 API_PUBLIC_KEY="<Turnkey API Public Key (that starts with 02 or 03)>"
 API_PRIVATE_KEY="<Turnkey API Private Key>"
 ORG_ID = "<your org ID>"
