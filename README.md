@@ -1,7 +1,7 @@
 # python-sdk
 This repository contains support for interacting with the Turnkey API using Python
 
-Unlike other languages ([Typescript](https://github.com/tkhq/sdk), [Ruby](https://github.com/tkhq/ruby-sdk)), we do not yet offer a full SDK for Rust.
+Unlike other languages ([Typescript](https://github.com/tkhq/sdk), [Ruby](https://github.com/tkhq/ruby-sdk)), we do not yet offer a full SDK for Python.
 
 If you are working on a project in Python and would benefit from a Python SDK please open an issue or get in touch with us (hello@turnkey.com) and we can discuss prioritizing this.
 
