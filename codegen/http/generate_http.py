@@ -1,0 +1,331 @@
+#!/usr/bin/env python3
+"""Generate HTTP client from OpenAPI specification."""
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Dict, Any
+
+# Add codegen directory to Python path
+CODEGEN_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(CODEGEN_DIR))
+
+from constants import (
+    COMMENT_HEADER,
+    VERSIONED_ACTIVITY_TYPES,
+    METHODS_WITH_ONLY_OPTIONAL_PARAMETERS,
+    TERMINAL_ACTIVITY_STATUSES,
+)
+from utils import (
+    to_snake_case,
+    extract_latest_versions,
+    method_type_from_method_name,
+)
+
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+SCHEMA_PATH = PROJECT_ROOT / "schema" / "public_api.swagger.json"
+OUTPUT_DIR = PROJECT_ROOT / "packages" / "http" / "src" / "turnkey_http" / "generated"
+OUTPUT_FILE = OUTPUT_DIR / "client.py"
+
+
+def generate_sdk_client(swagger: Dict[str, Any]) -> str:
+    """Generate the SDK client from Swagger spec."""
+    namespace = next((tag["name"] for tag in swagger.get("tags", []) if "name" in tag), None)
+    code_buffer = []
+    latest_versions = extract_latest_versions(swagger["definitions"])
+    
+    # Generate class header
+    code_buffer.append("""
+class TurnkeyClient:
+    \"\"\"Turnkey API HTTP client with auto-generated methods.\"\"\"
+    
+    def __init__(
+        self,
+        base_url: str,
+        stamper: ApiKeyStamper,
+        organization_id: str,
+        default_timeout: int = 30,
+        polling_interval_ms: int = 1000,
+        max_polling_retries: int = 3
+    ):
+        \"\"\"Initialize the Turnkey client.
+        
+        Args:
+            base_url: Base URL for the Turnkey API
+            stamper: API key stamper for authentication
+            organization_id: Organization ID
+            default_timeout: Default request timeout in seconds
+            polling_interval_ms: Polling interval for command status in milliseconds
+            max_polling_retries: Maximum number of polling retries
+        \"\"\"
+        self.base_url = base_url.rstrip("/")
+        self.stamper = stamper
+        self.organization_id = organization_id
+        self.default_timeout = default_timeout
+        self.polling_interval_ms = polling_interval_ms
+        self.max_polling_retries = max_polling_retries
+    
+    def _serialize_body(self, body: Any) -> str:
+        \"\"\"Serialize request body, handling Pydantic models.
+        
+        Args:
+            body: Request body (dict or Pydantic model)
+            
+        Returns:
+            JSON string
+        \"\"\"
+        # Check if it's a Pydantic model
+        if hasattr(body, 'model_dump'):
+            # Use by_alias=True to convert Python names back to API names (e.g., from_ -> from)
+            return json.dumps(body.model_dump(by_alias=True, exclude_none=True))
+        else:
+            return json.dumps(body)
+    
+    def _request(self, url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        \"\"\"Make a request to the Turnkey API.
+        
+        Args:
+            url: Endpoint URL
+            body: Request body
+            
+        Returns:
+            Response data
+            
+        Raises:
+            Exception: If request fails
+        \"\"\"
+        full_url = self.base_url + url
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+        
+        headers = {
+            stamp.stamp_header_name: stamp.stamp_header_value,
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            full_url,
+            headers=headers,
+            data=body_str,
+            timeout=self.default_timeout
+        )
+        
+        if not response.ok:
+            try:
+                error_data = response.json()
+                raise Exception(f"Turnkey API error: {error_data}")
+            except ValueError:
+                raise Exception(f"{response.status_code} {response.reason}")
+        
+        return response.json()
+    
+    def _command(self, url: str, body: Dict[str, Any], result_key: str) -> Dict[str, Any]:
+        \"\"\"Execute a command and poll for completion.
+        
+        Args:
+            url: Endpoint URL
+            body: Request body
+            result_key: Key to extract result from activity
+            
+        Returns:
+            Response data with activity result
+        \"\"\"
+        response_data = self._request(url, body)
+        activity = response_data.get("activity", {})
+        status = activity.get("status")
+        
+        if status not in TERMINAL_ACTIVITY_STATUSES:
+            # Poll for completion
+            activity_id = activity.get("id")
+            attempts = 0
+            
+            while attempts < self.max_polling_retries:
+                time.sleep(self.polling_interval_ms / 1000.0)
+                poll_response = self.get_activity({"activityId": activity_id})
+                poll_activity = poll_response.get("activity", {})
+                status = poll_activity.get("status")
+                
+                if status in TERMINAL_ACTIVITY_STATUSES:
+                    response_data = poll_response
+                    activity = poll_activity
+                    break
+                
+                attempts += 1
+        
+        # Extract result
+        result = activity.get("result", {})
+        if result_key in result:
+            return {**result[result_key], **response_data}
+        
+        return response_data
+    
+    def _activity_decision(self, url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        \"\"\"Execute an activity decision.
+        
+        Args:
+            url: Endpoint URL
+            body: Request body
+            
+        Returns:
+            Response data with activity result
+        \"\"\"
+        response_data = self._request(url, body)
+        activity = response_data.get("activity", {})
+        result = activity.get("result", {})
+        
+        return {**result, **response_data}
+""")
+    
+    # Generate methods for each endpoint
+    for path, methods in swagger["paths"].items():
+        operation = methods.get("post")
+        if not operation:
+            continue
+        
+        operation_id = operation.get("operationId")
+        if not operation_id:
+            continue
+        
+        operation_name_without_namespace = operation_id.replace(f"{namespace}_", "")
+        
+        if operation_name_without_namespace == "NOOPCodegenAnchor":
+            continue
+        
+        method_name = operation_name_without_namespace[0].lower() + operation_name_without_namespace[1:]
+        snake_method_name = to_snake_case(method_name)
+        method_type = method_type_from_method_name(method_name)
+        
+        # Extract description from OpenAPI spec
+        summary = operation.get("summary", "")
+        
+        input_type = f"T{operation_name_without_namespace}Body"
+        response_type = f"T{operation_name_without_namespace}Response"
+        
+        unversioned_activity_type = f"ACTIVITY_TYPE_{to_snake_case(operation_name_without_namespace).upper()}"
+        versioned_activity_type = VERSIONED_ACTIVITY_TYPES.get(unversioned_activity_type, unversioned_activity_type)
+        
+        # Generate method
+        if method_type == "query":
+            has_optional_params = method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
+            default_param = " = None" if has_optional_params else ""
+            
+            code_buffer.append(f"""
+    def {snake_method_name}(self, input: Optional[{input_type}]{default_param}) -> {response_type}:
+        if input is None:
+            input = {{}}
+        
+        body = {{
+            **input,
+            "organizationId": input.get("organizationId", self.organization_id)
+        }}
+        
+        return self._request("{path}", body)
+""")
+        
+        elif method_type == "command":
+            result_key = operation_name_without_namespace + "Result"
+            versioned_method_name = latest_versions[result_key]["formatted_key_name"]
+            
+            code_buffer.append(f"""
+    def {snake_method_name}(self, input: {input_type}) -> {response_type}:
+        organization_id = input.pop("organizationId", self.organization_id)
+        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        
+        body = {{
+            "parameters": input,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "{versioned_activity_type}"
+        }}
+        
+        return self._command("{path}", body, "{versioned_method_name}")
+""")
+        
+        elif method_type == "activityDecision":
+            code_buffer.append(f"""
+    def {snake_method_name}(self, input: {input_type}) -> {response_type}:
+        organization_id = input.pop("organizationId", self.organization_id)
+        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        
+        body = {{
+            "parameters": input,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "{unversioned_activity_type}"
+        }}
+        
+        return self._activity_decision("{path}", body)
+""")
+    
+    return "\n".join(code_buffer)
+
+
+def main():
+    """Generate HTTP client from OpenAPI spec."""
+    print("🔧 Turnkey SDK HTTP Generator")
+    print("=" * 50)
+    
+    # Check if schema file exists
+    if not SCHEMA_PATH.exists():
+        print(f"❌ Error: Schema file not found at {SCHEMA_PATH}")
+        print(f"   Please ensure public_api.swagger.json exists in the schema directory")
+        return 1
+    
+    print(f"📄 Schema: {SCHEMA_PATH}")
+    print(f"📁 Output: {OUTPUT_FILE}")
+    print()
+    
+    # Load swagger
+    with open(SCHEMA_PATH, "r") as f:
+        swagger = json.load(f)
+    
+    print(f"✓ Loaded OpenAPI spec")
+    print(f"  Found {len(swagger['paths'])} API endpoints")
+    print()
+    
+    # Generate client
+    print("🔨 Generating HTTP client...")
+    client_code = generate_sdk_client(swagger)
+    
+    # Build full output
+    output = f"{COMMENT_HEADER}\n\n"
+    output += "import json\nimport time\nfrom typing import Any, Dict, Optional\nimport requests\n"
+    output += "from turnkey_api_key_stamper import ApiKeyStamper\n"
+    output += "from turnkey_sdk_types.generated.types import *\n\n"
+    output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n"
+    output += client_code
+    
+    # Ensure output directory exists
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Write output
+    with open(OUTPUT_FILE, "w") as f:
+        f.write(output)
+    
+    print(f"✅ Generated {OUTPUT_FILE}")
+    print(f"   {len(swagger['paths'])} API methods")
+    
+    # Format with ruff
+    print()
+    print("🎨 Formatting with ruff...")
+    try:
+        subprocess.run(
+            ["ruff", "format", str(OUTPUT_FILE)],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print(f"✅ Formatted {OUTPUT_FILE}")
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Formatting failed: {e.stderr}")
+    except FileNotFoundError:
+        print("⚠️  ruff not found - skipping formatting")
+        print("   Install with: pip install ruff")
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

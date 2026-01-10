@@ -1,19 +1,109 @@
-# python-sdk
-This repository contains support for interacting with the Turnkey API using Python
+# Turnkey Python SDK
 
-Unlike other languages ([Typescript](https://github.com/tkhq/sdk), [Ruby](https://github.com/tkhq/ruby-sdk)), we do not yet offer a full SDK for Python.
+Python SDK for interacting with the Turnkey API.
 
-If you are working on a project in Python and would benefit from a Python SDK please open an issue or get in touch with us (hello@turnkey.com) and we can discuss prioritizing this.
+## 📦 Packages
 
-## Stamper 
+This is a monorepo containing multiple packages:
 
-The stamper utility stamps requests to the Turnkey API and authenticates the requests. In order to use the stamper to successfully make API calls you need to have a Turnkey organization and an associated API key that is authorized to make requests. 
+- **`turnkey-sdk-types`** - Pydantic type definitions for Turnkey API
+- **`turnkey-http`** - HTTP client for making API requests
+- **`turnkey-api-key-stamper`** - API key authentication stamper
 
-Fill out the fields at the beginning of the python stamper script with the correct information.
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+pip install turnkey-http turnkey-api-key-stamper
+```
+
+### Usage
+
+```python
+from turnkey_http import TurnkeyClient
+from turnkey_api_key_stamper import ApiKeyStamper, ApiKeyStamperConfig
+
+# Initialize stamper
+config = ApiKeyStamperConfig(
+    api_public_key="your-api-public-key",
+    api_private_key="your-api-private-key"
+)
+stamper = ApiKeyStamper(config)
+
+# Create client
+client = TurnkeyClient(
+    base_url="https://api.turnkey.com",
+    stamper=stamper,
+    organization_id="your-org-id"
+)
+
+# Make API calls
+response = client.get_whoami()
+print(response)
+```
+
+## 💻 Development Setup
+
+### Prerequisites
+
+- Python 3.8+
+- pip
+
+### Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/tkhq/python-sdk.git
+cd python-sdk
+```
+
+2. Create and activate virtual environment:
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install all packages in editable mode:
+```bash
+make install
+```
+
+This installs all packages with their dev dependencies in editable mode, so changes take effect immediately.
+
+
+### Code Generation
+
+This SDK uses code generation to stay in sync with the Turnkey API:
+
+```bash
+make generate          # Generate both types and HTTP client
+# or
+make generate-types    # Generate types only
+make generate-http     # Generate HTTP client only
+```
+
+### Testing
+
+```bash
+make test
+```
+
+## 📝 Project Structure
 
 ```
-ENDPOINT = "https://api.turnkey.com/public/v1/whoami"
-API_PUBLIC_KEY="<Turnkey API Public Key (that starts with 02 or 03)>"
-API_PRIVATE_KEY="<Turnkey API Private Key>"
-ORG_ID = "<your org ID>"
+python-sdk/
+├── packages/
+│   ├── sdk-types/         # Type definitions
+│   │   ├── src/
+│   │   └── scripts/       # Code generator
+│   ├── http/              # HTTP client
+│   │   ├── src/
+│   │   ├── scripts/       # Code generator
+│   │   └── tests/
+│   └── api-key-stamper/   # Authentication
+│       └── src/
+├── schema/                # OpenAPI spec
+└── examples/              # Example usage
 ```
+
