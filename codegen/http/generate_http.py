@@ -59,7 +59,7 @@ class TurnkeyClient:
             stamper: API key stamper for authentication
             organization_id: Organization ID
             default_timeout: Default request timeout in seconds
-            polling_interval_ms: Polling interval for command status in milliseconds
+            polling_interval_ms: Polling interval for activity status in milliseconds
             max_polling_retries: Maximum number of polling retries
         \"\"\"
         self.base_url = base_url.rstrip("/")
@@ -132,8 +132,8 @@ class TurnkeyClient:
         response_data = response.json()
         return response_type(**response_data)
     
-    def _command(self, url: str, body: Dict[str, Any], result_key: str, response_type: type) -> Any:
-        \"\"\"Execute a command and poll for completion.
+    def _activity(self, url: str, body: Dict[str, Any], result_key: str, response_type: type) -> Any:
+        \"\"\"Execute an activity and poll for completion.
         
         Args:
             url: Endpoint URL
@@ -144,7 +144,7 @@ class TurnkeyClient:
         Returns:
             Parsed response as Pydantic model with flattened result fields
         \"\"\"
-        # Make initial request
+        # Make initial request, we parse as activity response without result fields
         initial_response = self._request(url, body, TGetActivityResponse)
         
         # Check if we need to poll
@@ -275,7 +275,7 @@ class TurnkeyClient:
         return self._request("{path}", body, {response_type})
 """)
 
-        elif method_type == "command":
+        elif method_type == "activity":
             result_key = operation_name_without_namespace + "Result"
             versioned_method_name = latest_versions[result_key]["formatted_key_name"]
 
@@ -294,7 +294,7 @@ class TurnkeyClient:
             "type": "{versioned_activity_type}"
         }}
         
-        return self._command("{path}", body, "{versioned_method_name}", {response_type})
+        return self._activity("{path}", body, "{versioned_method_name}", {response_type})
 """)
 
         elif method_type == "activityDecision":

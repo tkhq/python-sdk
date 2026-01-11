@@ -143,7 +143,7 @@ def generate_inline_properties(
             elif "type" in schema:
                 prop_type = swagger_type_to_python(schema["type"], schema)
 
-            # For command response types, result fields should be optional since they're only present when completed
+            # For activity response types, result fields should be optional since they're only present when completed
             is_required = prop in required_props and not is_all_optional
             if not is_required:
                 prop_type = f"Optional[{prop_type}]"
@@ -230,7 +230,7 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
         )
 
         # --- RESPONSE TYPE GENERATION ---
-        if method_type == "command":
+        if method_type == "activity":
             result_type_name = None
             activity_type_key = None
             version_suffix = None
@@ -336,7 +336,7 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
 
         output += f"class {api_body_type_name}(TurnkeyBaseModel):\n"
 
-        if method_type in ("command", "activityDecision"):
+        if method_type in ("activity", "activityDecision"):
             output += "    timestampMs: Optional[str] = None\n"
             output += "    organizationId: Optional[str] = None\n"
 

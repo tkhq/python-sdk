@@ -56,7 +56,7 @@ def method_type_from_method_name(method_name: str) -> str:
         method_name: The method name (e.g., "getWhoami", "tGetWhoami", "createPrivateKeys")
 
     Returns:
-        Method type: "query", "command", "activityDecision", or "noop"
+        Method type: "query", "activity", "activityDecision", or "noop"
     """
     method_name_lower = method_name.lower()
 
@@ -75,4 +75,4 @@ def method_type_from_method_name(method_name: str) -> str:
         or method_name_lower.startswith("ttest")
     ):
         return "query"
-    return "command"
+    return "activity"

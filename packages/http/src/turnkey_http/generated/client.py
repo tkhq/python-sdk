@@ -34,7 +34,7 @@ class TurnkeyClient:
             stamper: API key stamper for authentication
             organization_id: Organization ID
             default_timeout: Default request timeout in seconds
-            polling_interval_ms: Polling interval for command status in milliseconds
+            polling_interval_ms: Polling interval for activity status in milliseconds
             max_polling_retries: Maximum number of polling retries
         """
         self.base_url = base_url.rstrip("/")
@@ -105,10 +105,10 @@ class TurnkeyClient:
         response_data = response.json()
         return response_type(**response_data)
 
-    def _command(
+    def _activity(
         self, url: str, body: Dict[str, Any], result_key: str, response_type: type
     ) -> Any:
-        """Execute a command and poll for completion.
+        """Execute an activity and poll for completion.
 
         Args:
             url: Endpoint URL
@@ -119,7 +119,7 @@ class TurnkeyClient:
         Returns:
             Parsed response as Pydantic model with flattened result fields
         """
-        # Make initial request
+        # Make initial request, we parse as activity response without result fields
         initial_response = self._request(url, body, TGetActivityResponse)
 
         # Check if we need to poll
@@ -751,7 +751,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_API_KEYS_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_api_keys",
             body,
             "createApiKeysResult",
@@ -774,7 +774,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_API_ONLY_USERS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_api_only_users",
             body,
             "createApiOnlyUsersResult",
@@ -797,7 +797,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_AUTHENTICATORS_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_authenticators",
             body,
             "createAuthenticatorsResult",
@@ -820,7 +820,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_FIAT_ON_RAMP_CREDENTIAL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_fiat_on_ramp_credential",
             body,
             "createFiatOnRampCredentialResult",
@@ -843,7 +843,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_INVITATIONS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_invitations",
             body,
             "createInvitationsResult",
@@ -866,7 +866,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_OAUTH2_CREDENTIAL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_oauth2_credential",
             body,
             "createOauth2CredentialResult",
@@ -889,7 +889,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_oauth_providers",
             body,
             "createOauthProvidersResult",
@@ -910,7 +910,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_POLICIES",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_policies",
             body,
             "createPoliciesResult",
@@ -931,7 +931,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_POLICY_V3",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_policy",
             body,
             "createPolicyResult",
@@ -954,7 +954,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_PRIVATE_KEY_TAG",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_private_key_tag",
             body,
             "createPrivateKeyTagResult",
@@ -977,7 +977,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_PRIVATE_KEYS_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_private_keys",
             body,
             "createPrivateKeysResultV2",
@@ -1000,7 +1000,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_READ_ONLY_SESSION",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_read_only_session",
             body,
             "createReadOnlySessionResult",
@@ -1023,7 +1023,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_READ_WRITE_SESSION_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_read_write_session",
             body,
             "createReadWriteSessionResultV2",
@@ -1046,7 +1046,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_SMART_CONTRACT_INTERFACE",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_smart_contract_interface",
             body,
             "createSmartContractInterfaceResult",
@@ -1069,7 +1069,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_sub_organization",
             body,
             "createSubOrganizationResultV7",
@@ -1090,7 +1090,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_USER_TAG",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_user_tag",
             body,
             "createUserTagResult",
@@ -1111,7 +1111,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_USERS_V3",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_users",
             body,
             "createUsersResult",
@@ -1132,7 +1132,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_WALLET",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_wallet",
             body,
             "createWalletResult",
@@ -1155,7 +1155,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_CREATE_WALLET_ACCOUNTS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/create_wallet_accounts",
             body,
             "createWalletAccountsResult",
@@ -1176,7 +1176,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_API_KEYS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_api_keys",
             body,
             "deleteApiKeysResult",
@@ -1199,7 +1199,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_AUTHENTICATORS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_authenticators",
             body,
             "deleteAuthenticatorsResult",
@@ -1222,7 +1222,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_FIAT_ON_RAMP_CREDENTIAL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_fiat_on_ramp_credential",
             body,
             "deleteFiatOnRampCredentialResult",
@@ -1245,7 +1245,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_INVITATION",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_invitation",
             body,
             "deleteInvitationResult",
@@ -1268,7 +1268,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_OAUTH2_CREDENTIAL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_oauth2_credential",
             body,
             "deleteOauth2CredentialResult",
@@ -1291,7 +1291,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_OAUTH_PROVIDERS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_oauth_providers",
             body,
             "deleteOauthProvidersResult",
@@ -1312,7 +1312,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_POLICIES",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_policies",
             body,
             "deletePoliciesResult",
@@ -1333,7 +1333,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_POLICY",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_policy",
             body,
             "deletePolicyResult",
@@ -1356,7 +1356,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_PRIVATE_KEY_TAGS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_private_key_tags",
             body,
             "deletePrivateKeyTagsResult",
@@ -1379,7 +1379,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_PRIVATE_KEYS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_private_keys",
             body,
             "deletePrivateKeysResult",
@@ -1402,7 +1402,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_SMART_CONTRACT_INTERFACE",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_smart_contract_interface",
             body,
             "deleteSmartContractInterfaceResult",
@@ -1425,7 +1425,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_SUB_ORGANIZATION",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_sub_organization",
             body,
             "deleteSubOrganizationResult",
@@ -1446,7 +1446,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_USER_TAGS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_user_tags",
             body,
             "deleteUserTagsResult",
@@ -1467,7 +1467,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_USERS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_users",
             body,
             "deleteUsersResult",
@@ -1490,7 +1490,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_WALLET_ACCOUNTS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_wallet_accounts",
             body,
             "deleteWalletAccountsResult",
@@ -1511,7 +1511,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_DELETE_WALLETS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/delete_wallets",
             body,
             "deleteWalletsResult",
@@ -1532,7 +1532,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_EMAIL_AUTH_V3",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/email_auth", body, "emailAuthResult", TEmailAuthResponse
         )
 
@@ -1552,7 +1552,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_ETH_SEND_RAW_TRANSACTION",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/eth_send_raw_transaction",
             body,
             "ethSendRawTransactionResult",
@@ -1575,7 +1575,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_ETH_SEND_TRANSACTION",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/eth_send_transaction",
             body,
             "ethSendTransactionResult",
@@ -1598,7 +1598,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_EXPORT_PRIVATE_KEY",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/export_private_key",
             body,
             "exportPrivateKeyResult",
@@ -1619,7 +1619,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_EXPORT_WALLET",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/export_wallet",
             body,
             "exportWalletResult",
@@ -1642,7 +1642,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_EXPORT_WALLET_ACCOUNT",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/export_wallet_account",
             body,
             "exportWalletAccountResult",
@@ -1665,7 +1665,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_IMPORT_PRIVATE_KEY",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/import_private_key",
             body,
             "importPrivateKeyResult",
@@ -1686,7 +1686,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_IMPORT_WALLET",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/import_wallet",
             body,
             "importWalletResult",
@@ -1707,7 +1707,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_INIT_FIAT_ON_RAMP",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/init_fiat_on_ramp",
             body,
             "initFiatOnRampResult",
@@ -1730,7 +1730,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_INIT_IMPORT_PRIVATE_KEY",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/init_import_private_key",
             body,
             "initImportPrivateKeyResult",
@@ -1753,7 +1753,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_INIT_IMPORT_WALLET",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/init_import_wallet",
             body,
             "initImportWalletResult",
@@ -1774,7 +1774,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_INIT_OTP_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/init_otp", body, "initOtpResult", TInitOtpResponse
         )
 
@@ -1792,7 +1792,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_INIT_OTP_AUTH_V3",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/init_otp_auth",
             body,
             "initOtpAuthResultV2",
@@ -1815,7 +1815,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_INIT_USER_EMAIL_RECOVERY_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/init_user_email_recovery",
             body,
             "initUserEmailRecoveryResult",
@@ -1836,7 +1836,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_OAUTH",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/oauth", body, "oauthResult", TOauthResponse
         )
 
@@ -1856,7 +1856,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_OAUTH2_AUTHENTICATE",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/oauth2_authenticate",
             body,
             "oauth2AuthenticateResult",
@@ -1877,7 +1877,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_OAUTH_LOGIN",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/oauth_login",
             body,
             "oauthLoginResult",
@@ -1898,7 +1898,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_OTP_AUTH",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/otp_auth", body, "otpAuthResult", TOtpAuthResponse
         )
 
@@ -1916,7 +1916,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_OTP_LOGIN",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/otp_login", body, "otpLoginResult", TOtpLoginResponse
         )
 
@@ -1934,7 +1934,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_RECOVER_USER",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/recover_user",
             body,
             "recoverUserResult",
@@ -1975,7 +1975,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_REMOVE_ORGANIZATION_FEATURE",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/remove_organization_feature",
             body,
             "removeOrganizationFeatureResult",
@@ -1998,7 +1998,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_SET_ORGANIZATION_FEATURE",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/set_organization_feature",
             body,
             "setOrganizationFeatureResult",
@@ -2019,7 +2019,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/sign_raw_payload",
             body,
             "signRawPayloadResult",
@@ -2042,7 +2042,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_SIGN_RAW_PAYLOADS",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/sign_raw_payloads",
             body,
             "signRawPayloadsResult",
@@ -2063,7 +2063,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_SIGN_TRANSACTION_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/sign_transaction",
             body,
             "signTransactionResult",
@@ -2084,7 +2084,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_STAMP_LOGIN",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/stamp_login",
             body,
             "stampLoginResult",
@@ -2107,7 +2107,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_FIAT_ON_RAMP_CREDENTIAL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_fiat_on_ramp_credential",
             body,
             "updateFiatOnRampCredentialResult",
@@ -2130,7 +2130,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_OAUTH2_CREDENTIAL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_oauth2_credential",
             body,
             "updateOauth2CredentialResult",
@@ -2151,7 +2151,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_POLICY_V2",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_policy",
             body,
             "updatePolicyResultV2",
@@ -2174,7 +2174,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_PRIVATE_KEY_TAG",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_private_key_tag",
             body,
             "updatePrivateKeyTagResult",
@@ -2197,7 +2197,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_ROOT_QUORUM",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_root_quorum",
             body,
             "updateRootQuorumResult",
@@ -2218,7 +2218,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_USER",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_user",
             body,
             "updateUserResult",
@@ -2241,7 +2241,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_USER_EMAIL",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_user_email",
             body,
             "updateUserEmailResult",
@@ -2262,7 +2262,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_USER_NAME",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_user_name",
             body,
             "updateUserNameResult",
@@ -2285,7 +2285,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_USER_PHONE_NUMBER",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_user_phone_number",
             body,
             "updateUserPhoneNumberResult",
@@ -2306,7 +2306,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_USER_TAG",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_user_tag",
             body,
             "updateUserTagResult",
@@ -2327,7 +2327,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_UPDATE_WALLET",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/update_wallet",
             body,
             "updateWalletResult",
@@ -2348,7 +2348,7 @@ class TurnkeyClient:
             "type": "ACTIVITY_TYPE_VERIFY_OTP",
         }
 
-        return self._command(
+        return self._activity(
             "/public/v1/submit/verify_otp", body, "verifyOtpResult", TVerifyOtpResponse
         )
 
