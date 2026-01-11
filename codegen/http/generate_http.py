@@ -32,10 +32,12 @@ OUTPUT_FILE = OUTPUT_DIR / "client.py"
 
 def generate_sdk_client(swagger: Dict[str, Any]) -> str:
     """Generate the SDK client from Swagger spec."""
-    namespace = next((tag["name"] for tag in swagger.get("tags", []) if "name" in tag), None)
+    namespace = next(
+        (tag["name"] for tag in swagger.get("tags", []) if "name" in tag), None
+    )
     code_buffer = []
     latest_versions = extract_latest_versions(swagger["definitions"])
-    
+
     # Generate class header
     code_buffer.append("""
 class TurnkeyClient:
@@ -143,10 +145,10 @@ class TurnkeyClient:
             Parsed response as Pydantic model with flattened result fields
         \"\"\"
         # Make initial request
-        response = self._request(url, body, response_type)
+        initial_response = self._request(url, body, TGetActivityResponse)
         
         # Check if we need to poll
-        activity = response.activity
+        activity = initial_response.activity
         
         if activity.status not in TERMINAL_ACTIVITY_STATUSES:
             # Poll for completion
@@ -157,11 +159,10 @@ class TurnkeyClient:
                 time.sleep(self.polling_interval_ms / 1000.0)
                 
                 # Poll activity status
-                poll_response = self.get_activity({"activityId": activity_id})
+                poll_response = self.get_activity(TGetActivityBody(activityId=activity_id))
                 activity = poll_response.activity
                 
                 if activity.status in TERMINAL_ACTIVITY_STATUSES:
-                    response = poll_response
                     break
                 
                 attempts += 1
@@ -175,12 +176,15 @@ class TurnkeyClient:
                 if result_data and hasattr(result_data, 'model_dump'):
                     # Flatten result fields into response
                     result_dict = result_data.model_dump(by_alias=True, exclude_none=True)
-                    response_dict = response.model_dump(by_alias=True, exclude_none=True)
-                    response_dict.update(result_dict)
-                    # Recreate response with flattened fields
-                    response = response_type(**response_dict)
+                    # Construct final response with activity and result fields
+                    response = response_type(
+                        activity=activity,
+                        **result_dict
+                    )
+                    return response
         
-        return response
+        # Return response with just the activity (no result fields)
+        return response_type(activity=activity)
     
     def _activity_decision(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         \"\"\"Execute an activity decision.
@@ -195,41 +199,48 @@ class TurnkeyClient:
         \"\"\"
         return self._request(url, body, response_type)
 """)
-    
+
     # Generate methods for each endpoint
     for path, methods in swagger["paths"].items():
         operation = methods.get("post")
         if not operation:
             continue
-        
+
         operation_id = operation.get("operationId")
         if not operation_id:
             continue
-        
+
         operation_name_without_namespace = operation_id.replace(f"{namespace}_", "")
-        
+
         if operation_name_without_namespace == "NOOPCodegenAnchor":
             continue
-        
-        method_name = operation_name_without_namespace[0].lower() + operation_name_without_namespace[1:]
+
+        method_name = (
+            operation_name_without_namespace[0].lower()
+            + operation_name_without_namespace[1:]
+        )
         snake_method_name = to_snake_case(method_name)
         method_type = method_type_from_method_name(method_name)
-        
+
         # Extract description from OpenAPI spec
         summary = operation.get("summary", "")
-        
+
         input_type = f"T{operation_name_without_namespace}Body"
         response_type = f"T{operation_name_without_namespace}Response"
-        
-        unversioned_activity_type = f"ACTIVITY_TYPE_{to_snake_case(operation_name_without_namespace).upper()}"
-        versioned_activity_type = VERSIONED_ACTIVITY_TYPES.get(unversioned_activity_type, unversioned_activity_type)
-        
+
+        unversioned_activity_type = (
+            f"ACTIVITY_TYPE_{to_snake_case(operation_name_without_namespace).upper()}"
+        )
+        versioned_activity_type = VERSIONED_ACTIVITY_TYPES.get(
+            unversioned_activity_type, unversioned_activity_type
+        )
+
         # Generate method
         if method_type == "query":
             has_optional_params = method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
-            
+
             if has_optional_params:
-                # Method has only optional parameters - allow None with default
+                # Method has only optional parameters so we allow None with default
                 code_buffer.append(f"""
     def {snake_method_name}(self, input: Optional[{input_type}] = None) -> {response_type}:
         if input is None:
@@ -248,7 +259,7 @@ class TurnkeyClient:
         return self._request("{path}", body, {response_type})
 """)
             else:
-                # Method has required parameters - input is required, not Optional
+                # Method has required parameters so input is required, not Optional
                 code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
         # Convert Pydantic model to dict
@@ -263,11 +274,11 @@ class TurnkeyClient:
         
         return self._request("{path}", body, {response_type})
 """)
-        
+
         elif method_type == "command":
             result_key = operation_name_without_namespace + "Result"
             versioned_method_name = latest_versions[result_key]["formatted_key_name"]
-            
+
             code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
         # Convert Pydantic model to dict
@@ -285,7 +296,7 @@ class TurnkeyClient:
         
         return self._command("{path}", body, "{versioned_method_name}", {response_type})
 """)
-        
+
         elif method_type == "activityDecision":
             code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
@@ -304,7 +315,7 @@ class TurnkeyClient:
         
         return self._activity_decision("{path}", body, {response_type})
 """)
-    
+
     return "\n".join(code_buffer)
 
 
@@ -312,29 +323,31 @@ def main():
     """Generate HTTP client from OpenAPI spec."""
     print("🔧 Turnkey SDK HTTP Generator")
     print("=" * 50)
-    
+
     # Check if schema file exists
     if not SCHEMA_PATH.exists():
         print(f"❌ Error: Schema file not found at {SCHEMA_PATH}")
-        print(f"   Please ensure public_api.swagger.json exists in the schema directory")
+        print(
+            f"   Please ensure public_api.swagger.json exists in the schema directory"
+        )
         return 1
-    
+
     print(f"📄 Schema: {SCHEMA_PATH}")
     print(f"📁 Output: {OUTPUT_FILE}")
     print()
-    
+
     # Load swagger
     with open(SCHEMA_PATH, "r") as f:
         swagger = json.load(f)
-    
+
     print(f"✓ Loaded OpenAPI spec")
     print(f"  Found {len(swagger['paths'])} API endpoints")
     print()
-    
+
     # Generate client
     print("🔨 Generating HTTP client...")
     client_code = generate_sdk_client(swagger)
-    
+
     # Build full output
     output = f"{COMMENT_HEADER}\n\n"
     output += "import json\nimport time\nfrom typing import Any, Dict, Optional\nimport requests\n"
@@ -342,17 +355,17 @@ def main():
     output += "from turnkey_sdk_types.generated.types import *\n\n"
     output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n"
     output += client_code
-    
+
     # Ensure output directory exists
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # Write output
     with open(OUTPUT_FILE, "w") as f:
         f.write(output)
-    
+
     print(f"✅ Generated {OUTPUT_FILE}")
     print(f"   {len(swagger['paths'])} API methods")
-    
+
     # Format with ruff
     print()
     print("🎨 Formatting with ruff...")
@@ -361,15 +374,15 @@ def main():
             ["ruff", "format", str(OUTPUT_FILE)],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
         )
         print(f"✅ Formatted {OUTPUT_FILE}")
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Formatting failed: {e.stderr}")
     except FileNotFoundError:
-        print("⚠️  ruff not found - skipping formatting")
+        print("⚠️  ruff not found so skipping formatting")
         print("   Install with: pip install ruff")
-    
+
     return 0
 
 

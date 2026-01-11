@@ -23,7 +23,9 @@ from utils import extract_latest_versions, method_type_from_method_name
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 SCHEMA_PATH = PROJECT_ROOT / "schema" / "public_api.swagger.json"
-OUTPUT_DIR = PROJECT_ROOT / "packages" / "sdk-types" / "src" / "turnkey_sdk_types" / "generated"
+OUTPUT_DIR = (
+    PROJECT_ROOT / "packages" / "sdk-types" / "src" / "turnkey_sdk_types" / "generated"
+)
 OUTPUT_FILE = OUTPUT_DIR / "types.py"
 
 
@@ -64,9 +66,11 @@ def is_valid_identifier(name: str) -> bool:
 
 def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
     """Generate Pydantic model from Swagger definition."""
-    if definition.get("type") == "object" and ("properties" in definition or "additionalProperties" in definition):
+    if definition.get("type") == "object" and (
+        "properties" in definition or "additionalProperties" in definition
+    ):
         output = f"class {name}(TurnkeyBaseModel):\n"
-        
+
         if "properties" in definition:
             required = definition.get("required", [])
             for prop, schema in definition["properties"].items():
@@ -75,16 +79,16 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
                     prop_type = ref_to_python(schema["$ref"])
                 elif "type" in schema:
                     prop_type = swagger_type_to_python(schema["type"], schema)
-                
+
                 # Make field optional if not required
                 is_required = prop in required
                 if not is_required:
                     prop_type = f"Optional[{prop_type}]"
-                
+
                 desc = schema.get("description", "")
                 safe_prop = safe_property_name(prop)
                 needs_alias, original_prop = needs_field_alias(prop)
-                
+
                 # Build Field definition
                 if needs_alias:
                     field_params = []
@@ -94,6 +98,7 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
                     if desc:
                         field_params.append(f'description="{desc}"')
                     field_def = f"Field({', '.join(field_params)})"
+                    output += f"    {safe_prop}: {prop_type} = {field_def}\n"
                 elif desc or not is_required:
                     field_params = []
                     if not is_required:
@@ -101,16 +106,16 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
                     if desc:
                         field_params.append(f'description="{desc}"')
                     field_def = f"Field({', '.join(field_params)})"
+                    output += f"    {safe_prop}: {prop_type} = {field_def}\n"
                 else:
-                    field_def = "..."
-                
-                output += f"    {safe_prop}: {prop_type} = {field_def}\n"
-        
+                    # Required field with no description or alias: bare annotation
+                    output += f"    {safe_prop}: {prop_type}\n"
+
         if not definition.get("properties"):
             output += "    pass\n"
-        
+
         return output + "\n"
-    
+
     if definition.get("type") == "string" and "enum" in definition:
         # Generate proper enum members: MEMBER_NAME = "MEMBER_VALUE"
         enum_members = []
@@ -120,11 +125,13 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
             enum_members.append(f'{e} = "{e}"')
         enum_values = "\n    ".join(enum_members)
         return f"class {name}(str, Enum):\n    {enum_values}\n\n"
-    
+
     return f"class {name}(TurnkeyBaseModel):\n    pass\n\n"
 
 
-def generate_inline_properties(definition: Optional[Dict[str, Any]], is_all_optional: bool = False) -> str:
+def generate_inline_properties(
+    definition: Optional[Dict[str, Any]], is_all_optional: bool = False
+) -> str:
     """Generate inline Pydantic properties."""
     output = ""
     if definition and "properties" in definition:
@@ -135,16 +142,16 @@ def generate_inline_properties(definition: Optional[Dict[str, Any]], is_all_opti
                 prop_type = ref_to_python(schema["$ref"])
             elif "type" in schema:
                 prop_type = swagger_type_to_python(schema["type"], schema)
-            
+
             # For command response types, result fields should be optional since they're only present when completed
             is_required = prop in required_props and not is_all_optional
             if not is_required:
                 prop_type = f"Optional[{prop_type}]"
-            
+
             desc = schema.get("description", "")
             safe_prop = safe_property_name(prop)
             needs_alias, original_prop = needs_field_alias(prop)
-            
+
             # Build Field definition
             if needs_alias:
                 field_params = []
@@ -154,6 +161,7 @@ def generate_inline_properties(definition: Optional[Dict[str, Any]], is_all_opti
                 if desc:
                     field_params.append(f'description="{desc}"')
                 field_def = f"Field({', '.join(field_params)})"
+                output += f"    {safe_prop}: {prop_type} = {field_def}\n"
             elif desc or not is_required:
                 field_params = []
                 if not is_required:
@@ -161,92 +169,141 @@ def generate_inline_properties(definition: Optional[Dict[str, Any]], is_all_opti
                 if desc:
                     field_params.append(f'description="{desc}"')
                 field_def = f"Field({', '.join(field_params)})"
+                output += f"    {safe_prop}: {prop_type} = {field_def}\n"
             else:
-                field_def = "..."
-            
-            output += f"    {safe_prop}: {prop_type} = {field_def}\n"
-    
+                # Required field with no description or alias: bare annotation
+                output += f"    {safe_prop}: {prop_type}\n"
+
     return output
 
 
 def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
     """Generate API types from Swagger paths."""
-    namespace = next((tag["name"] for tag in swagger.get("tags", []) if "name" in tag), None)
+    namespace = next(
+        (tag["name"] for tag in swagger.get("tags", []) if "name" in tag), None
+    )
     output = ""
     latest_versions = extract_latest_versions(swagger["definitions"])
     definitions = swagger["definitions"]
-    
+
     for path, methods in swagger["paths"].items():
         operation = methods.get("post")
         if not operation:
             continue
-        
+
         operation_id = operation.get("operationId")
         if not operation_id:
             continue
-        
-        operation_name_without_namespace = operation_id.replace(f"{namespace}_", f"{prefix}T")
-        method_name = operation_name_without_namespace[0].lower() + operation_name_without_namespace[1:]
+
+        operation_name_without_namespace = operation_id.replace(
+            f"{namespace}_", f"{prefix}T"
+        )
+        method_name = (
+            operation_name_without_namespace[0].lower()
+            + operation_name_without_namespace[1:]
+        )
         method_type = method_type_from_method_name(method_name)
-        
+
         # Get response schema
         response_schema = None
         if "responses" in operation and "200" in operation["responses"]:
-            response_schema = operation["responses"]["200"].get("schema", {}).get("$ref")
+            response_schema = (
+                operation["responses"]["200"].get("schema", {}).get("$ref")
+            )
         response_type_name = ref_to_python(response_schema) if response_schema else None
-        
+
         # Compose API type names
-        api_type_name = operation_name_without_namespace[0].upper() + operation_name_without_namespace[1:] + "Response"
-        api_body_type_name = operation_name_without_namespace[0].upper() + operation_name_without_namespace[1:] + "Body"
-        api_input_type_name = operation_name_without_namespace[0].upper() + operation_name_without_namespace[1:] + "Input"
-        
+        api_type_name = (
+            operation_name_without_namespace[0].upper()
+            + operation_name_without_namespace[1:]
+            + "Response"
+        )
+        api_body_type_name = (
+            operation_name_without_namespace[0].upper()
+            + operation_name_without_namespace[1:]
+            + "Body"
+        )
+        api_input_type_name = (
+            operation_name_without_namespace[0].upper()
+            + operation_name_without_namespace[1:]
+            + "Input"
+        )
+
         # --- RESPONSE TYPE GENERATION ---
         if method_type == "command":
             result_type_name = None
             activity_type_key = None
             version_suffix = None
-            
+
             parameters = operation.get("parameters", [])
             for param in parameters:
                 if param.get("in") == "body" and "$ref" in param.get("schema", {}):
                     req_type_name = ref_to_python(param["schema"]["$ref"])
                     req_def = definitions.get(req_type_name)
-                    if req_def and "properties" in req_def and "type" in req_def["properties"]:
+                    if (
+                        req_def
+                        and "properties" in req_def
+                        and "type" in req_def["properties"]
+                    ):
                         type_prop = req_def["properties"]["type"]
                         if "enum" in type_prop and type_prop["enum"]:
-                            activity_type_key = strip_version_suffix(type_prop["enum"][0])
+                            activity_type_key = strip_version_suffix(
+                                type_prop["enum"][0]
+                            )
                             mapped = VERSIONED_ACTIVITY_TYPES.get(activity_type_key)
                             if mapped:
                                 version_suffix_match = re.search(r"(V\d+)$", mapped)
-                                version_suffix = version_suffix_match.group(1) if version_suffix_match else ""
-                            
+                                version_suffix = (
+                                    version_suffix_match.group(1)
+                                    if version_suffix_match
+                                    else ""
+                                )
+
                             base_activity = re.sub(r"^v\d+", "", req_type_name)
-                            base_activity = re.sub(r"Request(V\d+)?$", "", base_activity)
+                            base_activity = re.sub(
+                                r"Request(V\d+)?$", "", base_activity
+                            )
                             result_base = base_activity + "Result"
                             result_key = None
-                            
+
                             if result_base in latest_versions:
                                 if version_suffix:
-                                    candidate = next((k for k in definitions.keys() if k.startswith("v1" + base_activity + "Result") and k.endswith(version_suffix)), None)
+                                    candidate = next(
+                                        (
+                                            k
+                                            for k in definitions.keys()
+                                            if k.startswith(
+                                                "v1" + base_activity + "Result"
+                                            )
+                                            and k.endswith(version_suffix)
+                                        ),
+                                        None,
+                                    )
                                     if candidate:
                                         result_key = candidate
                                 if not result_key:
-                                    result_key = latest_versions[result_base]["full_name"]
-                            
+                                    result_key = latest_versions[result_base][
+                                        "full_name"
+                                    ]
+
                             if result_key:
                                 result_type_name = result_key
-            
+
             output += f"class {api_type_name}(TurnkeyBaseModel):\n"
             output += "    activity: v1Activity\n"
             if result_type_name and result_type_name in definitions:
-                # Result fields are optional since they're only present when activity completes
-                result_props = generate_inline_properties(definitions[result_type_name], is_all_optional=True)
+                # Include result fields as required - they're present when function returns successfully
+                result_props = generate_inline_properties(
+                    definitions[result_type_name], is_all_optional=False
+                )
                 if result_props.strip():  # Only add if there are actual properties
                     output += result_props
             output += "\n\n"
-        
+
         elif method_type in ("query", "noop"):
-            resp_def = definitions.get(response_type_name) if response_type_name else None
+            resp_def = (
+                definitions.get(response_type_name) if response_type_name else None
+            )
             if resp_def:
                 if "properties" in resp_def:
                     output += f"class {api_type_name}(TurnkeyBaseModel):\n"
@@ -254,60 +311,84 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                     output += "\n\n"
                 else:
                     output += f"class {api_type_name}(TurnkeyBaseModel):\n    pass\n\n"
-        
+
         elif method_type == "activityDecision":
-            activity_type = definitions.get(response_type_name) if response_type_name else None
+            activity_type = (
+                definitions.get(response_type_name) if response_type_name else None
+            )
             if activity_type and "properties" in activity_type:
                 output += f"class {api_type_name}(TurnkeyBaseModel):\n"
                 output += generate_inline_properties(activity_type)
                 output += "\n\n"
-        
+
         # --- REQUEST TYPE GENERATION ---
         request_type_def = None
         request_type_name = None
         parameters = operation.get("parameters", [])
-        
+
         for param in parameters:
             if param.get("in") == "body" and "$ref" in param.get("schema", {}):
                 request_type_name = ref_to_python(param["schema"]["$ref"])
                 request_type_def = definitions.get(request_type_name)
-        
+
         if not request_type_def:
             continue
-        
+
         output += f"class {api_body_type_name}(TurnkeyBaseModel):\n"
-        
+
         if method_type in ("command", "activityDecision"):
-            output += "    timestampMs: Optional[str]\n"
-            output += "    organizationId: Optional[str]\n"
-            
-            if "properties" in request_type_def and "parameters" in request_type_def["properties"]:
+            output += "    timestampMs: Optional[str] = None\n"
+            output += "    organizationId: Optional[str] = None\n"
+
+            if (
+                "properties" in request_type_def
+                and "parameters" in request_type_def["properties"]
+            ):
                 params_prop = request_type_def["properties"]["parameters"]
                 if "$ref" in params_prop:
-                    is_all_optional = method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
+                    is_all_optional = (
+                        method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
+                    )
                     intent_type_name = ref_to_python(params_prop["$ref"])
-                    
-                    base_activity = re.sub(r"^v\d+", "", request_type_name).replace(re.compile(r"Request(V\d+)?$").pattern, "")
-                    activity_type_key = strip_version_suffix(request_type_def["properties"]["type"]["enum"][0])
+
+                    base_activity = re.sub(r"^v\d+", "", request_type_name).replace(
+                        re.compile(r"Request(V\d+)?$").pattern, ""
+                    )
+                    activity_type_key = strip_version_suffix(
+                        request_type_def["properties"]["type"]["enum"][0]
+                    )
                     mapped = VERSIONED_ACTIVITY_TYPES.get(activity_type_key)
                     version_suffix = None
                     if mapped:
                         version_suffix_match = re.search(r"(V\d+)$", mapped)
-                        version_suffix = version_suffix_match.group(1) if version_suffix_match else ""
-                    
+                        version_suffix = (
+                            version_suffix_match.group(1)
+                            if version_suffix_match
+                            else ""
+                        )
+
                     adjusted_intent_type_name = intent_type_name
                     if version_suffix or mapped:
-                        candidate = next((k for k in definitions.keys() if k.startswith("v1" + base_activity + "Intent") and k.endswith(version_suffix)), None)
+                        candidate = next(
+                            (
+                                k
+                                for k in definitions.keys()
+                                if k.startswith("v1" + base_activity + "Intent")
+                                and k.endswith(version_suffix)
+                            ),
+                            None,
+                        )
                         if candidate:
                             adjusted_intent_type_name = candidate
-                    
+
                     intent_def = definitions.get(adjusted_intent_type_name)
                     output += generate_inline_properties(intent_def, is_all_optional)
-        
+
         elif method_type in ("query", "noop"):
-            output += "    organizationId: Optional[str]\n"
+            output += "    organizationId: Optional[str] = None\n"
             if "properties" in request_type_def:
                 is_all_optional = method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
+                required_props = request_type_def.get("required", [])
                 for prop, schema in request_type_def["properties"].items():
                     if prop == "organizationId":
                         continue
@@ -316,18 +397,42 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                         prop_type = ref_to_python(schema["$ref"])
                     elif "type" in schema:
                         prop_type = swagger_type_to_python(schema["type"], schema)
-                    
+
+                    # Check if field is required
+                    is_required = prop in required_props and not is_all_optional
+                    if not is_required:
+                        prop_type = f"Optional[{prop_type}]"
+
                     desc = schema.get("description", "")
-                    if desc:
-                        output += f'    """{desc}"""\n'
-                    
-                    prop_name = prop if is_valid_identifier(prop) else f'"{prop}"'
-                    output += f"    {prop_name}: {prop_type}\n"
-        
+                    safe_prop = safe_property_name(prop)
+                    needs_alias, original_prop = needs_field_alias(prop)
+
+                    # Build Field definition
+                    if needs_alias:
+                        field_params = []
+                        if not is_required:
+                            field_params.append("default=None")
+                        field_params.append(f'alias="{original_prop}"')
+                        if desc:
+                            field_params.append(f'description="{desc}"')
+                        field_def = f"Field({', '.join(field_params)})"
+                        output += f"    {safe_prop}: {prop_type} = {field_def}\n"
+                    elif desc or not is_required:
+                        field_params = []
+                        if not is_required:
+                            field_params.append("default=None")
+                        if desc:
+                            field_params.append(f'description="{desc}"')
+                        field_def = f"Field({', '.join(field_params)})"
+                        output += f"    {safe_prop}: {prop_type} = {field_def}\n"
+                    else:
+                        # Required field with no description or alias: bare annotation
+                        output += f"    {safe_prop}: {prop_type}\n"
+
         output += "\n\n"
         output += f"class {api_input_type_name}(TurnkeyBaseModel):\n"
         output += f"    body: {api_body_type_name}\n\n\n"
-    
+
     return output
 
 
@@ -335,23 +440,25 @@ def main():
     """Generate types from OpenAPI spec."""
     print("🔧 Turnkey SDK Types Generator")
     print("=" * 50)
-    
+
     # Check if schema file exists
     if not SCHEMA_PATH.exists():
         print(f"❌ Error: Schema file not found at {SCHEMA_PATH}")
-        print(f"   Please ensure public_api.swagger.json exists in the schema directory")
+        print(
+            f"   Please ensure public_api.swagger.json exists in the schema directory"
+        )
         return 1
-    
+
     print(f"📄 Schema: {SCHEMA_PATH}")
     print(f"📁 Output: {OUTPUT_FILE}")
     print()
-    
+
     # Load swagger
     with open(SCHEMA_PATH, "r") as f:
         swagger_main = json.load(f)
-    
+
     print(f"✓ Loaded OpenAPI spec")
-    
+
     # Generate output
     output = f"{COMMENT_HEADER}\n\n"
     output += "from __future__ import annotations\n"
@@ -361,32 +468,33 @@ def main():
     output += "\n# Base class with shared configuration\n"
     output += "class TurnkeyBaseModel(BaseModel):\n"
     output += "    model_config = ConfigDict(populate_by_name=True)\n\n"
-    
+
     # --- Base Types ---
     output += "# --- Base Types from Swagger Definitions ---\n\n"
-    
+
     for def_name, definition in swagger_main["definitions"].items():
-        if (definition.get("type") == "object" and "properties" in definition) or \
-           (definition.get("type") == "string" and "enum" in definition):
+        if (definition.get("type") == "object" and "properties" in definition) or (
+            definition.get("type") == "string" and "enum" in definition
+        ):
             output += generate_python_type(def_name, definition)
         else:
             output += f"class {def_name}(TurnkeyBaseModel):\n    pass\n\n"
-    
+
     # --- API Types ---
     output += "\n# --- API Types from Swagger Paths ---\n\n"
     output += generate_api_types(swagger_main)
-    
+
     # Ensure output directory exists
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # Write output
     with open(OUTPUT_FILE, "w") as f:
         f.write(output)
-    
+
     print(f"✅ Generated {OUTPUT_FILE}")
     print(f"   {len(swagger_main['definitions'])} base types")
     print(f"   {len(swagger_main['paths'])} API endpoints")
-    
+
     # Format with ruff
     print()
     print("🎨 Formatting with ruff...")
@@ -395,7 +503,7 @@ def main():
             ["ruff", "format", str(OUTPUT_FILE)],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
         )
         print(f"✅ Formatted {OUTPUT_FILE}")
     except subprocess.CalledProcessError as e:
@@ -403,7 +511,7 @@ def main():
     except FileNotFoundError:
         print("⚠️  ruff not found - skipping formatting")
         print("   Install with: pip install ruff")
-    
+
     return 0
 
 

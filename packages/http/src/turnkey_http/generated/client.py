@@ -120,10 +120,10 @@ class TurnkeyClient:
             Parsed response as Pydantic model with flattened result fields
         """
         # Make initial request
-        response = self._request(url, body, response_type)
+        initial_response = self._request(url, body, TGetActivityResponse)
 
         # Check if we need to poll
-        activity = response.activity
+        activity = initial_response.activity
 
         if activity.status not in TERMINAL_ACTIVITY_STATUSES:
             # Poll for completion
@@ -134,11 +134,12 @@ class TurnkeyClient:
                 time.sleep(self.polling_interval_ms / 1000.0)
 
                 # Poll activity status
-                poll_response = self.get_activity({"activityId": activity_id})
+                poll_response = self.get_activity(
+                    TGetActivityBody(activityId=activity_id)
+                )
                 activity = poll_response.activity
 
                 if activity.status in TERMINAL_ACTIVITY_STATUSES:
-                    response = poll_response
                     break
 
                 attempts += 1
@@ -158,14 +159,12 @@ class TurnkeyClient:
                     result_dict = result_data.model_dump(
                         by_alias=True, exclude_none=True
                     )
-                    response_dict = response.model_dump(
-                        by_alias=True, exclude_none=True
-                    )
-                    response_dict.update(result_dict)
-                    # Recreate response with flattened fields
-                    response = response_type(**response_dict)
+                    # Construct final response with activity and result fields
+                    response = response_type(activity=activity, **result_dict)
+                    return response
 
-        return response
+        # Return response with just the activity (no result fields)
+        return response_type(activity=activity)
 
     def _activity_decision(
         self, url: str, body: Dict[str, Any], response_type: type

@@ -23,16 +23,11 @@ BASE_URL = os.getenv("TURNKEY_BASE_URL", "https://api.turnkey.com")
 def client():
     """Create a Turnkey client instance for testing."""
     config = ApiKeyStamperConfig(
-        api_public_key=API_PUBLIC_KEY,
-        api_private_key=API_PRIVATE_KEY
+        api_public_key=API_PUBLIC_KEY, api_private_key=API_PRIVATE_KEY
     )
     stamper = ApiKeyStamper(config)
-    
-    return TurnkeyClient(
-        base_url=BASE_URL,
-        stamper=stamper,
-        organization_id=ORG_ID
-    )
+
+    return TurnkeyClient(base_url=BASE_URL, stamper=stamper, organization_id=ORG_ID)
 
 
 @pytest.fixture
