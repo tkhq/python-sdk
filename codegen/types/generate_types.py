@@ -112,7 +112,13 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
         return output + "\n"
     
     if definition.get("type") == "string" and "enum" in definition:
-        enum_values = "\n    ".join([f'"{e}"' for e in definition["enum"]])
+        # Generate proper enum members: MEMBER_NAME = "MEMBER_VALUE"
+        enum_members = []
+        for e in definition["enum"]:
+            # Use the enum value as both the member name and value
+            # This allows both EnumClass.MEMBER_NAME and "MEMBER_VALUE" string to work
+            enum_members.append(f'{e} = "{e}"')
+        enum_values = "\n    ".join(enum_members)
         return f"class {name}(str, Enum):\n    {enum_values}\n\n"
     
     return f"class {name}(TurnkeyBaseModel):\n    pass\n\n"
@@ -130,6 +136,7 @@ def generate_inline_properties(definition: Optional[Dict[str, Any]], is_all_opti
             elif "type" in schema:
                 prop_type = swagger_type_to_python(schema["type"], schema)
             
+            # For command response types, result fields should be optional since they're only present when completed
             is_required = prop in required_props and not is_all_optional
             if not is_required:
                 prop_type = f"Optional[{prop_type}]"
@@ -213,7 +220,8 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                                 version_suffix_match = re.search(r"(V\d+)$", mapped)
                                 version_suffix = version_suffix_match.group(1) if version_suffix_match else ""
                             
-                            base_activity = re.sub(r"^v\d+", "", req_type_name).replace(re.compile(r"Request(V\d+)?$").pattern, "")
+                            base_activity = re.sub(r"^v\d+", "", req_type_name)
+                            base_activity = re.sub(r"Request(V\d+)?$", "", base_activity)
                             result_base = base_activity + "Result"
                             result_key = None
                             
@@ -228,13 +236,16 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                             if result_key:
                                 result_type_name = result_key
             
-            output += f"class {api_type_name}(TurnkeyBaseModel):\n\n"
+            output += f"class {api_type_name}(TurnkeyBaseModel):\n"
             output += "    activity: v1Activity\n"
             if result_type_name and result_type_name in definitions:
-                output += generate_inline_properties(definitions[result_type_name])
+                # Result fields are optional since they're only present when activity completes
+                result_props = generate_inline_properties(definitions[result_type_name], is_all_optional=True)
+                if result_props.strip():  # Only add if there are actual properties
+                    output += result_props
             output += "\n\n"
         
-        elif method_type in ("query", "noop", "proxy"):
+        elif method_type in ("query", "noop"):
             resp_def = definitions.get(response_type_name) if response_type_name else None
             if resp_def:
                 if "properties" in resp_def:
@@ -300,23 +311,6 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                 for prop, schema in request_type_def["properties"].items():
                     if prop == "organizationId":
                         continue
-                    prop_type = "Any"
-                    if "$ref" in schema:
-                        prop_type = ref_to_python(schema["$ref"])
-                    elif "type" in schema:
-                        prop_type = swagger_type_to_python(schema["type"], schema)
-                    
-                    desc = schema.get("description", "")
-                    if desc:
-                        output += f'    """{desc}"""\n'
-                    
-                    prop_name = prop if is_valid_identifier(prop) else f'"{prop}"'
-                    output += f"    {prop_name}: {prop_type}\n"
-        
-        elif method_type == "proxy":
-            if "properties" in request_type_def:
-                is_all_optional = method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
-                for prop, schema in request_type_def["properties"].items():
                     prop_type = "Any"
                     if "$ref" in schema:
                         prop_type = ref_to_python(schema["$ref"])

@@ -72,8 +72,7 @@ http/
 │       └── generated/         # Auto-generated client (do not edit manually)
 ├── scripts/
 │   └── generate.py           # Code generation script
-├── tests/
-│   └── test_http_client.py
+├── tests/                    # Test suite
 ├── pyproject.toml
 └── README.md
 ```

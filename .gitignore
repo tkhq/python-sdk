@@ -11,6 +11,9 @@ env/
 ENV/
 .venv
 
+# Environment variables
+.env
+
 # Distribution / packaging
 build/
 dist/

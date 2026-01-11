@@ -45,30 +45,39 @@ class TurnkeyClient:
         self.max_polling_retries = max_polling_retries
 
     def _serialize_body(self, body: Any) -> str:
-        """Serialize request body, handling Pydantic models.
+        """Serialize request body, handling Pydantic models recursively.
 
         Args:
-            body: Request body (dict or Pydantic model)
+            body: Request body (dict, Pydantic model, list, or primitive)
 
         Returns:
             JSON string
         """
-        # Check if it's a Pydantic model
-        if hasattr(body, "model_dump"):
-            # Use by_alias=True to convert Python names back to API names (e.g., from_ -> from)
-            return json.dumps(body.model_dump(by_alias=True, exclude_none=True))
-        else:
-            return json.dumps(body)
 
-    def _request(self, url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        def serialize_value(value):
+            """Recursively serialize values, converting Pydantic models to dicts."""
+            if hasattr(value, "model_dump"):
+                return value.model_dump(by_alias=True, exclude_none=True)
+            elif isinstance(value, dict):
+                return {k: serialize_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [serialize_value(item) for item in value]
+            else:
+                return value
+
+        serialized = serialize_value(body)
+        return json.dumps(serialized)
+
+    def _request(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         """Make a request to the Turnkey API.
 
         Args:
             url: Endpoint URL
             body: Request body
+            response_type: Pydantic model class for response parsing
 
         Returns:
-            Response data
+            Parsed response as Pydantic model
 
         Raises:
             Exception: If request fails
@@ -93,595 +102,697 @@ class TurnkeyClient:
             except ValueError:
                 raise Exception(f"{response.status_code} {response.reason}")
 
-        return response.json()
+        response_data = response.json()
+        return response_type(**response_data)
 
     def _command(
-        self, url: str, body: Dict[str, Any], result_key: str
-    ) -> Dict[str, Any]:
+        self, url: str, body: Dict[str, Any], result_key: str, response_type: type
+    ) -> Any:
         """Execute a command and poll for completion.
 
         Args:
             url: Endpoint URL
             body: Request body
-            result_key: Key to extract result from activity
+            result_key: Key to extract result from activity when completed
+            response_type: Pydantic model class for response parsing
 
         Returns:
-            Response data with activity result
+            Parsed response as Pydantic model with flattened result fields
         """
-        response_data = self._request(url, body)
-        activity = response_data.get("activity", {})
-        status = activity.get("status")
+        # Make initial request
+        response = self._request(url, body, response_type)
 
-        if status not in TERMINAL_ACTIVITY_STATUSES:
+        # Check if we need to poll
+        activity = response.activity
+
+        if activity.status not in TERMINAL_ACTIVITY_STATUSES:
             # Poll for completion
-            activity_id = activity.get("id")
+            activity_id = activity.id
             attempts = 0
 
             while attempts < self.max_polling_retries:
                 time.sleep(self.polling_interval_ms / 1000.0)
-                poll_response = self.get_activity({"activityId": activity_id})
-                poll_activity = poll_response.get("activity", {})
-                status = poll_activity.get("status")
 
-                if status in TERMINAL_ACTIVITY_STATUSES:
-                    response_data = poll_response
-                    activity = poll_activity
+                # Poll activity status
+                poll_response = self.get_activity({"activityId": activity_id})
+                activity = poll_response.activity
+
+                if activity.status in TERMINAL_ACTIVITY_STATUSES:
+                    response = poll_response
                     break
 
                 attempts += 1
 
-        # Extract result
-        result = activity.get("result", {})
-        if result_key in result:
-            return {**result[result_key], **response_data}
+        # If activity completed successfully, flatten result fields into response
+        if (
+            activity.status == "ACTIVITY_STATUS_COMPLETED"
+            and hasattr(activity, "result")
+            and activity.result
+        ):
+            result = activity.result
+            # Get the versioned result key (e.g., 'createApiKeysResultV2')
+            if hasattr(result, result_key):
+                result_data = getattr(result, result_key)
+                if result_data and hasattr(result_data, "model_dump"):
+                    # Flatten result fields into response
+                    result_dict = result_data.model_dump(
+                        by_alias=True, exclude_none=True
+                    )
+                    response_dict = response.model_dump(
+                        by_alias=True, exclude_none=True
+                    )
+                    response_dict.update(result_dict)
+                    # Recreate response with flattened fields
+                    response = response_type(**response_dict)
 
-        return response_data
+        return response
 
-    def _activity_decision(self, url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _activity_decision(
+        self, url: str, body: Dict[str, Any], response_type: type
+    ) -> Any:
         """Execute an activity decision.
 
         Args:
             url: Endpoint URL
             body: Request body
+            response_type: Pydantic model class for response parsing
 
         Returns:
-            Response data with activity result
+            Parsed response as Pydantic model
         """
-        response_data = self._request(url, body)
-        activity = response_data.get("activity", {})
-        result = activity.get("result", {})
+        return self._request(url, body, response_type)
 
-        return {**result, **response_data}
+    def get_activity(self, input: TGetActivityBody) -> TGetActivityResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-    def get_activity(self, input: Optional[TGetActivityBody]) -> TGetActivityResponse:
-        if input is None:
-            input = {}
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_activity", body)
+        return self._request(
+            "/public/v1/query/get_activity", body, TGetActivityResponse
+        )
 
-    def get_api_key(self, input: Optional[TGetApiKeyBody]) -> TGetApiKeyResponse:
-        if input is None:
-            input = {}
+    def get_api_key(self, input: TGetApiKeyBody) -> TGetApiKeyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_api_key", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/get_api_key", body, TGetApiKeyResponse)
 
     def get_api_keys(
         self, input: Optional[TGetApiKeysBody] = None
     ) -> TGetApiKeysResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_api_keys", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/get_api_keys", body, TGetApiKeysResponse)
 
     def get_attestation_document(
-        self, input: Optional[TGetAttestationDocumentBody]
+        self, input: TGetAttestationDocumentBody
     ) -> TGetAttestationDocumentResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_attestation", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_attestation", body, TGetAttestationDocumentResponse
+        )
 
     def get_authenticator(
-        self, input: Optional[TGetAuthenticatorBody]
+        self, input: TGetAuthenticatorBody
     ) -> TGetAuthenticatorResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_authenticator", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_authenticator", body, TGetAuthenticatorResponse
+        )
 
     def get_authenticators(
-        self, input: Optional[TGetAuthenticatorsBody]
+        self, input: TGetAuthenticatorsBody
     ) -> TGetAuthenticatorsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_authenticators", body)
+        body = {"organizationId": organization_id, **input_dict}
 
-    def get_boot_proof(
-        self, input: Optional[TGetBootProofBody]
-    ) -> TGetBootProofResponse:
-        if input is None:
-            input = {}
+        return self._request(
+            "/public/v1/query/get_authenticators", body, TGetAuthenticatorsResponse
+        )
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+    def get_boot_proof(self, input: TGetBootProofBody) -> TGetBootProofResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        return self._request("/public/v1/query/get_boot_proof", body)
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-    def get_gas_usage(self, input: Optional[TGetGasUsageBody]) -> TGetGasUsageResponse:
-        if input is None:
-            input = {}
+        body = {"organizationId": organization_id, **input_dict}
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        return self._request(
+            "/public/v1/query/get_boot_proof", body, TGetBootProofResponse
+        )
 
-        return self._request("/public/v1/query/get_gas_usage", body)
+    def get_gas_usage(self, input: TGetGasUsageBody) -> TGetGasUsageResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_gas_usage", body, TGetGasUsageResponse
+        )
 
     def get_latest_boot_proof(
-        self, input: Optional[TGetLatestBootProofBody]
+        self, input: TGetLatestBootProofBody
     ) -> TGetLatestBootProofResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_latest_boot_proof", body)
+        body = {"organizationId": organization_id, **input_dict}
 
-    def get_nonces(self, input: Optional[TGetNoncesBody]) -> TGetNoncesResponse:
-        if input is None:
-            input = {}
+        return self._request(
+            "/public/v1/query/get_latest_boot_proof", body, TGetLatestBootProofResponse
+        )
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+    def get_nonces(self, input: TGetNoncesBody) -> TGetNoncesResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        return self._request("/public/v1/query/get_nonces", body)
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/get_nonces", body, TGetNoncesResponse)
 
     def get_oauth2_credential(
-        self, input: Optional[TGetOauth2CredentialBody]
+        self, input: TGetOauth2CredentialBody
     ) -> TGetOauth2CredentialResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_oauth2_credential", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_oauth2_credential", body, TGetOauth2CredentialResponse
+        )
 
     def get_oauth_providers(
-        self, input: Optional[TGetOauthProvidersBody]
+        self, input: TGetOauthProvidersBody
     ) -> TGetOauthProvidersResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_oauth_providers", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_oauth_providers", body, TGetOauthProvidersResponse
+        )
 
     def get_on_ramp_transaction_status(
-        self, input: Optional[TGetOnRampTransactionStatusBody]
+        self, input: TGetOnRampTransactionStatusBody
     ) -> TGetOnRampTransactionStatusResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_onramp_transaction_status", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_onramp_transaction_status",
+            body,
+            TGetOnRampTransactionStatusResponse,
+        )
 
     def get_organization(
         self, input: Optional[TGetOrganizationBody] = None
     ) -> TGetOrganizationResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_organization", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_organization", body, TGetOrganizationResponse
+        )
 
     def get_organization_configs(
-        self, input: Optional[TGetOrganizationConfigsBody]
+        self, input: TGetOrganizationConfigsBody
     ) -> TGetOrganizationConfigsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_organization_configs", body)
+        body = {"organizationId": organization_id, **input_dict}
 
-    def get_policy(self, input: Optional[TGetPolicyBody]) -> TGetPolicyResponse:
-        if input is None:
-            input = {}
+        return self._request(
+            "/public/v1/query/get_organization_configs",
+            body,
+            TGetOrganizationConfigsResponse,
+        )
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+    def get_policy(self, input: TGetPolicyBody) -> TGetPolicyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        return self._request("/public/v1/query/get_policy", body)
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/get_policy", body, TGetPolicyResponse)
 
     def get_policy_evaluations(
-        self, input: Optional[TGetPolicyEvaluationsBody]
+        self, input: TGetPolicyEvaluationsBody
     ) -> TGetPolicyEvaluationsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_policy_evaluations", body)
+        body = {"organizationId": organization_id, **input_dict}
 
-    def get_private_key(
-        self, input: Optional[TGetPrivateKeyBody]
-    ) -> TGetPrivateKeyResponse:
-        if input is None:
-            input = {}
+        return self._request(
+            "/public/v1/query/get_policy_evaluations",
+            body,
+            TGetPolicyEvaluationsResponse,
+        )
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+    def get_private_key(self, input: TGetPrivateKeyBody) -> TGetPrivateKeyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        return self._request("/public/v1/query/get_private_key", body)
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_private_key", body, TGetPrivateKeyResponse
+        )
 
     def get_send_transaction_status(
-        self, input: Optional[TGetSendTransactionStatusBody]
+        self, input: TGetSendTransactionStatusBody
     ) -> TGetSendTransactionStatusResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_send_transaction_status", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_send_transaction_status",
+            body,
+            TGetSendTransactionStatusResponse,
+        )
 
     def get_smart_contract_interface(
-        self, input: Optional[TGetSmartContractInterfaceBody]
+        self, input: TGetSmartContractInterfaceBody
     ) -> TGetSmartContractInterfaceResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_smart_contract_interface", body)
+        body = {"organizationId": organization_id, **input_dict}
 
-    def get_user(self, input: Optional[TGetUserBody]) -> TGetUserResponse:
-        if input is None:
-            input = {}
+        return self._request(
+            "/public/v1/query/get_smart_contract_interface",
+            body,
+            TGetSmartContractInterfaceResponse,
+        )
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+    def get_user(self, input: TGetUserBody) -> TGetUserResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        return self._request("/public/v1/query/get_user", body)
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-    def get_wallet(self, input: Optional[TGetWalletBody]) -> TGetWalletResponse:
-        if input is None:
-            input = {}
+        body = {"organizationId": organization_id, **input_dict}
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        return self._request("/public/v1/query/get_user", body, TGetUserResponse)
 
-        return self._request("/public/v1/query/get_wallet", body)
+    def get_wallet(self, input: TGetWalletBody) -> TGetWalletResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/get_wallet", body, TGetWalletResponse)
 
     def get_wallet_account(
-        self, input: Optional[TGetWalletAccountBody]
+        self, input: TGetWalletAccountBody
     ) -> TGetWalletAccountResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/get_wallet_account", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_wallet_account", body, TGetWalletAccountResponse
+        )
 
     def get_activities(
         self, input: Optional[TGetActivitiesBody] = None
     ) -> TGetActivitiesResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_activities", body)
+        body = {"organizationId": organization_id, **input_dict}
 
-    def get_app_proofs(
-        self, input: Optional[TGetAppProofsBody]
-    ) -> TGetAppProofsResponse:
-        if input is None:
-            input = {}
+        return self._request(
+            "/public/v1/query/list_activities", body, TGetActivitiesResponse
+        )
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+    def get_app_proofs(self, input: TGetAppProofsBody) -> TGetAppProofsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        return self._request("/public/v1/query/list_app_proofs", body)
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_app_proofs", body, TGetAppProofsResponse
+        )
 
     def list_fiat_on_ramp_credentials(
-        self, input: Optional[TListFiatOnRampCredentialsBody]
+        self, input: TListFiatOnRampCredentialsBody
     ) -> TListFiatOnRampCredentialsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_fiat_on_ramp_credentials", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_fiat_on_ramp_credentials",
+            body,
+            TListFiatOnRampCredentialsResponse,
+        )
 
     def list_oauth2_credentials(
-        self, input: Optional[TListOauth2CredentialsBody]
+        self, input: TListOauth2CredentialsBody
     ) -> TListOauth2CredentialsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_oauth2_credentials", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_oauth2_credentials",
+            body,
+            TListOauth2CredentialsResponse,
+        )
 
     def get_policies(
         self, input: Optional[TGetPoliciesBody] = None
     ) -> TGetPoliciesResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_policies", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_policies", body, TGetPoliciesResponse
+        )
 
     def list_private_key_tags(
-        self, input: Optional[TListPrivateKeyTagsBody]
+        self, input: TListPrivateKeyTagsBody
     ) -> TListPrivateKeyTagsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_private_key_tags", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_private_key_tags", body, TListPrivateKeyTagsResponse
+        )
 
     def get_private_keys(
         self, input: Optional[TGetPrivateKeysBody] = None
     ) -> TGetPrivateKeysResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_private_keys", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_private_keys", body, TGetPrivateKeysResponse
+        )
 
     def get_smart_contract_interfaces(
-        self, input: Optional[TGetSmartContractInterfacesBody]
+        self, input: TGetSmartContractInterfacesBody
     ) -> TGetSmartContractInterfacesResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_smart_contract_interfaces", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_smart_contract_interfaces",
+            body,
+            TGetSmartContractInterfacesResponse,
+        )
 
     def get_sub_org_ids(
         self, input: Optional[TGetSubOrgIdsBody] = None
     ) -> TGetSubOrgIdsResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_suborgs", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_suborgs", body, TGetSubOrgIdsResponse
+        )
 
     def list_user_tags(
         self, input: Optional[TListUserTagsBody] = None
     ) -> TListUserTagsResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_user_tags", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_user_tags", body, TListUserTagsResponse
+        )
 
     def get_users(self, input: Optional[TGetUsersBody] = None) -> TGetUsersResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_users", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/list_users", body, TGetUsersResponse)
 
     def get_verified_sub_org_ids(
-        self, input: Optional[TGetVerifiedSubOrgIdsBody]
+        self, input: TGetVerifiedSubOrgIdsBody
     ) -> TGetVerifiedSubOrgIdsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_verified_suborgs", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_verified_suborgs",
+            body,
+            TGetVerifiedSubOrgIdsResponse,
+        )
 
     def get_wallet_accounts(
-        self, input: Optional[TGetWalletAccountsBody]
+        self, input: TGetWalletAccountsBody
     ) -> TGetWalletAccountsResponse:
-        if input is None:
-            input = {}
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_wallet_accounts", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_wallet_accounts", body, TGetWalletAccountsResponse
+        )
 
     def get_wallets(
         self, input: Optional[TGetWalletsBody] = None
     ) -> TGetWalletsResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/list_wallets", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/list_wallets", body, TGetWalletsResponse)
 
     def get_whoami(self, input: Optional[TGetWhoamiBody] = None) -> TGetWhoamiResponse:
         if input is None:
-            input = {}
+            input_dict = {}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/public/v1/query/whoami", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/whoami", body, TGetWhoamiResponse)
 
     def approve_activity(self, input: TApproveActivityBody) -> TApproveActivityResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_APPROVE_ACTIVITY",
         }
 
-        return self._activity_decision("/public/v1/submit/approve_activity", body)
+        return self._activity_decision(
+            "/public/v1/submit/approve_activity", body, TApproveActivityResponse
+        )
 
     def create_api_keys(self, input: TCreateApiKeysBody) -> TCreateApiKeysResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_API_KEYS_V2",
         }
 
         return self._command(
-            "/public/v1/submit/create_api_keys", body, "createApiKeysResult"
+            "/public/v1/submit/create_api_keys",
+            body,
+            "createApiKeysResult",
+            TCreateApiKeysResponse,
         )
 
     def create_api_only_users(
         self, input: TCreateApiOnlyUsersBody
     ) -> TCreateApiOnlyUsersResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_API_ONLY_USERS",
         }
 
         return self._command(
-            "/public/v1/submit/create_api_only_users", body, "createApiOnlyUsersResult"
+            "/public/v1/submit/create_api_only_users",
+            body,
+            "createApiOnlyUsersResult",
+            TCreateApiOnlyUsersResponse,
         )
 
     def create_authenticators(
         self, input: TCreateAuthenticatorsBody
     ) -> TCreateAuthenticatorsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_AUTHENTICATORS_V2",
@@ -691,16 +802,20 @@ class TurnkeyClient:
             "/public/v1/submit/create_authenticators",
             body,
             "createAuthenticatorsResult",
+            TCreateAuthenticatorsResponse,
         )
 
     def create_fiat_on_ramp_credential(
         self, input: TCreateFiatOnRampCredentialBody
     ) -> TCreateFiatOnRampCredentialResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_FIAT_ON_RAMP_CREDENTIAL",
@@ -710,33 +825,43 @@ class TurnkeyClient:
             "/public/v1/submit/create_fiat_on_ramp_credential",
             body,
             "createFiatOnRampCredentialResult",
+            TCreateFiatOnRampCredentialResponse,
         )
 
     def create_invitations(
         self, input: TCreateInvitationsBody
     ) -> TCreateInvitationsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_INVITATIONS",
         }
 
         return self._command(
-            "/public/v1/submit/create_invitations", body, "createInvitationsResult"
+            "/public/v1/submit/create_invitations",
+            body,
+            "createInvitationsResult",
+            TCreateInvitationsResponse,
         )
 
     def create_oauth2_credential(
         self, input: TCreateOauth2CredentialBody
     ) -> TCreateOauth2CredentialResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_OAUTH2_CREDENTIAL",
@@ -746,16 +871,20 @@ class TurnkeyClient:
             "/public/v1/submit/create_oauth2_credential",
             body,
             "createOauth2CredentialResult",
+            TCreateOauth2CredentialResponse,
         )
 
     def create_oauth_providers(
         self, input: TCreateOauthProvidersBody
     ) -> TCreateOauthProvidersResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS",
@@ -765,46 +894,62 @@ class TurnkeyClient:
             "/public/v1/submit/create_oauth_providers",
             body,
             "createOauthProvidersResult",
+            TCreateOauthProvidersResponse,
         )
 
     def create_policies(self, input: TCreatePoliciesBody) -> TCreatePoliciesResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_POLICIES",
         }
 
         return self._command(
-            "/public/v1/submit/create_policies", body, "createPoliciesResult"
+            "/public/v1/submit/create_policies",
+            body,
+            "createPoliciesResult",
+            TCreatePoliciesResponse,
         )
 
     def create_policy(self, input: TCreatePolicyBody) -> TCreatePolicyResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_POLICY_V3",
         }
 
         return self._command(
-            "/public/v1/submit/create_policy", body, "createPolicyResult"
+            "/public/v1/submit/create_policy",
+            body,
+            "createPolicyResult",
+            TCreatePolicyResponse,
         )
 
     def create_private_key_tag(
         self, input: TCreatePrivateKeyTagBody
     ) -> TCreatePrivateKeyTagResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_PRIVATE_KEY_TAG",
@@ -814,33 +959,43 @@ class TurnkeyClient:
             "/public/v1/submit/create_private_key_tag",
             body,
             "createPrivateKeyTagResult",
+            TCreatePrivateKeyTagResponse,
         )
 
     def create_private_keys(
         self, input: TCreatePrivateKeysBody
     ) -> TCreatePrivateKeysResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_PRIVATE_KEYS_V2",
         }
 
         return self._command(
-            "/public/v1/submit/create_private_keys", body, "createPrivateKeysResultV2"
+            "/public/v1/submit/create_private_keys",
+            body,
+            "createPrivateKeysResultV2",
+            TCreatePrivateKeysResponse,
         )
 
     def create_read_only_session(
         self, input: TCreateReadOnlySessionBody
     ) -> TCreateReadOnlySessionResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_READ_ONLY_SESSION",
@@ -850,16 +1005,20 @@ class TurnkeyClient:
             "/public/v1/submit/create_read_only_session",
             body,
             "createReadOnlySessionResult",
+            TCreateReadOnlySessionResponse,
         )
 
     def create_read_write_session(
         self, input: TCreateReadWriteSessionBody
     ) -> TCreateReadWriteSessionResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_READ_WRITE_SESSION_V2",
@@ -869,16 +1028,20 @@ class TurnkeyClient:
             "/public/v1/submit/create_read_write_session",
             body,
             "createReadWriteSessionResultV2",
+            TCreateReadWriteSessionResponse,
         )
 
     def create_smart_contract_interface(
         self, input: TCreateSmartContractInterfaceBody
     ) -> TCreateSmartContractInterfaceResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_SMART_CONTRACT_INTERFACE",
@@ -888,16 +1051,20 @@ class TurnkeyClient:
             "/public/v1/submit/create_smart_contract_interface",
             body,
             "createSmartContractInterfaceResult",
+            TCreateSmartContractInterfaceResponse,
         )
 
     def create_sub_organization(
         self, input: TCreateSubOrganizationBody
     ) -> TCreateSubOrganizationResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
@@ -907,61 +1074,83 @@ class TurnkeyClient:
             "/public/v1/submit/create_sub_organization",
             body,
             "createSubOrganizationResultV7",
+            TCreateSubOrganizationResponse,
         )
 
     def create_user_tag(self, input: TCreateUserTagBody) -> TCreateUserTagResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_USER_TAG",
         }
 
         return self._command(
-            "/public/v1/submit/create_user_tag", body, "createUserTagResult"
+            "/public/v1/submit/create_user_tag",
+            body,
+            "createUserTagResult",
+            TCreateUserTagResponse,
         )
 
     def create_users(self, input: TCreateUsersBody) -> TCreateUsersResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_USERS_V3",
         }
 
         return self._command(
-            "/public/v1/submit/create_users", body, "createUsersResult"
+            "/public/v1/submit/create_users",
+            body,
+            "createUsersResult",
+            TCreateUsersResponse,
         )
 
     def create_wallet(self, input: TCreateWalletBody) -> TCreateWalletResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_WALLET",
         }
 
         return self._command(
-            "/public/v1/submit/create_wallet", body, "createWalletResult"
+            "/public/v1/submit/create_wallet",
+            body,
+            "createWalletResult",
+            TCreateWalletResponse,
         )
 
     def create_wallet_accounts(
         self, input: TCreateWalletAccountsBody
     ) -> TCreateWalletAccountsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_CREATE_WALLET_ACCOUNTS",
@@ -971,31 +1160,41 @@ class TurnkeyClient:
             "/public/v1/submit/create_wallet_accounts",
             body,
             "createWalletAccountsResult",
+            TCreateWalletAccountsResponse,
         )
 
     def delete_api_keys(self, input: TDeleteApiKeysBody) -> TDeleteApiKeysResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_API_KEYS",
         }
 
         return self._command(
-            "/public/v1/submit/delete_api_keys", body, "deleteApiKeysResult"
+            "/public/v1/submit/delete_api_keys",
+            body,
+            "deleteApiKeysResult",
+            TDeleteApiKeysResponse,
         )
 
     def delete_authenticators(
         self, input: TDeleteAuthenticatorsBody
     ) -> TDeleteAuthenticatorsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_AUTHENTICATORS",
@@ -1005,16 +1204,20 @@ class TurnkeyClient:
             "/public/v1/submit/delete_authenticators",
             body,
             "deleteAuthenticatorsResult",
+            TDeleteAuthenticatorsResponse,
         )
 
     def delete_fiat_on_ramp_credential(
         self, input: TDeleteFiatOnRampCredentialBody
     ) -> TDeleteFiatOnRampCredentialResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_FIAT_ON_RAMP_CREDENTIAL",
@@ -1024,33 +1227,43 @@ class TurnkeyClient:
             "/public/v1/submit/delete_fiat_on_ramp_credential",
             body,
             "deleteFiatOnRampCredentialResult",
+            TDeleteFiatOnRampCredentialResponse,
         )
 
     def delete_invitation(
         self, input: TDeleteInvitationBody
     ) -> TDeleteInvitationResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_INVITATION",
         }
 
         return self._command(
-            "/public/v1/submit/delete_invitation", body, "deleteInvitationResult"
+            "/public/v1/submit/delete_invitation",
+            body,
+            "deleteInvitationResult",
+            TDeleteInvitationResponse,
         )
 
     def delete_oauth2_credential(
         self, input: TDeleteOauth2CredentialBody
     ) -> TDeleteOauth2CredentialResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_OAUTH2_CREDENTIAL",
@@ -1060,16 +1273,20 @@ class TurnkeyClient:
             "/public/v1/submit/delete_oauth2_credential",
             body,
             "deleteOauth2CredentialResult",
+            TDeleteOauth2CredentialResponse,
         )
 
     def delete_oauth_providers(
         self, input: TDeleteOauthProvidersBody
     ) -> TDeleteOauthProvidersResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_OAUTH_PROVIDERS",
@@ -1079,46 +1296,62 @@ class TurnkeyClient:
             "/public/v1/submit/delete_oauth_providers",
             body,
             "deleteOauthProvidersResult",
+            TDeleteOauthProvidersResponse,
         )
 
     def delete_policies(self, input: TDeletePoliciesBody) -> TDeletePoliciesResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_POLICIES",
         }
 
         return self._command(
-            "/public/v1/submit/delete_policies", body, "deletePoliciesResult"
+            "/public/v1/submit/delete_policies",
+            body,
+            "deletePoliciesResult",
+            TDeletePoliciesResponse,
         )
 
     def delete_policy(self, input: TDeletePolicyBody) -> TDeletePolicyResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_POLICY",
         }
 
         return self._command(
-            "/public/v1/submit/delete_policy", body, "deletePolicyResult"
+            "/public/v1/submit/delete_policy",
+            body,
+            "deletePolicyResult",
+            TDeletePolicyResponse,
         )
 
     def delete_private_key_tags(
         self, input: TDeletePrivateKeyTagsBody
     ) -> TDeletePrivateKeyTagsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_PRIVATE_KEY_TAGS",
@@ -1128,33 +1361,43 @@ class TurnkeyClient:
             "/public/v1/submit/delete_private_key_tags",
             body,
             "deletePrivateKeyTagsResult",
+            TDeletePrivateKeyTagsResponse,
         )
 
     def delete_private_keys(
         self, input: TDeletePrivateKeysBody
     ) -> TDeletePrivateKeysResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_PRIVATE_KEYS",
         }
 
         return self._command(
-            "/public/v1/submit/delete_private_keys", body, "deletePrivateKeysResult"
+            "/public/v1/submit/delete_private_keys",
+            body,
+            "deletePrivateKeysResult",
+            TDeletePrivateKeysResponse,
         )
 
     def delete_smart_contract_interface(
         self, input: TDeleteSmartContractInterfaceBody
     ) -> TDeleteSmartContractInterfaceResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_SMART_CONTRACT_INTERFACE",
@@ -1164,16 +1407,20 @@ class TurnkeyClient:
             "/public/v1/submit/delete_smart_contract_interface",
             body,
             "deleteSmartContractInterfaceResult",
+            TDeleteSmartContractInterfaceResponse,
         )
 
     def delete_sub_organization(
         self, input: TDeleteSubOrganizationBody
     ) -> TDeleteSubOrganizationResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_SUB_ORGANIZATION",
@@ -1183,46 +1430,62 @@ class TurnkeyClient:
             "/public/v1/submit/delete_sub_organization",
             body,
             "deleteSubOrganizationResult",
+            TDeleteSubOrganizationResponse,
         )
 
     def delete_user_tags(self, input: TDeleteUserTagsBody) -> TDeleteUserTagsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_USER_TAGS",
         }
 
         return self._command(
-            "/public/v1/submit/delete_user_tags", body, "deleteUserTagsResult"
+            "/public/v1/submit/delete_user_tags",
+            body,
+            "deleteUserTagsResult",
+            TDeleteUserTagsResponse,
         )
 
     def delete_users(self, input: TDeleteUsersBody) -> TDeleteUsersResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_USERS",
         }
 
         return self._command(
-            "/public/v1/submit/delete_users", body, "deleteUsersResult"
+            "/public/v1/submit/delete_users",
+            body,
+            "deleteUsersResult",
+            TDeleteUsersResponse,
         )
 
     def delete_wallet_accounts(
         self, input: TDeleteWalletAccountsBody
     ) -> TDeleteWalletAccountsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_WALLET_ACCOUNTS",
@@ -1232,44 +1495,59 @@ class TurnkeyClient:
             "/public/v1/submit/delete_wallet_accounts",
             body,
             "deleteWalletAccountsResult",
+            TDeleteWalletAccountsResponse,
         )
 
     def delete_wallets(self, input: TDeleteWalletsBody) -> TDeleteWalletsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_DELETE_WALLETS",
         }
 
         return self._command(
-            "/public/v1/submit/delete_wallets", body, "deleteWalletsResult"
+            "/public/v1/submit/delete_wallets",
+            body,
+            "deleteWalletsResult",
+            TDeleteWalletsResponse,
         )
 
     def email_auth(self, input: TEmailAuthBody) -> TEmailAuthResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_EMAIL_AUTH_V3",
         }
 
-        return self._command("/public/v1/submit/email_auth", body, "emailAuthResult")
+        return self._command(
+            "/public/v1/submit/email_auth", body, "emailAuthResult", TEmailAuthResponse
+        )
 
     def eth_send_raw_transaction(
         self, input: TEthSendRawTransactionBody
     ) -> TEthSendRawTransactionResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_ETH_SEND_RAW_TRANSACTION",
@@ -1279,129 +1557,175 @@ class TurnkeyClient:
             "/public/v1/submit/eth_send_raw_transaction",
             body,
             "ethSendRawTransactionResult",
+            TEthSendRawTransactionResponse,
         )
 
     def eth_send_transaction(
         self, input: TEthSendTransactionBody
     ) -> TEthSendTransactionResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_ETH_SEND_TRANSACTION",
         }
 
         return self._command(
-            "/public/v1/submit/eth_send_transaction", body, "ethSendTransactionResult"
+            "/public/v1/submit/eth_send_transaction",
+            body,
+            "ethSendTransactionResult",
+            TEthSendTransactionResponse,
         )
 
     def export_private_key(
         self, input: TExportPrivateKeyBody
     ) -> TExportPrivateKeyResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_EXPORT_PRIVATE_KEY",
         }
 
         return self._command(
-            "/public/v1/submit/export_private_key", body, "exportPrivateKeyResult"
+            "/public/v1/submit/export_private_key",
+            body,
+            "exportPrivateKeyResult",
+            TExportPrivateKeyResponse,
         )
 
     def export_wallet(self, input: TExportWalletBody) -> TExportWalletResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_EXPORT_WALLET",
         }
 
         return self._command(
-            "/public/v1/submit/export_wallet", body, "exportWalletResult"
+            "/public/v1/submit/export_wallet",
+            body,
+            "exportWalletResult",
+            TExportWalletResponse,
         )
 
     def export_wallet_account(
         self, input: TExportWalletAccountBody
     ) -> TExportWalletAccountResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_EXPORT_WALLET_ACCOUNT",
         }
 
         return self._command(
-            "/public/v1/submit/export_wallet_account", body, "exportWalletAccountResult"
+            "/public/v1/submit/export_wallet_account",
+            body,
+            "exportWalletAccountResult",
+            TExportWalletAccountResponse,
         )
 
     def import_private_key(
         self, input: TImportPrivateKeyBody
     ) -> TImportPrivateKeyResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_IMPORT_PRIVATE_KEY",
         }
 
         return self._command(
-            "/public/v1/submit/import_private_key", body, "importPrivateKeyResult"
+            "/public/v1/submit/import_private_key",
+            body,
+            "importPrivateKeyResult",
+            TImportPrivateKeyResponse,
         )
 
     def import_wallet(self, input: TImportWalletBody) -> TImportWalletResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_IMPORT_WALLET",
         }
 
         return self._command(
-            "/public/v1/submit/import_wallet", body, "importWalletResult"
+            "/public/v1/submit/import_wallet",
+            body,
+            "importWalletResult",
+            TImportWalletResponse,
         )
 
     def init_fiat_on_ramp(self, input: TInitFiatOnRampBody) -> TInitFiatOnRampResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_INIT_FIAT_ON_RAMP",
         }
 
         return self._command(
-            "/public/v1/submit/init_fiat_on_ramp", body, "initFiatOnRampResult"
+            "/public/v1/submit/init_fiat_on_ramp",
+            body,
+            "initFiatOnRampResult",
+            TInitFiatOnRampResponse,
         )
 
     def init_import_private_key(
         self, input: TInitImportPrivateKeyBody
     ) -> TInitImportPrivateKeyResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_INIT_IMPORT_PRIVATE_KEY",
@@ -1411,61 +1735,82 @@ class TurnkeyClient:
             "/public/v1/submit/init_import_private_key",
             body,
             "initImportPrivateKeyResult",
+            TInitImportPrivateKeyResponse,
         )
 
     def init_import_wallet(
         self, input: TInitImportWalletBody
     ) -> TInitImportWalletResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_INIT_IMPORT_WALLET",
         }
 
         return self._command(
-            "/public/v1/submit/init_import_wallet", body, "initImportWalletResult"
+            "/public/v1/submit/init_import_wallet",
+            body,
+            "initImportWalletResult",
+            TInitImportWalletResponse,
         )
 
     def init_otp(self, input: TInitOtpBody) -> TInitOtpResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_INIT_OTP_V2",
         }
 
-        return self._command("/public/v1/submit/init_otp", body, "initOtpResult")
+        return self._command(
+            "/public/v1/submit/init_otp", body, "initOtpResult", TInitOtpResponse
+        )
 
     def init_otp_auth(self, input: TInitOtpAuthBody) -> TInitOtpAuthResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_INIT_OTP_AUTH_V3",
         }
 
         return self._command(
-            "/public/v1/submit/init_otp_auth", body, "initOtpAuthResultV2"
+            "/public/v1/submit/init_otp_auth",
+            body,
+            "initOtpAuthResultV2",
+            TInitOtpAuthResponse,
         )
 
     def init_user_email_recovery(
         self, input: TInitUserEmailRecoveryBody
     ) -> TInitUserEmailRecoveryResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_INIT_USER_EMAIL_RECOVERY_V2",
@@ -1475,113 +1820,157 @@ class TurnkeyClient:
             "/public/v1/submit/init_user_email_recovery",
             body,
             "initUserEmailRecoveryResult",
+            TInitUserEmailRecoveryResponse,
         )
 
     def oauth(self, input: TOauthBody) -> TOauthResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_OAUTH",
         }
 
-        return self._command("/public/v1/submit/oauth", body, "oauthResult")
+        return self._command(
+            "/public/v1/submit/oauth", body, "oauthResult", TOauthResponse
+        )
 
     def oauth2_authenticate(
         self, input: TOauth2AuthenticateBody
     ) -> TOauth2AuthenticateResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_OAUTH2_AUTHENTICATE",
         }
 
         return self._command(
-            "/public/v1/submit/oauth2_authenticate", body, "oauth2AuthenticateResult"
+            "/public/v1/submit/oauth2_authenticate",
+            body,
+            "oauth2AuthenticateResult",
+            TOauth2AuthenticateResponse,
         )
 
     def oauth_login(self, input: TOauthLoginBody) -> TOauthLoginResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_OAUTH_LOGIN",
         }
 
-        return self._command("/public/v1/submit/oauth_login", body, "oauthLoginResult")
+        return self._command(
+            "/public/v1/submit/oauth_login",
+            body,
+            "oauthLoginResult",
+            TOauthLoginResponse,
+        )
 
     def otp_auth(self, input: TOtpAuthBody) -> TOtpAuthResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_OTP_AUTH",
         }
 
-        return self._command("/public/v1/submit/otp_auth", body, "otpAuthResult")
+        return self._command(
+            "/public/v1/submit/otp_auth", body, "otpAuthResult", TOtpAuthResponse
+        )
 
     def otp_login(self, input: TOtpLoginBody) -> TOtpLoginResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_OTP_LOGIN",
         }
 
-        return self._command("/public/v1/submit/otp_login", body, "otpLoginResult")
+        return self._command(
+            "/public/v1/submit/otp_login", body, "otpLoginResult", TOtpLoginResponse
+        )
 
     def recover_user(self, input: TRecoverUserBody) -> TRecoverUserResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_RECOVER_USER",
         }
 
         return self._command(
-            "/public/v1/submit/recover_user", body, "recoverUserResult"
+            "/public/v1/submit/recover_user",
+            body,
+            "recoverUserResult",
+            TRecoverUserResponse,
         )
 
     def reject_activity(self, input: TRejectActivityBody) -> TRejectActivityResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_REJECT_ACTIVITY",
         }
 
-        return self._activity_decision("/public/v1/submit/reject_activity", body)
+        return self._activity_decision(
+            "/public/v1/submit/reject_activity", body, TRejectActivityResponse
+        )
 
     def remove_organization_feature(
         self, input: TRemoveOrganizationFeatureBody
     ) -> TRemoveOrganizationFeatureResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_REMOVE_ORGANIZATION_FEATURE",
@@ -1591,16 +1980,20 @@ class TurnkeyClient:
             "/public/v1/submit/remove_organization_feature",
             body,
             "removeOrganizationFeatureResult",
+            TRemoveOrganizationFeatureResponse,
         )
 
     def set_organization_feature(
         self, input: TSetOrganizationFeatureBody
     ) -> TSetOrganizationFeatureResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_SET_ORGANIZATION_FEATURE",
@@ -1610,76 +2003,106 @@ class TurnkeyClient:
             "/public/v1/submit/set_organization_feature",
             body,
             "setOrganizationFeatureResult",
+            TSetOrganizationFeatureResponse,
         )
 
     def sign_raw_payload(self, input: TSignRawPayloadBody) -> TSignRawPayloadResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2",
         }
 
         return self._command(
-            "/public/v1/submit/sign_raw_payload", body, "signRawPayloadResult"
+            "/public/v1/submit/sign_raw_payload",
+            body,
+            "signRawPayloadResult",
+            TSignRawPayloadResponse,
         )
 
     def sign_raw_payloads(
         self, input: TSignRawPayloadsBody
     ) -> TSignRawPayloadsResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_SIGN_RAW_PAYLOADS",
         }
 
         return self._command(
-            "/public/v1/submit/sign_raw_payloads", body, "signRawPayloadsResult"
+            "/public/v1/submit/sign_raw_payloads",
+            body,
+            "signRawPayloadsResult",
+            TSignRawPayloadsResponse,
         )
 
     def sign_transaction(self, input: TSignTransactionBody) -> TSignTransactionResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_SIGN_TRANSACTION_V2",
         }
 
         return self._command(
-            "/public/v1/submit/sign_transaction", body, "signTransactionResult"
+            "/public/v1/submit/sign_transaction",
+            body,
+            "signTransactionResult",
+            TSignTransactionResponse,
         )
 
     def stamp_login(self, input: TStampLoginBody) -> TStampLoginResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_STAMP_LOGIN",
         }
 
-        return self._command("/public/v1/submit/stamp_login", body, "stampLoginResult")
+        return self._command(
+            "/public/v1/submit/stamp_login",
+            body,
+            "stampLoginResult",
+            TStampLoginResponse,
+        )
 
     def update_fiat_on_ramp_credential(
         self, input: TUpdateFiatOnRampCredentialBody
     ) -> TUpdateFiatOnRampCredentialResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_FIAT_ON_RAMP_CREDENTIAL",
@@ -1689,16 +2112,20 @@ class TurnkeyClient:
             "/public/v1/submit/update_fiat_on_ramp_credential",
             body,
             "updateFiatOnRampCredentialResult",
+            TUpdateFiatOnRampCredentialResponse,
         )
 
     def update_oauth2_credential(
         self, input: TUpdateOauth2CredentialBody
     ) -> TUpdateOauth2CredentialResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_OAUTH2_CREDENTIAL",
@@ -1708,31 +2135,41 @@ class TurnkeyClient:
             "/public/v1/submit/update_oauth2_credential",
             body,
             "updateOauth2CredentialResult",
+            TUpdateOauth2CredentialResponse,
         )
 
     def update_policy(self, input: TUpdatePolicyBody) -> TUpdatePolicyResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_POLICY_V2",
         }
 
         return self._command(
-            "/public/v1/submit/update_policy", body, "updatePolicyResultV2"
+            "/public/v1/submit/update_policy",
+            body,
+            "updatePolicyResultV2",
+            TUpdatePolicyResponse,
         )
 
     def update_private_key_tag(
         self, input: TUpdatePrivateKeyTagBody
     ) -> TUpdatePrivateKeyTagResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_PRIVATE_KEY_TAG",
@@ -1742,78 +2179,108 @@ class TurnkeyClient:
             "/public/v1/submit/update_private_key_tag",
             body,
             "updatePrivateKeyTagResult",
+            TUpdatePrivateKeyTagResponse,
         )
 
     def update_root_quorum(
         self, input: TUpdateRootQuorumBody
     ) -> TUpdateRootQuorumResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_ROOT_QUORUM",
         }
 
         return self._command(
-            "/public/v1/submit/update_root_quorum", body, "updateRootQuorumResult"
+            "/public/v1/submit/update_root_quorum",
+            body,
+            "updateRootQuorumResult",
+            TUpdateRootQuorumResponse,
         )
 
     def update_user(self, input: TUpdateUserBody) -> TUpdateUserResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_USER",
         }
 
-        return self._command("/public/v1/submit/update_user", body, "updateUserResult")
+        return self._command(
+            "/public/v1/submit/update_user",
+            body,
+            "updateUserResult",
+            TUpdateUserResponse,
+        )
 
     def update_user_email(
         self, input: TUpdateUserEmailBody
     ) -> TUpdateUserEmailResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_USER_EMAIL",
         }
 
         return self._command(
-            "/public/v1/submit/update_user_email", body, "updateUserEmailResult"
+            "/public/v1/submit/update_user_email",
+            body,
+            "updateUserEmailResult",
+            TUpdateUserEmailResponse,
         )
 
     def update_user_name(self, input: TUpdateUserNameBody) -> TUpdateUserNameResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_USER_NAME",
         }
 
         return self._command(
-            "/public/v1/submit/update_user_name", body, "updateUserNameResult"
+            "/public/v1/submit/update_user_name",
+            body,
+            "updateUserNameResult",
+            TUpdateUserNameResponse,
         )
 
     def update_user_phone_number(
         self, input: TUpdateUserPhoneNumberBody
     ) -> TUpdateUserPhoneNumberResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_USER_PHONE_NUMBER",
@@ -1823,60 +2290,77 @@ class TurnkeyClient:
             "/public/v1/submit/update_user_phone_number",
             body,
             "updateUserPhoneNumberResult",
+            TUpdateUserPhoneNumberResponse,
         )
 
     def update_user_tag(self, input: TUpdateUserTagBody) -> TUpdateUserTagResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_USER_TAG",
         }
 
         return self._command(
-            "/public/v1/submit/update_user_tag", body, "updateUserTagResult"
+            "/public/v1/submit/update_user_tag",
+            body,
+            "updateUserTagResult",
+            TUpdateUserTagResponse,
         )
 
     def update_wallet(self, input: TUpdateWalletBody) -> TUpdateWalletResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_UPDATE_WALLET",
         }
 
         return self._command(
-            "/public/v1/submit/update_wallet", body, "updateWalletResult"
+            "/public/v1/submit/update_wallet",
+            body,
+            "updateWalletResult",
+            TUpdateWalletResponse,
         )
 
     def verify_otp(self, input: TVerifyOtpBody) -> TVerifyOtpResponse:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
 
         body = {
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "ACTIVITY_TYPE_VERIFY_OTP",
         }
 
-        return self._command("/public/v1/submit/verify_otp", body, "verifyOtpResult")
+        return self._command(
+            "/public/v1/submit/verify_otp", body, "verifyOtpResult", TVerifyOtpResponse
+        )
 
-    def test_rate_limits(
-        self, input: Optional[TTestRateLimitsBody]
-    ) -> TTestRateLimitsResponse:
-        if input is None:
-            input = {}
+    def test_rate_limits(self, input: TTestRateLimitsBody) -> TTestRateLimitsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
-        body = {
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id),
-        }
+        organization_id = input_dict.pop("organizationId", self.organization_id)
 
-        return self._request("/tkhq/api/v1/test_rate_limits", body)
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/tkhq/api/v1/test_rate_limits", body, TTestRateLimitsResponse
+        )

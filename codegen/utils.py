@@ -54,7 +54,7 @@ def method_type_from_method_name(method_name: str) -> str:
         method_name: The method name (e.g., "getWhoami", "tGetWhoami", "createPrivateKeys")
         
     Returns:
-        Method type: "query", "command", "activityDecision", "noop", or "proxy"
+        Method type: "query", "command", "activityDecision", or "noop"
     """
     method_name_lower = method_name.lower()
     
@@ -62,8 +62,6 @@ def method_type_from_method_name(method_name: str) -> str:
         return "activityDecision"
     if method_name.startswith("nOOP"):
         return "noop"
-    if method_name_lower.startswith("proxy"):
-        return "proxy"
     # Note: method names may have 't' prefix from types generation (e.g., "tGetWhoami")
     # or no prefix from HTTP generation (e.g., "getWhoami")
     if (method_name_lower.startswith("get") or method_name_lower.startswith("list") or 

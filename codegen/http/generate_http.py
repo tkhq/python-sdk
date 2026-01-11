@@ -68,30 +68,38 @@ class TurnkeyClient:
         self.max_polling_retries = max_polling_retries
     
     def _serialize_body(self, body: Any) -> str:
-        \"\"\"Serialize request body, handling Pydantic models.
+        \"\"\"Serialize request body, handling Pydantic models recursively.
         
         Args:
-            body: Request body (dict or Pydantic model)
+            body: Request body (dict, Pydantic model, list, or primitive)
             
         Returns:
             JSON string
         \"\"\"
-        # Check if it's a Pydantic model
-        if hasattr(body, 'model_dump'):
-            # Use by_alias=True to convert Python names back to API names (e.g., from_ -> from)
-            return json.dumps(body.model_dump(by_alias=True, exclude_none=True))
-        else:
-            return json.dumps(body)
+        def serialize_value(value):
+            \"\"\"Recursively serialize values, converting Pydantic models to dicts.\"\"\"
+            if hasattr(value, 'model_dump'):
+                return value.model_dump(by_alias=True, exclude_none=True)
+            elif isinstance(value, dict):
+                return {k: serialize_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [serialize_value(item) for item in value]
+            else:
+                return value
+        
+        serialized = serialize_value(body)
+        return json.dumps(serialized)
     
-    def _request(self, url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _request(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         \"\"\"Make a request to the Turnkey API.
         
         Args:
             url: Endpoint URL
             body: Request body
+            response_type: Pydantic model class for response parsing
             
         Returns:
-            Response data
+            Parsed response as Pydantic model
             
         Raises:
             Exception: If request fails
@@ -119,63 +127,73 @@ class TurnkeyClient:
             except ValueError:
                 raise Exception(f"{response.status_code} {response.reason}")
         
-        return response.json()
+        response_data = response.json()
+        return response_type(**response_data)
     
-    def _command(self, url: str, body: Dict[str, Any], result_key: str) -> Dict[str, Any]:
+    def _command(self, url: str, body: Dict[str, Any], result_key: str, response_type: type) -> Any:
         \"\"\"Execute a command and poll for completion.
         
         Args:
             url: Endpoint URL
             body: Request body
-            result_key: Key to extract result from activity
+            result_key: Key to extract result from activity when completed
+            response_type: Pydantic model class for response parsing
             
         Returns:
-            Response data with activity result
+            Parsed response as Pydantic model with flattened result fields
         \"\"\"
-        response_data = self._request(url, body)
-        activity = response_data.get("activity", {})
-        status = activity.get("status")
+        # Make initial request
+        response = self._request(url, body, response_type)
         
-        if status not in TERMINAL_ACTIVITY_STATUSES:
+        # Check if we need to poll
+        activity = response.activity
+        
+        if activity.status not in TERMINAL_ACTIVITY_STATUSES:
             # Poll for completion
-            activity_id = activity.get("id")
+            activity_id = activity.id
             attempts = 0
             
             while attempts < self.max_polling_retries:
                 time.sleep(self.polling_interval_ms / 1000.0)
-                poll_response = self.get_activity({"activityId": activity_id})
-                poll_activity = poll_response.get("activity", {})
-                status = poll_activity.get("status")
                 
-                if status in TERMINAL_ACTIVITY_STATUSES:
-                    response_data = poll_response
-                    activity = poll_activity
+                # Poll activity status
+                poll_response = self.get_activity({"activityId": activity_id})
+                activity = poll_response.activity
+                
+                if activity.status in TERMINAL_ACTIVITY_STATUSES:
+                    response = poll_response
                     break
                 
                 attempts += 1
         
-        # Extract result
-        result = activity.get("result", {})
-        if result_key in result:
-            return {**result[result_key], **response_data}
+        # If activity completed successfully, flatten result fields into response
+        if activity.status == "ACTIVITY_STATUS_COMPLETED" and hasattr(activity, 'result') and activity.result:
+            result = activity.result
+            # Get the versioned result key (e.g., 'createApiKeysResultV2')
+            if hasattr(result, result_key):
+                result_data = getattr(result, result_key)
+                if result_data and hasattr(result_data, 'model_dump'):
+                    # Flatten result fields into response
+                    result_dict = result_data.model_dump(by_alias=True, exclude_none=True)
+                    response_dict = response.model_dump(by_alias=True, exclude_none=True)
+                    response_dict.update(result_dict)
+                    # Recreate response with flattened fields
+                    response = response_type(**response_dict)
         
-        return response_data
+        return response
     
-    def _activity_decision(self, url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _activity_decision(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         \"\"\"Execute an activity decision.
         
         Args:
             url: Endpoint URL
             body: Request body
+            response_type: Pydantic model class for response parsing
             
         Returns:
-            Response data with activity result
+            Parsed response as Pydantic model
         \"\"\"
-        response_data = self._request(url, body)
-        activity = response_data.get("activity", {})
-        result = activity.get("result", {})
-        
-        return {**result, **response_data}
+        return self._request(url, body, response_type)
 """)
     
     # Generate methods for each endpoint
@@ -209,19 +227,41 @@ class TurnkeyClient:
         # Generate method
         if method_type == "query":
             has_optional_params = method_name in METHODS_WITH_ONLY_OPTIONAL_PARAMETERS
-            default_param = " = None" if has_optional_params else ""
             
-            code_buffer.append(f"""
-    def {snake_method_name}(self, input: Optional[{input_type}]{default_param}) -> {response_type}:
+            if has_optional_params:
+                # Method has only optional parameters - allow None with default
+                code_buffer.append(f"""
+    def {snake_method_name}(self, input: Optional[{input_type}] = None) -> {response_type}:
         if input is None:
-            input = {{}}
+            input_dict = {{}}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
         
         body = {{
-            **input,
-            "organizationId": input.get("organizationId", self.organization_id)
+            "organizationId": organization_id,
+            **input_dict
         }}
         
-        return self._request("{path}", body)
+        return self._request("{path}", body, {response_type})
+""")
+            else:
+                # Method has required parameters - input is required, not Optional
+                code_buffer.append(f"""
+    def {snake_method_name}(self, input: {input_type}) -> {response_type}:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        
+        body = {{
+            "organizationId": organization_id,
+            **input_dict
+        }}
+        
+        return self._request("{path}", body, {response_type})
 """)
         
         elif method_type == "command":
@@ -230,33 +270,39 @@ class TurnkeyClient:
             
             code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
         
         body = {{
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "{versioned_activity_type}"
         }}
         
-        return self._command("{path}", body, "{versioned_method_name}")
+        return self._command("{path}", body, "{versioned_method_name}", {response_type})
 """)
         
         elif method_type == "activityDecision":
             code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
-        organization_id = input.pop("organizationId", self.organization_id)
-        timestamp_ms = input.pop("timestampMs", str(int(time.time() * 1000)))
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
         
         body = {{
-            "parameters": input,
+            "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
             "type": "{unversioned_activity_type}"
         }}
         
-        return self._activity_decision("{path}", body)
+        return self._activity_decision("{path}", body, {response_type})
 """)
     
     return "\n".join(code_buffer)
