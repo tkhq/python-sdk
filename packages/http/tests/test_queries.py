@@ -1,5 +1,8 @@
 """Test Turnkey HTTP client query methods."""
 
+import pytest
+from turnkey_sdk_types.generated.types import TGetOrganizationBody
+
 
 def test_get_whoami(client, org_id):
     """Test getWhoami query method."""
@@ -70,3 +73,24 @@ def test_get_wallets(client):
 
     print("✅ getWallets successful!")
     print(f"\nFound {len(response.wallets)} wallets")
+
+
+def test_organization_id_override_query(client):
+    """Test that organizationId in request body overrides client config for queries."""
+    print("\n🔧 Testing organizationId override for queries")
+
+    # Create request with WRONG organization ID to prove override works
+    wrong_org_id = "00000000-0000-0000-0000-000000000000"
+    request = TGetOrganizationBody(organizationId=wrong_org_id)
+
+    # This should fail because we're using a wrong organization ID
+    with pytest.raises(Exception) as exc_info:
+        client.get_organization(request)
+
+    # Verify the error is related to the wrong organization
+    error_msg = str(exc_info.value)
+    print(f"\n❌ Error message: {error_msg}")
+    print(f"✅ Request failed as expected with wrong organization ID")
+
+    # Assert that we got an error for invalid organization (different error than activities)
+    assert "invalid organization ID" in error_msg

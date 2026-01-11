@@ -5,7 +5,7 @@ import secrets
 from turnkey_sdk_types.generated.types import (
     v1ApiKeyParamsV2,
     v1ApiKeyCurve,
-    v1CreateApiKeysIntentV2,
+    TCreateApiKeysBody,
 )
 
 
@@ -27,7 +27,7 @@ def test_create_api_keys(client, user_id):
     )
 
     # Create the typed request
-    request = v1CreateApiKeysIntentV2(userId=user_id, apiKeys=[api_key])
+    request = TCreateApiKeysBody(userId=user_id, apiKeys=[api_key])
 
     # Make the createApiKeys request with typed input
     response = client.create_api_keys(request)
@@ -51,3 +51,41 @@ def test_create_api_keys(client, user_id):
     # Check if apiKeyIds were flattened into response
     if hasattr(response, "apiKeyIds") and response.apiKeyIds:
         print(f"  Created API Key IDs: {response.apiKeyIds}")
+
+
+def test_organization_id_override(client, user_id):
+    """Test that organizationId in request body overrides client config."""
+    print("🔧 Testing organizationId override")
+
+    # Generate a new key pair for the API key
+    private_key = secrets.token_bytes(32)
+    public_key = private_key.hex()
+
+    # Create the API key parameters
+    api_key = v1ApiKeyParamsV2(
+        apiKeyName="Test API Key - Should Fail",
+        publicKey=f"02{public_key[:64]}",
+        curveType=v1ApiKeyCurve.API_KEY_CURVE_P256,
+        expirationSeconds="3600",
+    )
+
+    # Create request with WRONG organization ID to prove override works
+    wrong_org_id = "00000000-0000-0000-0000-000000000000"
+    request = TCreateApiKeysBody(
+        organizationId=wrong_org_id,  # Override with wrong org ID
+        userId=user_id,
+        apiKeys=[api_key],
+    )
+
+    # This should fail because we're using a wrong organization ID
+    with pytest.raises(Exception) as exc_info:
+        client.create_api_keys(request)
+
+    # Verify the error is related to the wrong organization
+    error_msg = str(exc_info.value)
+    print(f"\n❌ Error message: {error_msg}")
+    print(f"✅ Request failed as expected with wrong organization ID")
+
+    # Assert that we got the expected error for organization not found
+    assert "ORGANIZATION_NOT_FOUND" in error_msg
+    assert wrong_org_id in error_msg
