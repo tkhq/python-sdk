@@ -1,12 +1,8 @@
 import json
 
-from turnkey_sdk_types.generated.types import (
-    protobufAny,
+from turnkey_sdk_types import (
     TEthSendTransactionBody,
-    v1ApiKeyParamsV2,
 )
-from pydantic import BaseModel, Field, ConfigDict
-
 
 def test_pydantic_aliases():
     """Test Pydantic field aliasing for Python keywords and special characters.

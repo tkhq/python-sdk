@@ -1,12 +1,14 @@
-"""Test Turnkey HTTP client command methods (activities)."""
+"""Test Turnkey HTTP client activity methods"""
 
 import pytest
 import secrets
-from turnkey_sdk_types.generated.types import (
+from turnkey_sdk_types import (
     v1ApiKeyParamsV2,
     v1ApiKeyCurve,
     TCreateApiKeysBody,
+    TGetActivityResponse,
 )
+from turnkey_http.utils import send_signed_request
 
 
 def test_create_api_keys(client, user_id):
@@ -89,3 +91,42 @@ def test_organization_id_override(client, user_id):
     # Assert that we got the expected error for organization not found
     assert "ORGANIZATION_NOT_FOUND" in error_msg
     assert wrong_org_id in error_msg
+
+
+def test_stamp_create_api_keys_send_signed_request(client, user_id):
+    """Stamp an activity and submit via send_signed_request."""
+    print("\n🔧 Testing stamp + send for createApiKeys")
+
+    private_key = secrets.token_bytes(32)
+    public_key = private_key.hex()
+
+    api_key = v1ApiKeyParamsV2(
+        apiKeyName="Test API Key via Stamp",
+        publicKey=f"02{public_key[:64]}",
+        curveType=v1ApiKeyCurve.API_KEY_CURVE_P256,
+        expirationSeconds="3600",
+    )
+
+    request = TCreateApiKeysBody(userId=user_id, apiKeys=[api_key])
+
+    # Stamp only (do not auto-send)
+    signed_req = client.stamp_create_api_keys(request)
+
+    # Manually send stamped request; initial response is activity-only
+    activity_resp = send_signed_request(
+        signed_req, parser=lambda p: TGetActivityResponse(**p)
+    )
+
+    assert activity_resp is not None
+    assert activity_resp.activity is not None
+    assert activity_resp.activity.id is not None
+    assert activity_resp.activity.status in [
+        "ACTIVITY_STATUS_COMPLETED",
+        "ACTIVITY_STATUS_PENDING",
+        "ACTIVITY_STATUS_CONSENSUS_NEEDED",
+        "ACTIVITY_STATUS_FAILED",
+        "ACTIVITY_STATUS_REJECTED",
+    ]
+    print(
+        f"✅ Stamped createApiKeys submitted; activity {activity_resp.activity.id} status: {activity_resp.activity.status}"
+    )

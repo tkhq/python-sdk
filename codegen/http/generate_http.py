@@ -112,7 +112,8 @@ class TurnkeyClient:
         
         headers = {
             stamp.stamp_header_name: stamp.stamp_header_value,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-Client-Version": VERSION
         }
         
         response = requests.post(
@@ -257,6 +258,28 @@ class TurnkeyClient:
         }}
         
         return self._request("{path}", body, {response_type})
+    
+    def stamp_{snake_method_name}(self, input: Optional[{input_type}] = None) -> TSignedRequest:
+        \"\"\"Stamp a {method_name} request without sending it.\"\"\"
+        
+        if input is None:
+            input_dict = {{}}
+        else:
+            # Convert Pydantic model to dict
+            input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        
+        body = {{
+            "organizationId": organization_id,
+            **input_dict
+        }}
+        
+        full_url = self.base_url + "{path}"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+        
+        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
 """)
             else:
                 # Method has required parameters so input is required, not Optional
@@ -273,6 +296,25 @@ class TurnkeyClient:
         }}
         
         return self._request("{path}", body, {response_type})
+    
+    def stamp_{snake_method_name}(self, input: {input_type}) -> TSignedRequest:
+        \"\"\"Stamp a {method_name} request without sending it.\"\"\"
+        
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        
+        body = {{
+            "organizationId": organization_id,
+            **input_dict
+        }}
+        
+        full_url = self.base_url + "{path}"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+        
+        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
 """)
 
         elif method_type == "activity":
@@ -295,6 +337,28 @@ class TurnkeyClient:
         }}
         
         return self._activity("{path}", body, "{versioned_method_name}", {response_type})
+    
+    def stamp_{snake_method_name}(self, input: {input_type}) -> TSignedRequest:
+        \"\"\"Stamp a {method_name} request without sending it.\"\"\"
+        
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+        
+        body = {{
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "{versioned_activity_type}"
+        }}
+        
+        full_url = self.base_url + "{path}"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+        
+        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
 """)
 
         elif method_type == "activityDecision":
@@ -314,6 +378,28 @@ class TurnkeyClient:
         }}
         
         return self._activity_decision("{path}", body, {response_type})
+    
+    def stamp_{snake_method_name}(self, input: {input_type}) -> TSignedRequest:
+        \"\"\"Stamp a {method_name} request without sending it.\"\"\"
+        
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+        
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+        
+        body = {{
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "{unversioned_activity_type}"
+        }}
+        
+        full_url = self.base_url + "{path}"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+        
+        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
 """)
 
     return "\n".join(code_buffer)
@@ -351,9 +437,12 @@ def main():
     # Build full output
     output = f"{COMMENT_HEADER}\n\n"
     output += "import json\nimport time\nfrom typing import Any, Dict, Optional\nimport requests\n"
-    output += "from turnkey_api_key_stamper import ApiKeyStamper\n"
-    output += "from turnkey_sdk_types.generated.types import *\n\n"
-    output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n"
+    output += "from dataclasses import dataclass\n"
+    output += "from turnkey_api_key_stamper import ApiKeyStamper, TStamp\n"
+    output += "from turnkey_sdk_types import *\n"
+    output += "from ..version import VERSION\n\n"
+    output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n\n"
+    output += """@dataclass\nclass TSignedRequest:\n    \"\"\"A signed request ready to be sent to the Turnkey API.\"\"\"\n    \n    url: str\n    body: str\n    stamp: TStamp\n\n"""
     output += client_code
 
     # Ensure output directory exists

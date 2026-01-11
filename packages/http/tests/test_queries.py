@@ -1,7 +1,9 @@
-"""Test Turnkey HTTP client query methods."""
+"""Test Turnkey HTTP client query methods"""
+
+from turnkey_http.utils import send_signed_request
+from turnkey_sdk_types import TGetOrganizationResponse, TGetOrganizationBody
 
 import pytest
-from turnkey_sdk_types.generated.types import TGetOrganizationBody
 
 
 def test_get_whoami(client, org_id):
@@ -73,6 +75,26 @@ def test_get_wallets(client):
 
     print("✅ getWallets successful!")
     print(f"\nFound {len(response.wallets)} wallets")
+
+
+def test_stamp_get_organization_send_signed_request(client, org_id):
+    """Stamp a query and submit via send_signed_request."""
+    print("\n🔧 Testing stamp + send for getOrganization")
+
+    # Stamp only (queries have flat bodies)
+    signed_req = client.stamp_get_organization(TGetOrganizationBody())
+
+    # Manually send stamped request; parse into typed response
+    org_resp = send_signed_request(
+        signed_req, parser=lambda p: TGetOrganizationResponse(**p)
+    )
+
+    assert org_resp is not None
+    assert org_resp.organizationData is not None
+    assert org_resp.organizationData.organizationId == org_id
+    print(
+        f"✅ Stamped getOrganization submitted; org: {org_resp.organizationData.organizationId}"
+    )
 
 
 def test_organization_id_override_query(client):
