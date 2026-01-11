@@ -89,6 +89,16 @@ make generate-http     # Generate HTTP client only
 make test
 ```
 
+### Code Quality
+
+Before committing, run these commands to ensure code cleanliness:
+
+```bash
+make format      # Format code with ruff
+make typecheck   # Check types with mypy
+make test        # Run tests
+```
+
 ## 📝 Project Structure
 
 ```

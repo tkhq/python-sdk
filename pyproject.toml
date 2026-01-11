@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "turnkey-oss"
+version = "0.1.0"
+description = "Turnkey Python SDK - monorepo workspace"
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.8.0",
+    "types-requests>=2.31.0",
+    "ruff>=0.1.0",
+    "pytest>=7.0.0",
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = false
+strict_optional = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = true
+follow_imports = "silent"
+ignore_missing_imports = true
+
+# Exclude patterns
+exclude = [
+    "^venv/",
+    "^build/",
+    "^dist/",
+    "^\\.eggs/",
+]

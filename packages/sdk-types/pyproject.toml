@@ -41,3 +41,6 @@ Documentation = "https://github.com/tkhq/python-sdk/tree/main/packages/sdk-types
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+turnkey_sdk_types = ["py.typed"]

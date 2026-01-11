@@ -35,3 +35,6 @@ Documentation = "https://github.com/tkhq/python-sdk/tree/main/packages/stamper"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+turnkey_api_key_stamper = ["py.typed"]

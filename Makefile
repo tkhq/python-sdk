@@ -1,4 +1,4 @@
-.PHONY: generate generate-types generate-http test format install clean help
+.PHONY: generate generate-types generate-http test format typecheck install clean help
 
 help:
 	@echo "Available commands:"
@@ -7,6 +7,7 @@ help:
 	@echo "  make generate-http  - Generate HTTP client"
 	@echo "  make test          - Run tests"
 	@echo "  make format        - Format all Python files with ruff"
+	@echo "  make typecheck     - Run mypy type checking"
 	@echo "  make install       - Install all packages in dev mode"
 	@echo "  make clean         - Remove generated files and caches"
 
@@ -28,8 +29,14 @@ format:
 	@echo "🎨 Formatting code..."
 	@ruff format .
 
+typecheck:
+	@echo "🔍 Running type checks..."
+	@mypy packages/
+	@echo "✅ Type checking complete"
+
 install:
 	@echo "📦 Installing packages in dev mode..."
+	@pip install -e .[dev]
 	@pip install -e ./packages/sdk-types[dev]
 	@pip install -e ./packages/api-key-stamper[dev]
 	@pip install -e ./packages/http[dev]
