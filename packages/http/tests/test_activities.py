@@ -7,6 +7,7 @@ from turnkey_sdk_types import (
     v1ApiKeyCurve,
     TCreateApiKeysBody,
     TGetActivityResponse,
+    TurnkeyNetworkError,
 )
 from turnkey_http.utils import send_signed_request
 
@@ -80,16 +81,18 @@ def test_organization_id_override(client, user_id):
     )
 
     # This should fail because we're using a wrong organization ID
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(TurnkeyNetworkError) as exc_info:
         client.create_api_keys(request)
 
     # Verify the error is related to the wrong organization
-    error_msg = str(exc_info.value)
+    error = exc_info.value
+    error_msg = str(error)
     print(f"\n❌ Error message: {error_msg}")
+    print(f"   Status code: {error.status_code}")
     print(f"✅ Request failed as expected with wrong organization ID")
 
     # Assert that we got the expected error for organization not found
-    assert "ORGANIZATION_NOT_FOUND" in error_msg
+    assert "no organization found" in error_msg.lower()
     assert wrong_org_id in error_msg
 
 

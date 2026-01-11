@@ -91,7 +91,7 @@ class TurnkeyClient:
             Parsed response as Pydantic model
 
         Raises:
-            Exception: If request fails
+            TurnkeyNetworkError: If request fails
         """
         full_url = self.base_url + url
         body_str = self._serialize_body(body)
@@ -103,16 +103,30 @@ class TurnkeyClient:
             "X-Client-Version": VERSION,
         }
 
-        response = requests.post(
-            full_url, headers=headers, data=body_str, timeout=self.default_timeout
-        )
+        try:
+            response = requests.post(
+                full_url, headers=headers, data=body_str, timeout=self.default_timeout
+            )
+        except requests.RequestException as exc:
+            raise TurnkeyNetworkError(
+                "Request failed", None, TurnkeyErrorCodes.NETWORK_ERROR, str(exc)
+            ) from exc
 
         if not response.ok:
             try:
                 error_data = response.json()
-                raise Exception(f"Turnkey API error: {error_data}")
+                error_message = error_data.get("message", str(error_data))
             except ValueError:
-                raise Exception(f"{response.status_code} {response.reason}")
+                error_message = (
+                    response.text or f"{response.status_code} {response.reason}"
+                )
+
+            raise TurnkeyNetworkError(
+                error_message,
+                response.status_code,
+                TurnkeyErrorCodes.BAD_RESPONSE,
+                response.text,
+            )
 
         response_data = response.json()
         return response_type(**response_data)

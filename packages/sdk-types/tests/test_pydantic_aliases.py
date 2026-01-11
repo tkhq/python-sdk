@@ -4,6 +4,7 @@ from turnkey_sdk_types import (
     TEthSendTransactionBody,
 )
 
+
 def test_pydantic_aliases():
     """Test Pydantic field aliasing for Python keywords and special characters.
 

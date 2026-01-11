@@ -1,7 +1,11 @@
 """Test Turnkey HTTP client query methods"""
 
 from turnkey_http.utils import send_signed_request
-from turnkey_sdk_types import TGetOrganizationResponse, TGetOrganizationBody
+from turnkey_sdk_types import (
+    TGetOrganizationResponse,
+    TGetOrganizationBody,
+    TurnkeyNetworkError,
+)
 
 import pytest
 
@@ -106,12 +110,14 @@ def test_organization_id_override_query(client):
     request = TGetOrganizationBody(organizationId=wrong_org_id)
 
     # This should fail because we're using a wrong organization ID
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(TurnkeyNetworkError) as exc_info:
         client.get_organization(request)
 
     # Verify the error is related to the wrong organization
-    error_msg = str(exc_info.value)
+    error = exc_info.value
+    error_msg = str(error)
     print(f"\n❌ Error message: {error_msg}")
+    print(f"   Status code: {error.status_code}")
     print(f"✅ Request failed as expected with wrong organization ID")
 
     # Assert that we got an error for invalid organization (different error than activities)
