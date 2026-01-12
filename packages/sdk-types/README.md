@@ -2,6 +2,20 @@
 
 Generated type definitions for the Turnkey API based on the OpenAPI specification.
 
+## Why Pydantic?
+
+This package uses Pydantic models to handle field name conflicts with Python keywords. For example, some Turnkey API requests include a `from` field (like `v1EthSendTransactionIntent`), which is a reserved keyword in Python. 
+
+Pydantic's Field aliasing allows us to:
+- Use `from_` in Python code (avoiding syntax errors)
+- Automatically serialize to `from` when making API requests to Turnkey
+
+```python
+class v1EthSendTransactionIntent(TurnkeyBaseModel):
+    from_: str = Field(alias="from")
+    # ... other fields
+```
+
 ## Installation
 
 ```bash
@@ -50,8 +64,11 @@ pip install -e ".[dev]"
 sdk-types/
 ├── src/
 │   └── turnkey_sdk_types/
-│       ├── __init__.py
-│       └── generated/         # Auto-generated types (do not edit manually)
+│       ├── __init__.py        # Package exports
+│       ├── types.py           # RequestType, SignedRequest (not generated)
+│       ├── errors.py          # TurnkeyError, TurnkeyNetworkError (not generated)
+│       └── generated/         # Auto-generated from OpenAPI spec
+│           └── types.py       
 ├── scripts/
 │   └── generate.py           # Code generation script
 ├── pyproject.toml
@@ -64,6 +81,14 @@ sdk-types/
 
 ## Development
 
-The generated types are created using `datamodel-code-generator` which creates Pydantic models from the OpenAPI specification.
+### Generated Types
+
+The types in `generated/types.py` are automatically created from the OpenAPI specification at `schema/public_api.swagger.json`. These include all request/response models like `v1EthSendTransactionIntent`, `CreateWalletBody`, etc.
 
 **Important:** Never edit files in `src/turnkey_sdk_types/generated/` manually. They will be overwritten on the next generation run.
+
+### Non-Generated Types
+
+Files outside the `generated/` directory are maintained as part of the SDK and are not auto-generated:
+- `types.py` - Core SDK types like `RequestType`, `SignedRequest`
+- `errors.py` - Error classes like `TurnkeyError`, `TurnkeyNetworkError`
