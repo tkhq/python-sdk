@@ -1,7 +1,7 @@
 import json
 
 from turnkey_sdk_types import (
-    TEthSendTransactionBody,
+    EthSendTransactionBody,
 )
 
 
@@ -20,10 +20,10 @@ def test_pydantic_aliases():
     print("🔧 Testing Pydantic Field Aliases on Generated Types")
     print("=" * 50)
 
-    # Test 1: TEthSendTransactionBody with 'from' keyword field
-    print("\n✓ Test 1: TEthSendTransactionBody 'from' keyword field")
+    # Test 1: EthSendTransactionBody with 'from' keyword field
+    print("\n✓ Test 1: EthSendTransactionBody 'from' keyword field")
 
-    eth_tx = TEthSendTransactionBody(
+    eth_tx = EthSendTransactionBody(
         timestampMs="1234567890",
         organizationId="test-org",
         from_="0x1234567890123456789012345678901234567890",  # Python name with underscore
@@ -41,8 +41,8 @@ def test_pydantic_aliases():
     assert json_dict["from"] == "0x1234567890123456789012345678901234567890"
     print("  ✅ Field 'from_' correctly aliased to 'from' in JSON")
 
-    # Test 2: Parse TEthSendTransactionBody from JSON with 'from' keyword
-    print("\n✓ Test 2: Parse TEthSendTransactionBody from JSON with 'from' keyword")
+    # Test 2: Parse EthSendTransactionBody from JSON with 'from' keyword
+    print("\n✓ Test 2: Parse EthSendTransactionBody from JSON with 'from' keyword")
     json_input = {
         "timestampMs": "1234567890",
         "organizationId": "test-org",
@@ -50,7 +50,7 @@ def test_pydantic_aliases():
         "caip2": "eip155:137",
         "to": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     }
-    parsed = TEthSendTransactionBody.model_validate(json_input)
+    parsed = EthSendTransactionBody.model_validate(json_input)
     print(f"  JSON:   {json.dumps(json_input, indent=2)}")
     print(f"  Python: from_='{parsed.from_}', to='{parsed.to}'")
 
@@ -67,7 +67,7 @@ def test_pydantic_aliases():
         "caip2": "eip155:1",
         "to": "0x8888888888888888888888888888888888888888",
     }
-    parsed2 = TEthSendTransactionBody.model_validate(json_with_python_name)
+    parsed2 = EthSendTransactionBody.model_validate(json_with_python_name)
     print(f"  JSON (Python name): {json.dumps(json_with_python_name, indent=2)}")
     print(f"  Python: from_='{parsed2.from_}'")
 

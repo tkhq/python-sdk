@@ -2,12 +2,13 @@
 
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TypeVar, overload
 import requests
-from dataclasses import dataclass
-from turnkey_api_key_stamper import ApiKeyStamper, TStamp
+from turnkey_api_key_stamper import ApiKeyStamper
 from turnkey_sdk_types import *
 from ..version import VERSION
+
+T = TypeVar("T")
 
 TERMINAL_ACTIVITY_STATUSES = [
     "ACTIVITY_STATUS_COMPLETED",
@@ -15,15 +16,6 @@ TERMINAL_ACTIVITY_STATUSES = [
     "ACTIVITY_STATUS_CONSENSUS_NEEDED",
     "ACTIVITY_STATUS_REJECTED",
 ]
-
-
-@dataclass
-class TSignedRequest:
-    """A signed request ready to be sent to the Turnkey API."""
-
-    url: str
-    body: str
-    stamp: TStamp
 
 
 class TurnkeyClient:
@@ -131,6 +123,29 @@ class TurnkeyClient:
         response_data = response.json()
         return response_type(**response_data)
 
+    def _poll_for_completion(self, activity: Any) -> Any:
+        """Poll until activity reaches terminal status.
+
+        Args:
+            activity: Initial activity object with id and status attributes.
+
+        Returns:
+            Activity object after reaching terminal status or max retries.
+        """
+        if activity.status in TERMINAL_ACTIVITY_STATUSES:
+            return activity
+
+        attempts = 0
+        while attempts < self.max_polling_retries:
+            time.sleep(self.polling_interval_ms / 1000.0)
+            poll_response = self.get_activity(GetActivityBody(activityId=activity.id))
+            activity = poll_response.activity
+            if activity.status in TERMINAL_ACTIVITY_STATUSES:
+                break
+            attempts += 1
+
+        return activity
+
     def _activity(
         self, url: str, body: Dict[str, Any], result_key: str, response_type: type
     ) -> Any:
@@ -146,29 +161,10 @@ class TurnkeyClient:
             Parsed response as Pydantic model with flattened result fields
         """
         # Make initial request, we parse as activity response without result fields
-        initial_response = self._request(url, body, TGetActivityResponse)
+        initial_response = self._request(url, body, GetActivityResponse)
 
-        # Check if we need to poll
-        activity = initial_response.activity
-
-        if activity.status not in TERMINAL_ACTIVITY_STATUSES:
-            # Poll for completion
-            activity_id = activity.id
-            attempts = 0
-
-            while attempts < self.max_polling_retries:
-                time.sleep(self.polling_interval_ms / 1000.0)
-
-                # Poll activity status
-                poll_response = self.get_activity(
-                    TGetActivityBody(activityId=activity_id)
-                )
-                activity = poll_response.activity
-
-                if activity.status in TERMINAL_ACTIVITY_STATUSES:
-                    break
-
-                attempts += 1
+        # Poll for completion
+        activity = self._poll_for_completion(initial_response.activity)
 
         # If activity completed successfully, flatten result fields into response
         if (
@@ -207,7 +203,87 @@ class TurnkeyClient:
         """
         return self._request(url, body, response_type)
 
-    def get_activity(self, input: TGetActivityBody) -> TGetActivityResponse:
+    @overload
+    def send_signed_request(
+        self, signed_request: SignedRequest, response_type: Callable[[Any], T]
+    ) -> T: ...
+
+    @overload
+    def send_signed_request(self, signed_request: SignedRequest) -> Any: ...
+
+    def send_signed_request(
+        self,
+        signed_request: SignedRequest,
+        response_type: Callable[[Any], T] | None = None,
+    ) -> Any:
+        """Submit a signed request and poll for activity completion if needed.
+
+        You can pass in the SignedRequest returned by any of the SDK's
+        stamping methods (stamp_create_api_keys, stamp_get_policies, etc.).
+
+        For activities, this will poll until the activity reaches a terminal status.
+
+        Args:
+            signed_request: A SignedRequest object returned by a stamping method.
+            response_type: Optional callable to convert the JSON payload to a typed value.
+                          Typically a Pydantic model class.
+
+        Returns:
+            The parsed response via response_type, or raw JSON dict if no type provided.
+
+        Raises:
+            TurnkeyNetworkError: If the request fails.
+        """
+        headers = {
+            signed_request.stamp.stamp_header_name: signed_request.stamp.stamp_header_value,
+            "Content-Type": "application/json",
+            "X-Client-Version": VERSION,
+        }
+
+        try:
+            response = requests.post(
+                signed_request.url,
+                headers=headers,
+                data=signed_request.body,
+                timeout=self.default_timeout,
+            )
+        except requests.RequestException as exc:
+            raise TurnkeyNetworkError(
+                "Signed request failed", None, TurnkeyErrorCodes.NETWORK_ERROR, str(exc)
+            ) from exc
+
+        if not response.ok:
+            try:
+                error_data = response.json()
+                error_message = error_data.get("message", str(error_data))
+            except ValueError:
+                error_message = (
+                    response.text or f"{response.status_code} {response.reason}"
+                )
+
+            raise TurnkeyNetworkError(
+                error_message,
+                response.status_code,
+                TurnkeyErrorCodes.BAD_RESPONSE,
+                response.text,
+            )
+
+        payload = response.json()
+
+        # Poll for activity completion if this is an activity request
+        if signed_request.type == RequestType.ACTIVITY:
+            activity_response = GetActivityResponse(**payload)
+            activity = self._poll_for_completion(activity_response.activity)
+            # Return updated payload with polled activity
+            payload["activity"] = (
+                activity.model_dump(by_alias=True, exclude_none=True)
+                if hasattr(activity, "model_dump")
+                else payload["activity"]
+            )
+
+        return response_type(payload) if response_type is not None else payload
+
+    def get_activity(self, input: GetActivityBody) -> GetActivityResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -215,11 +291,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request(
-            "/public/v1/query/get_activity", body, TGetActivityResponse
-        )
+        return self._request("/public/v1/query/get_activity", body, GetActivityResponse)
 
-    def stamp_get_activity(self, input: TGetActivityBody) -> TSignedRequest:
+    def stamp_get_activity(self, input: GetActivityBody) -> SignedRequest:
         """Stamp a getActivity request without sending it."""
 
         # Convert Pydantic model to dict
@@ -233,9 +307,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_api_key(self, input: TGetApiKeyBody) -> TGetApiKeyResponse:
+    def get_api_key(self, input: GetApiKeyBody) -> GetApiKeyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -243,9 +319,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_api_key", body, TGetApiKeyResponse)
+        return self._request("/public/v1/query/get_api_key", body, GetApiKeyResponse)
 
-    def stamp_get_api_key(self, input: TGetApiKeyBody) -> TSignedRequest:
+    def stamp_get_api_key(self, input: GetApiKeyBody) -> SignedRequest:
         """Stamp a getApiKey request without sending it."""
 
         # Convert Pydantic model to dict
@@ -259,11 +335,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_api_keys(
-        self, input: Optional[TGetApiKeysBody] = None
-    ) -> TGetApiKeysResponse:
+        self, input: Optional[GetApiKeysBody] = None
+    ) -> GetApiKeysResponse:
         if input is None:
             input_dict = {}
         else:
@@ -274,11 +352,11 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_api_keys", body, TGetApiKeysResponse)
+        return self._request("/public/v1/query/get_api_keys", body, GetApiKeysResponse)
 
     def stamp_get_api_keys(
-        self, input: Optional[TGetApiKeysBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetApiKeysBody] = None
+    ) -> SignedRequest:
         """Stamp a getApiKeys request without sending it."""
 
         if input is None:
@@ -295,11 +373,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_attestation_document(
-        self, input: TGetAttestationDocumentBody
-    ) -> TGetAttestationDocumentResponse:
+        self, input: GetAttestationDocumentBody
+    ) -> GetAttestationDocumentResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -308,12 +388,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_attestation", body, TGetAttestationDocumentResponse
+            "/public/v1/query/get_attestation", body, GetAttestationDocumentResponse
         )
 
     def stamp_get_attestation_document(
-        self, input: TGetAttestationDocumentBody
-    ) -> TSignedRequest:
+        self, input: GetAttestationDocumentBody
+    ) -> SignedRequest:
         """Stamp a getAttestationDocument request without sending it."""
 
         # Convert Pydantic model to dict
@@ -327,11 +407,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_authenticator(
-        self, input: TGetAuthenticatorBody
-    ) -> TGetAuthenticatorResponse:
+        self, input: GetAuthenticatorBody
+    ) -> GetAuthenticatorResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -340,10 +422,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_authenticator", body, TGetAuthenticatorResponse
+            "/public/v1/query/get_authenticator", body, GetAuthenticatorResponse
         )
 
-    def stamp_get_authenticator(self, input: TGetAuthenticatorBody) -> TSignedRequest:
+    def stamp_get_authenticator(self, input: GetAuthenticatorBody) -> SignedRequest:
         """Stamp a getAuthenticator request without sending it."""
 
         # Convert Pydantic model to dict
@@ -357,11 +439,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_authenticators(
-        self, input: TGetAuthenticatorsBody
-    ) -> TGetAuthenticatorsResponse:
+        self, input: GetAuthenticatorsBody
+    ) -> GetAuthenticatorsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -370,10 +454,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_authenticators", body, TGetAuthenticatorsResponse
+            "/public/v1/query/get_authenticators", body, GetAuthenticatorsResponse
         )
 
-    def stamp_get_authenticators(self, input: TGetAuthenticatorsBody) -> TSignedRequest:
+    def stamp_get_authenticators(self, input: GetAuthenticatorsBody) -> SignedRequest:
         """Stamp a getAuthenticators request without sending it."""
 
         # Convert Pydantic model to dict
@@ -387,9 +471,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_boot_proof(self, input: TGetBootProofBody) -> TGetBootProofResponse:
+    def get_boot_proof(self, input: GetBootProofBody) -> GetBootProofResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -398,10 +484,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_boot_proof", body, TGetBootProofResponse
+            "/public/v1/query/get_boot_proof", body, GetBootProofResponse
         )
 
-    def stamp_get_boot_proof(self, input: TGetBootProofBody) -> TSignedRequest:
+    def stamp_get_boot_proof(self, input: GetBootProofBody) -> SignedRequest:
         """Stamp a getBootProof request without sending it."""
 
         # Convert Pydantic model to dict
@@ -415,9 +501,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_gas_usage(self, input: TGetGasUsageBody) -> TGetGasUsageResponse:
+    def get_gas_usage(self, input: GetGasUsageBody) -> GetGasUsageResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -426,10 +514,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_gas_usage", body, TGetGasUsageResponse
+            "/public/v1/query/get_gas_usage", body, GetGasUsageResponse
         )
 
-    def stamp_get_gas_usage(self, input: TGetGasUsageBody) -> TSignedRequest:
+    def stamp_get_gas_usage(self, input: GetGasUsageBody) -> SignedRequest:
         """Stamp a getGasUsage request without sending it."""
 
         # Convert Pydantic model to dict
@@ -443,11 +531,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_latest_boot_proof(
-        self, input: TGetLatestBootProofBody
-    ) -> TGetLatestBootProofResponse:
+        self, input: GetLatestBootProofBody
+    ) -> GetLatestBootProofResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -456,12 +546,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_latest_boot_proof", body, TGetLatestBootProofResponse
+            "/public/v1/query/get_latest_boot_proof", body, GetLatestBootProofResponse
         )
 
     def stamp_get_latest_boot_proof(
-        self, input: TGetLatestBootProofBody
-    ) -> TSignedRequest:
+        self, input: GetLatestBootProofBody
+    ) -> SignedRequest:
         """Stamp a getLatestBootProof request without sending it."""
 
         # Convert Pydantic model to dict
@@ -475,9 +565,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_nonces(self, input: TGetNoncesBody) -> TGetNoncesResponse:
+    def get_nonces(self, input: GetNoncesBody) -> GetNoncesResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -485,9 +577,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_nonces", body, TGetNoncesResponse)
+        return self._request("/public/v1/query/get_nonces", body, GetNoncesResponse)
 
-    def stamp_get_nonces(self, input: TGetNoncesBody) -> TSignedRequest:
+    def stamp_get_nonces(self, input: GetNoncesBody) -> SignedRequest:
         """Stamp a getNonces request without sending it."""
 
         # Convert Pydantic model to dict
@@ -501,11 +593,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_oauth2_credential(
-        self, input: TGetOauth2CredentialBody
-    ) -> TGetOauth2CredentialResponse:
+        self, input: GetOauth2CredentialBody
+    ) -> GetOauth2CredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -514,12 +608,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_oauth2_credential", body, TGetOauth2CredentialResponse
+            "/public/v1/query/get_oauth2_credential", body, GetOauth2CredentialResponse
         )
 
     def stamp_get_oauth2_credential(
-        self, input: TGetOauth2CredentialBody
-    ) -> TSignedRequest:
+        self, input: GetOauth2CredentialBody
+    ) -> SignedRequest:
         """Stamp a getOauth2Credential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -533,11 +627,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_oauth_providers(
-        self, input: TGetOauthProvidersBody
-    ) -> TGetOauthProvidersResponse:
+        self, input: GetOauthProvidersBody
+    ) -> GetOauthProvidersResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -546,12 +642,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_oauth_providers", body, TGetOauthProvidersResponse
+            "/public/v1/query/get_oauth_providers", body, GetOauthProvidersResponse
         )
 
-    def stamp_get_oauth_providers(
-        self, input: TGetOauthProvidersBody
-    ) -> TSignedRequest:
+    def stamp_get_oauth_providers(self, input: GetOauthProvidersBody) -> SignedRequest:
         """Stamp a getOauthProviders request without sending it."""
 
         # Convert Pydantic model to dict
@@ -565,11 +659,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_on_ramp_transaction_status(
-        self, input: TGetOnRampTransactionStatusBody
-    ) -> TGetOnRampTransactionStatusResponse:
+        self, input: GetOnRampTransactionStatusBody
+    ) -> GetOnRampTransactionStatusResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -580,12 +676,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/get_onramp_transaction_status",
             body,
-            TGetOnRampTransactionStatusResponse,
+            GetOnRampTransactionStatusResponse,
         )
 
     def stamp_get_on_ramp_transaction_status(
-        self, input: TGetOnRampTransactionStatusBody
-    ) -> TSignedRequest:
+        self, input: GetOnRampTransactionStatusBody
+    ) -> SignedRequest:
         """Stamp a getOnRampTransactionStatus request without sending it."""
 
         # Convert Pydantic model to dict
@@ -599,11 +695,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_organization(
-        self, input: Optional[TGetOrganizationBody] = None
-    ) -> TGetOrganizationResponse:
+        self, input: Optional[GetOrganizationBody] = None
+    ) -> GetOrganizationResponse:
         if input is None:
             input_dict = {}
         else:
@@ -615,12 +713,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_organization", body, TGetOrganizationResponse
+            "/public/v1/query/get_organization", body, GetOrganizationResponse
         )
 
     def stamp_get_organization(
-        self, input: Optional[TGetOrganizationBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetOrganizationBody] = None
+    ) -> SignedRequest:
         """Stamp a getOrganization request without sending it."""
 
         if input is None:
@@ -637,11 +735,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_organization_configs(
-        self, input: TGetOrganizationConfigsBody
-    ) -> TGetOrganizationConfigsResponse:
+        self, input: GetOrganizationConfigsBody
+    ) -> GetOrganizationConfigsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -652,12 +752,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/get_organization_configs",
             body,
-            TGetOrganizationConfigsResponse,
+            GetOrganizationConfigsResponse,
         )
 
     def stamp_get_organization_configs(
-        self, input: TGetOrganizationConfigsBody
-    ) -> TSignedRequest:
+        self, input: GetOrganizationConfigsBody
+    ) -> SignedRequest:
         """Stamp a getOrganizationConfigs request without sending it."""
 
         # Convert Pydantic model to dict
@@ -671,9 +771,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_policy(self, input: TGetPolicyBody) -> TGetPolicyResponse:
+    def get_policy(self, input: GetPolicyBody) -> GetPolicyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -681,9 +783,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_policy", body, TGetPolicyResponse)
+        return self._request("/public/v1/query/get_policy", body, GetPolicyResponse)
 
-    def stamp_get_policy(self, input: TGetPolicyBody) -> TSignedRequest:
+    def stamp_get_policy(self, input: GetPolicyBody) -> SignedRequest:
         """Stamp a getPolicy request without sending it."""
 
         # Convert Pydantic model to dict
@@ -697,11 +799,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_policy_evaluations(
-        self, input: TGetPolicyEvaluationsBody
-    ) -> TGetPolicyEvaluationsResponse:
+        self, input: GetPolicyEvaluationsBody
+    ) -> GetPolicyEvaluationsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -712,12 +816,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/get_policy_evaluations",
             body,
-            TGetPolicyEvaluationsResponse,
+            GetPolicyEvaluationsResponse,
         )
 
     def stamp_get_policy_evaluations(
-        self, input: TGetPolicyEvaluationsBody
-    ) -> TSignedRequest:
+        self, input: GetPolicyEvaluationsBody
+    ) -> SignedRequest:
         """Stamp a getPolicyEvaluations request without sending it."""
 
         # Convert Pydantic model to dict
@@ -731,9 +835,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_private_key(self, input: TGetPrivateKeyBody) -> TGetPrivateKeyResponse:
+    def get_private_key(self, input: GetPrivateKeyBody) -> GetPrivateKeyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -742,10 +848,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_private_key", body, TGetPrivateKeyResponse
+            "/public/v1/query/get_private_key", body, GetPrivateKeyResponse
         )
 
-    def stamp_get_private_key(self, input: TGetPrivateKeyBody) -> TSignedRequest:
+    def stamp_get_private_key(self, input: GetPrivateKeyBody) -> SignedRequest:
         """Stamp a getPrivateKey request without sending it."""
 
         # Convert Pydantic model to dict
@@ -759,11 +865,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_send_transaction_status(
-        self, input: TGetSendTransactionStatusBody
-    ) -> TGetSendTransactionStatusResponse:
+        self, input: GetSendTransactionStatusBody
+    ) -> GetSendTransactionStatusResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -774,12 +882,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/get_send_transaction_status",
             body,
-            TGetSendTransactionStatusResponse,
+            GetSendTransactionStatusResponse,
         )
 
     def stamp_get_send_transaction_status(
-        self, input: TGetSendTransactionStatusBody
-    ) -> TSignedRequest:
+        self, input: GetSendTransactionStatusBody
+    ) -> SignedRequest:
         """Stamp a getSendTransactionStatus request without sending it."""
 
         # Convert Pydantic model to dict
@@ -793,11 +901,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_smart_contract_interface(
-        self, input: TGetSmartContractInterfaceBody
-    ) -> TGetSmartContractInterfaceResponse:
+        self, input: GetSmartContractInterfaceBody
+    ) -> GetSmartContractInterfaceResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -808,12 +918,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/get_smart_contract_interface",
             body,
-            TGetSmartContractInterfaceResponse,
+            GetSmartContractInterfaceResponse,
         )
 
     def stamp_get_smart_contract_interface(
-        self, input: TGetSmartContractInterfaceBody
-    ) -> TSignedRequest:
+        self, input: GetSmartContractInterfaceBody
+    ) -> SignedRequest:
         """Stamp a getSmartContractInterface request without sending it."""
 
         # Convert Pydantic model to dict
@@ -827,9 +937,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_user(self, input: TGetUserBody) -> TGetUserResponse:
+    def get_user(self, input: GetUserBody) -> GetUserResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -837,9 +949,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_user", body, TGetUserResponse)
+        return self._request("/public/v1/query/get_user", body, GetUserResponse)
 
-    def stamp_get_user(self, input: TGetUserBody) -> TSignedRequest:
+    def stamp_get_user(self, input: GetUserBody) -> SignedRequest:
         """Stamp a getUser request without sending it."""
 
         # Convert Pydantic model to dict
@@ -853,9 +965,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_wallet(self, input: TGetWalletBody) -> TGetWalletResponse:
+    def get_wallet(self, input: GetWalletBody) -> GetWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -863,9 +977,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/get_wallet", body, TGetWalletResponse)
+        return self._request("/public/v1/query/get_wallet", body, GetWalletResponse)
 
-    def stamp_get_wallet(self, input: TGetWalletBody) -> TSignedRequest:
+    def stamp_get_wallet(self, input: GetWalletBody) -> SignedRequest:
         """Stamp a getWallet request without sending it."""
 
         # Convert Pydantic model to dict
@@ -879,11 +993,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_wallet_account(
-        self, input: TGetWalletAccountBody
-    ) -> TGetWalletAccountResponse:
+        self, input: GetWalletAccountBody
+    ) -> GetWalletAccountResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -892,10 +1008,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/get_wallet_account", body, TGetWalletAccountResponse
+            "/public/v1/query/get_wallet_account", body, GetWalletAccountResponse
         )
 
-    def stamp_get_wallet_account(self, input: TGetWalletAccountBody) -> TSignedRequest:
+    def stamp_get_wallet_account(self, input: GetWalletAccountBody) -> SignedRequest:
         """Stamp a getWalletAccount request without sending it."""
 
         # Convert Pydantic model to dict
@@ -909,11 +1025,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_activities(
-        self, input: Optional[TGetActivitiesBody] = None
-    ) -> TGetActivitiesResponse:
+        self, input: Optional[GetActivitiesBody] = None
+    ) -> GetActivitiesResponse:
         if input is None:
             input_dict = {}
         else:
@@ -925,12 +1043,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_activities", body, TGetActivitiesResponse
+            "/public/v1/query/list_activities", body, GetActivitiesResponse
         )
 
     def stamp_get_activities(
-        self, input: Optional[TGetActivitiesBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetActivitiesBody] = None
+    ) -> SignedRequest:
         """Stamp a getActivities request without sending it."""
 
         if input is None:
@@ -947,9 +1065,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_app_proofs(self, input: TGetAppProofsBody) -> TGetAppProofsResponse:
+    def get_app_proofs(self, input: GetAppProofsBody) -> GetAppProofsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -958,10 +1078,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_app_proofs", body, TGetAppProofsResponse
+            "/public/v1/query/list_app_proofs", body, GetAppProofsResponse
         )
 
-    def stamp_get_app_proofs(self, input: TGetAppProofsBody) -> TSignedRequest:
+    def stamp_get_app_proofs(self, input: GetAppProofsBody) -> SignedRequest:
         """Stamp a getAppProofs request without sending it."""
 
         # Convert Pydantic model to dict
@@ -975,11 +1095,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def list_fiat_on_ramp_credentials(
-        self, input: TListFiatOnRampCredentialsBody
-    ) -> TListFiatOnRampCredentialsResponse:
+        self, input: ListFiatOnRampCredentialsBody
+    ) -> ListFiatOnRampCredentialsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -990,12 +1112,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/list_fiat_on_ramp_credentials",
             body,
-            TListFiatOnRampCredentialsResponse,
+            ListFiatOnRampCredentialsResponse,
         )
 
     def stamp_list_fiat_on_ramp_credentials(
-        self, input: TListFiatOnRampCredentialsBody
-    ) -> TSignedRequest:
+        self, input: ListFiatOnRampCredentialsBody
+    ) -> SignedRequest:
         """Stamp a listFiatOnRampCredentials request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1009,11 +1131,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def list_oauth2_credentials(
-        self, input: TListOauth2CredentialsBody
-    ) -> TListOauth2CredentialsResponse:
+        self, input: ListOauth2CredentialsBody
+    ) -> ListOauth2CredentialsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1024,12 +1148,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/list_oauth2_credentials",
             body,
-            TListOauth2CredentialsResponse,
+            ListOauth2CredentialsResponse,
         )
 
     def stamp_list_oauth2_credentials(
-        self, input: TListOauth2CredentialsBody
-    ) -> TSignedRequest:
+        self, input: ListOauth2CredentialsBody
+    ) -> SignedRequest:
         """Stamp a listOauth2Credentials request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1043,11 +1167,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_policies(
-        self, input: Optional[TGetPoliciesBody] = None
-    ) -> TGetPoliciesResponse:
+        self, input: Optional[GetPoliciesBody] = None
+    ) -> GetPoliciesResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1059,12 +1185,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_policies", body, TGetPoliciesResponse
+            "/public/v1/query/list_policies", body, GetPoliciesResponse
         )
 
     def stamp_get_policies(
-        self, input: Optional[TGetPoliciesBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetPoliciesBody] = None
+    ) -> SignedRequest:
         """Stamp a getPolicies request without sending it."""
 
         if input is None:
@@ -1081,11 +1207,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def list_private_key_tags(
-        self, input: TListPrivateKeyTagsBody
-    ) -> TListPrivateKeyTagsResponse:
+        self, input: ListPrivateKeyTagsBody
+    ) -> ListPrivateKeyTagsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1094,12 +1222,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_private_key_tags", body, TListPrivateKeyTagsResponse
+            "/public/v1/query/list_private_key_tags", body, ListPrivateKeyTagsResponse
         )
 
     def stamp_list_private_key_tags(
-        self, input: TListPrivateKeyTagsBody
-    ) -> TSignedRequest:
+        self, input: ListPrivateKeyTagsBody
+    ) -> SignedRequest:
         """Stamp a listPrivateKeyTags request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1113,11 +1241,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_private_keys(
-        self, input: Optional[TGetPrivateKeysBody] = None
-    ) -> TGetPrivateKeysResponse:
+        self, input: Optional[GetPrivateKeysBody] = None
+    ) -> GetPrivateKeysResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1129,12 +1259,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_private_keys", body, TGetPrivateKeysResponse
+            "/public/v1/query/list_private_keys", body, GetPrivateKeysResponse
         )
 
     def stamp_get_private_keys(
-        self, input: Optional[TGetPrivateKeysBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetPrivateKeysBody] = None
+    ) -> SignedRequest:
         """Stamp a getPrivateKeys request without sending it."""
 
         if input is None:
@@ -1151,11 +1281,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_smart_contract_interfaces(
-        self, input: TGetSmartContractInterfacesBody
-    ) -> TGetSmartContractInterfacesResponse:
+        self, input: GetSmartContractInterfacesBody
+    ) -> GetSmartContractInterfacesResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1166,12 +1298,12 @@ class TurnkeyClient:
         return self._request(
             "/public/v1/query/list_smart_contract_interfaces",
             body,
-            TGetSmartContractInterfacesResponse,
+            GetSmartContractInterfacesResponse,
         )
 
     def stamp_get_smart_contract_interfaces(
-        self, input: TGetSmartContractInterfacesBody
-    ) -> TSignedRequest:
+        self, input: GetSmartContractInterfacesBody
+    ) -> SignedRequest:
         """Stamp a getSmartContractInterfaces request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1185,11 +1317,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_sub_org_ids(
-        self, input: Optional[TGetSubOrgIdsBody] = None
-    ) -> TGetSubOrgIdsResponse:
+        self, input: Optional[GetSubOrgIdsBody] = None
+    ) -> GetSubOrgIdsResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1201,12 +1335,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_suborgs", body, TGetSubOrgIdsResponse
+            "/public/v1/query/list_suborgs", body, GetSubOrgIdsResponse
         )
 
     def stamp_get_sub_org_ids(
-        self, input: Optional[TGetSubOrgIdsBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetSubOrgIdsBody] = None
+    ) -> SignedRequest:
         """Stamp a getSubOrgIds request without sending it."""
 
         if input is None:
@@ -1223,11 +1357,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def list_user_tags(
-        self, input: Optional[TListUserTagsBody] = None
-    ) -> TListUserTagsResponse:
+        self, input: Optional[ListUserTagsBody] = None
+    ) -> ListUserTagsResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1239,12 +1375,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_user_tags", body, TListUserTagsResponse
+            "/public/v1/query/list_user_tags", body, ListUserTagsResponse
         )
 
     def stamp_list_user_tags(
-        self, input: Optional[TListUserTagsBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[ListUserTagsBody] = None
+    ) -> SignedRequest:
         """Stamp a listUserTags request without sending it."""
 
         if input is None:
@@ -1261,9 +1397,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_users(self, input: Optional[TGetUsersBody] = None) -> TGetUsersResponse:
+    def get_users(self, input: Optional[GetUsersBody] = None) -> GetUsersResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1274,9 +1412,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/list_users", body, TGetUsersResponse)
+        return self._request("/public/v1/query/list_users", body, GetUsersResponse)
 
-    def stamp_get_users(self, input: Optional[TGetUsersBody] = None) -> TSignedRequest:
+    def stamp_get_users(self, input: Optional[GetUsersBody] = None) -> SignedRequest:
         """Stamp a getUsers request without sending it."""
 
         if input is None:
@@ -1293,11 +1431,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_verified_sub_org_ids(
-        self, input: TGetVerifiedSubOrgIdsBody
-    ) -> TGetVerifiedSubOrgIdsResponse:
+        self, input: GetVerifiedSubOrgIdsBody
+    ) -> GetVerifiedSubOrgIdsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1306,14 +1446,12 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_verified_suborgs",
-            body,
-            TGetVerifiedSubOrgIdsResponse,
+            "/public/v1/query/list_verified_suborgs", body, GetVerifiedSubOrgIdsResponse
         )
 
     def stamp_get_verified_sub_org_ids(
-        self, input: TGetVerifiedSubOrgIdsBody
-    ) -> TSignedRequest:
+        self, input: GetVerifiedSubOrgIdsBody
+    ) -> SignedRequest:
         """Stamp a getVerifiedSubOrgIds request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1327,11 +1465,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_wallet_accounts(
-        self, input: TGetWalletAccountsBody
-    ) -> TGetWalletAccountsResponse:
+        self, input: GetWalletAccountsBody
+    ) -> GetWalletAccountsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1340,12 +1480,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/public/v1/query/list_wallet_accounts", body, TGetWalletAccountsResponse
+            "/public/v1/query/list_wallet_accounts", body, GetWalletAccountsResponse
         )
 
-    def stamp_get_wallet_accounts(
-        self, input: TGetWalletAccountsBody
-    ) -> TSignedRequest:
+    def stamp_get_wallet_accounts(self, input: GetWalletAccountsBody) -> SignedRequest:
         """Stamp a getWalletAccounts request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1359,11 +1497,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_wallets(
-        self, input: Optional[TGetWalletsBody] = None
-    ) -> TGetWalletsResponse:
+    def get_wallets(self, input: Optional[GetWalletsBody] = None) -> GetWalletsResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1374,11 +1512,11 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/list_wallets", body, TGetWalletsResponse)
+        return self._request("/public/v1/query/list_wallets", body, GetWalletsResponse)
 
     def stamp_get_wallets(
-        self, input: Optional[TGetWalletsBody] = None
-    ) -> TSignedRequest:
+        self, input: Optional[GetWalletsBody] = None
+    ) -> SignedRequest:
         """Stamp a getWallets request without sending it."""
 
         if input is None:
@@ -1395,9 +1533,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def get_whoami(self, input: Optional[TGetWhoamiBody] = None) -> TGetWhoamiResponse:
+    def get_whoami(self, input: Optional[GetWhoamiBody] = None) -> GetWhoamiResponse:
         if input is None:
             input_dict = {}
         else:
@@ -1408,11 +1548,9 @@ class TurnkeyClient:
 
         body = {"organizationId": organization_id, **input_dict}
 
-        return self._request("/public/v1/query/whoami", body, TGetWhoamiResponse)
+        return self._request("/public/v1/query/whoami", body, GetWhoamiResponse)
 
-    def stamp_get_whoami(
-        self, input: Optional[TGetWhoamiBody] = None
-    ) -> TSignedRequest:
+    def stamp_get_whoami(self, input: Optional[GetWhoamiBody] = None) -> SignedRequest:
         """Stamp a getWhoami request without sending it."""
 
         if input is None:
@@ -1429,9 +1567,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
-    def approve_activity(self, input: TApproveActivityBody) -> TApproveActivityResponse:
+    def approve_activity(self, input: ApproveActivityBody) -> ApproveActivityResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1446,10 +1586,10 @@ class TurnkeyClient:
         }
 
         return self._activity_decision(
-            "/public/v1/submit/approve_activity", body, TApproveActivityResponse
+            "/public/v1/submit/approve_activity", body, ApproveActivityResponse
         )
 
-    def stamp_approve_activity(self, input: TApproveActivityBody) -> TSignedRequest:
+    def stamp_approve_activity(self, input: ApproveActivityBody) -> SignedRequest:
         """Stamp a approveActivity request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1469,9 +1609,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY_DECISION
+        )
 
-    def create_api_keys(self, input: TCreateApiKeysBody) -> TCreateApiKeysResponse:
+    def create_api_keys(self, input: CreateApiKeysBody) -> CreateApiKeysResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1489,10 +1631,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_api_keys",
             body,
             "createApiKeysResult",
-            TCreateApiKeysResponse,
+            CreateApiKeysResponse,
         )
 
-    def stamp_create_api_keys(self, input: TCreateApiKeysBody) -> TSignedRequest:
+    def stamp_create_api_keys(self, input: CreateApiKeysBody) -> SignedRequest:
         """Stamp a createApiKeys request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1512,11 +1654,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_api_only_users(
-        self, input: TCreateApiOnlyUsersBody
-    ) -> TCreateApiOnlyUsersResponse:
+        self, input: CreateApiOnlyUsersBody
+    ) -> CreateApiOnlyUsersResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1534,12 +1678,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_api_only_users",
             body,
             "createApiOnlyUsersResult",
-            TCreateApiOnlyUsersResponse,
+            CreateApiOnlyUsersResponse,
         )
 
     def stamp_create_api_only_users(
-        self, input: TCreateApiOnlyUsersBody
-    ) -> TSignedRequest:
+        self, input: CreateApiOnlyUsersBody
+    ) -> SignedRequest:
         """Stamp a createApiOnlyUsers request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1559,11 +1703,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_authenticators(
-        self, input: TCreateAuthenticatorsBody
-    ) -> TCreateAuthenticatorsResponse:
+        self, input: CreateAuthenticatorsBody
+    ) -> CreateAuthenticatorsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1581,12 +1727,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_authenticators",
             body,
             "createAuthenticatorsResult",
-            TCreateAuthenticatorsResponse,
+            CreateAuthenticatorsResponse,
         )
 
     def stamp_create_authenticators(
-        self, input: TCreateAuthenticatorsBody
-    ) -> TSignedRequest:
+        self, input: CreateAuthenticatorsBody
+    ) -> SignedRequest:
         """Stamp a createAuthenticators request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1606,11 +1752,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_fiat_on_ramp_credential(
-        self, input: TCreateFiatOnRampCredentialBody
-    ) -> TCreateFiatOnRampCredentialResponse:
+        self, input: CreateFiatOnRampCredentialBody
+    ) -> CreateFiatOnRampCredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1628,12 +1776,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_fiat_on_ramp_credential",
             body,
             "createFiatOnRampCredentialResult",
-            TCreateFiatOnRampCredentialResponse,
+            CreateFiatOnRampCredentialResponse,
         )
 
     def stamp_create_fiat_on_ramp_credential(
-        self, input: TCreateFiatOnRampCredentialBody
-    ) -> TSignedRequest:
+        self, input: CreateFiatOnRampCredentialBody
+    ) -> SignedRequest:
         """Stamp a createFiatOnRampCredential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1653,11 +1801,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_invitations(
-        self, input: TCreateInvitationsBody
-    ) -> TCreateInvitationsResponse:
+        self, input: CreateInvitationsBody
+    ) -> CreateInvitationsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1675,10 +1825,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_invitations",
             body,
             "createInvitationsResult",
-            TCreateInvitationsResponse,
+            CreateInvitationsResponse,
         )
 
-    def stamp_create_invitations(self, input: TCreateInvitationsBody) -> TSignedRequest:
+    def stamp_create_invitations(self, input: CreateInvitationsBody) -> SignedRequest:
         """Stamp a createInvitations request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1698,11 +1848,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_oauth2_credential(
-        self, input: TCreateOauth2CredentialBody
-    ) -> TCreateOauth2CredentialResponse:
+        self, input: CreateOauth2CredentialBody
+    ) -> CreateOauth2CredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1720,12 +1872,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_oauth2_credential",
             body,
             "createOauth2CredentialResult",
-            TCreateOauth2CredentialResponse,
+            CreateOauth2CredentialResponse,
         )
 
     def stamp_create_oauth2_credential(
-        self, input: TCreateOauth2CredentialBody
-    ) -> TSignedRequest:
+        self, input: CreateOauth2CredentialBody
+    ) -> SignedRequest:
         """Stamp a createOauth2Credential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1745,11 +1897,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_oauth_providers(
-        self, input: TCreateOauthProvidersBody
-    ) -> TCreateOauthProvidersResponse:
+        self, input: CreateOauthProvidersBody
+    ) -> CreateOauthProvidersResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1767,12 +1921,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_oauth_providers",
             body,
             "createOauthProvidersResult",
-            TCreateOauthProvidersResponse,
+            CreateOauthProvidersResponse,
         )
 
     def stamp_create_oauth_providers(
-        self, input: TCreateOauthProvidersBody
-    ) -> TSignedRequest:
+        self, input: CreateOauthProvidersBody
+    ) -> SignedRequest:
         """Stamp a createOauthProviders request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1792,9 +1946,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def create_policies(self, input: TCreatePoliciesBody) -> TCreatePoliciesResponse:
+    def create_policies(self, input: CreatePoliciesBody) -> CreatePoliciesResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1812,10 +1968,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_policies",
             body,
             "createPoliciesResult",
-            TCreatePoliciesResponse,
+            CreatePoliciesResponse,
         )
 
-    def stamp_create_policies(self, input: TCreatePoliciesBody) -> TSignedRequest:
+    def stamp_create_policies(self, input: CreatePoliciesBody) -> SignedRequest:
         """Stamp a createPolicies request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1835,9 +1991,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def create_policy(self, input: TCreatePolicyBody) -> TCreatePolicyResponse:
+    def create_policy(self, input: CreatePolicyBody) -> CreatePolicyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1855,10 +2013,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_policy",
             body,
             "createPolicyResult",
-            TCreatePolicyResponse,
+            CreatePolicyResponse,
         )
 
-    def stamp_create_policy(self, input: TCreatePolicyBody) -> TSignedRequest:
+    def stamp_create_policy(self, input: CreatePolicyBody) -> SignedRequest:
         """Stamp a createPolicy request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1878,11 +2036,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_private_key_tag(
-        self, input: TCreatePrivateKeyTagBody
-    ) -> TCreatePrivateKeyTagResponse:
+        self, input: CreatePrivateKeyTagBody
+    ) -> CreatePrivateKeyTagResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1900,12 +2060,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_private_key_tag",
             body,
             "createPrivateKeyTagResult",
-            TCreatePrivateKeyTagResponse,
+            CreatePrivateKeyTagResponse,
         )
 
     def stamp_create_private_key_tag(
-        self, input: TCreatePrivateKeyTagBody
-    ) -> TSignedRequest:
+        self, input: CreatePrivateKeyTagBody
+    ) -> SignedRequest:
         """Stamp a createPrivateKeyTag request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1925,11 +2085,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_private_keys(
-        self, input: TCreatePrivateKeysBody
-    ) -> TCreatePrivateKeysResponse:
+        self, input: CreatePrivateKeysBody
+    ) -> CreatePrivateKeysResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1947,12 +2109,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_private_keys",
             body,
             "createPrivateKeysResultV2",
-            TCreatePrivateKeysResponse,
+            CreatePrivateKeysResponse,
         )
 
-    def stamp_create_private_keys(
-        self, input: TCreatePrivateKeysBody
-    ) -> TSignedRequest:
+    def stamp_create_private_keys(self, input: CreatePrivateKeysBody) -> SignedRequest:
         """Stamp a createPrivateKeys request without sending it."""
 
         # Convert Pydantic model to dict
@@ -1972,11 +2132,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_read_only_session(
-        self, input: TCreateReadOnlySessionBody
-    ) -> TCreateReadOnlySessionResponse:
+        self, input: CreateReadOnlySessionBody
+    ) -> CreateReadOnlySessionResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -1994,12 +2156,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_read_only_session",
             body,
             "createReadOnlySessionResult",
-            TCreateReadOnlySessionResponse,
+            CreateReadOnlySessionResponse,
         )
 
     def stamp_create_read_only_session(
-        self, input: TCreateReadOnlySessionBody
-    ) -> TSignedRequest:
+        self, input: CreateReadOnlySessionBody
+    ) -> SignedRequest:
         """Stamp a createReadOnlySession request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2019,11 +2181,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_read_write_session(
-        self, input: TCreateReadWriteSessionBody
-    ) -> TCreateReadWriteSessionResponse:
+        self, input: CreateReadWriteSessionBody
+    ) -> CreateReadWriteSessionResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2041,12 +2205,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_read_write_session",
             body,
             "createReadWriteSessionResultV2",
-            TCreateReadWriteSessionResponse,
+            CreateReadWriteSessionResponse,
         )
 
     def stamp_create_read_write_session(
-        self, input: TCreateReadWriteSessionBody
-    ) -> TSignedRequest:
+        self, input: CreateReadWriteSessionBody
+    ) -> SignedRequest:
         """Stamp a createReadWriteSession request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2066,11 +2230,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_smart_contract_interface(
-        self, input: TCreateSmartContractInterfaceBody
-    ) -> TCreateSmartContractInterfaceResponse:
+        self, input: CreateSmartContractInterfaceBody
+    ) -> CreateSmartContractInterfaceResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2088,12 +2254,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_smart_contract_interface",
             body,
             "createSmartContractInterfaceResult",
-            TCreateSmartContractInterfaceResponse,
+            CreateSmartContractInterfaceResponse,
         )
 
     def stamp_create_smart_contract_interface(
-        self, input: TCreateSmartContractInterfaceBody
-    ) -> TSignedRequest:
+        self, input: CreateSmartContractInterfaceBody
+    ) -> SignedRequest:
         """Stamp a createSmartContractInterface request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2113,11 +2279,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_sub_organization(
-        self, input: TCreateSubOrganizationBody
-    ) -> TCreateSubOrganizationResponse:
+        self, input: CreateSubOrganizationBody
+    ) -> CreateSubOrganizationResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2135,12 +2303,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_sub_organization",
             body,
             "createSubOrganizationResultV7",
-            TCreateSubOrganizationResponse,
+            CreateSubOrganizationResponse,
         )
 
     def stamp_create_sub_organization(
-        self, input: TCreateSubOrganizationBody
-    ) -> TSignedRequest:
+        self, input: CreateSubOrganizationBody
+    ) -> SignedRequest:
         """Stamp a createSubOrganization request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2160,9 +2328,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def create_user_tag(self, input: TCreateUserTagBody) -> TCreateUserTagResponse:
+    def create_user_tag(self, input: CreateUserTagBody) -> CreateUserTagResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2180,10 +2350,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_user_tag",
             body,
             "createUserTagResult",
-            TCreateUserTagResponse,
+            CreateUserTagResponse,
         )
 
-    def stamp_create_user_tag(self, input: TCreateUserTagBody) -> TSignedRequest:
+    def stamp_create_user_tag(self, input: CreateUserTagBody) -> SignedRequest:
         """Stamp a createUserTag request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2203,9 +2373,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def create_users(self, input: TCreateUsersBody) -> TCreateUsersResponse:
+    def create_users(self, input: CreateUsersBody) -> CreateUsersResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2223,10 +2395,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_users",
             body,
             "createUsersResult",
-            TCreateUsersResponse,
+            CreateUsersResponse,
         )
 
-    def stamp_create_users(self, input: TCreateUsersBody) -> TSignedRequest:
+    def stamp_create_users(self, input: CreateUsersBody) -> SignedRequest:
         """Stamp a createUsers request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2246,9 +2418,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def create_wallet(self, input: TCreateWalletBody) -> TCreateWalletResponse:
+    def create_wallet(self, input: CreateWalletBody) -> CreateWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2266,10 +2440,10 @@ class TurnkeyClient:
             "/public/v1/submit/create_wallet",
             body,
             "createWalletResult",
-            TCreateWalletResponse,
+            CreateWalletResponse,
         )
 
-    def stamp_create_wallet(self, input: TCreateWalletBody) -> TSignedRequest:
+    def stamp_create_wallet(self, input: CreateWalletBody) -> SignedRequest:
         """Stamp a createWallet request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2289,11 +2463,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def create_wallet_accounts(
-        self, input: TCreateWalletAccountsBody
-    ) -> TCreateWalletAccountsResponse:
+        self, input: CreateWalletAccountsBody
+    ) -> CreateWalletAccountsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2311,12 +2487,12 @@ class TurnkeyClient:
             "/public/v1/submit/create_wallet_accounts",
             body,
             "createWalletAccountsResult",
-            TCreateWalletAccountsResponse,
+            CreateWalletAccountsResponse,
         )
 
     def stamp_create_wallet_accounts(
-        self, input: TCreateWalletAccountsBody
-    ) -> TSignedRequest:
+        self, input: CreateWalletAccountsBody
+    ) -> SignedRequest:
         """Stamp a createWalletAccounts request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2336,9 +2512,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def delete_api_keys(self, input: TDeleteApiKeysBody) -> TDeleteApiKeysResponse:
+    def delete_api_keys(self, input: DeleteApiKeysBody) -> DeleteApiKeysResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2356,10 +2534,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_api_keys",
             body,
             "deleteApiKeysResult",
-            TDeleteApiKeysResponse,
+            DeleteApiKeysResponse,
         )
 
-    def stamp_delete_api_keys(self, input: TDeleteApiKeysBody) -> TSignedRequest:
+    def stamp_delete_api_keys(self, input: DeleteApiKeysBody) -> SignedRequest:
         """Stamp a deleteApiKeys request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2379,11 +2557,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_authenticators(
-        self, input: TDeleteAuthenticatorsBody
-    ) -> TDeleteAuthenticatorsResponse:
+        self, input: DeleteAuthenticatorsBody
+    ) -> DeleteAuthenticatorsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2401,12 +2581,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_authenticators",
             body,
             "deleteAuthenticatorsResult",
-            TDeleteAuthenticatorsResponse,
+            DeleteAuthenticatorsResponse,
         )
 
     def stamp_delete_authenticators(
-        self, input: TDeleteAuthenticatorsBody
-    ) -> TSignedRequest:
+        self, input: DeleteAuthenticatorsBody
+    ) -> SignedRequest:
         """Stamp a deleteAuthenticators request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2426,11 +2606,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_fiat_on_ramp_credential(
-        self, input: TDeleteFiatOnRampCredentialBody
-    ) -> TDeleteFiatOnRampCredentialResponse:
+        self, input: DeleteFiatOnRampCredentialBody
+    ) -> DeleteFiatOnRampCredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2448,12 +2630,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_fiat_on_ramp_credential",
             body,
             "deleteFiatOnRampCredentialResult",
-            TDeleteFiatOnRampCredentialResponse,
+            DeleteFiatOnRampCredentialResponse,
         )
 
     def stamp_delete_fiat_on_ramp_credential(
-        self, input: TDeleteFiatOnRampCredentialBody
-    ) -> TSignedRequest:
+        self, input: DeleteFiatOnRampCredentialBody
+    ) -> SignedRequest:
         """Stamp a deleteFiatOnRampCredential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2473,11 +2655,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_invitation(
-        self, input: TDeleteInvitationBody
-    ) -> TDeleteInvitationResponse:
+        self, input: DeleteInvitationBody
+    ) -> DeleteInvitationResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2495,10 +2679,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_invitation",
             body,
             "deleteInvitationResult",
-            TDeleteInvitationResponse,
+            DeleteInvitationResponse,
         )
 
-    def stamp_delete_invitation(self, input: TDeleteInvitationBody) -> TSignedRequest:
+    def stamp_delete_invitation(self, input: DeleteInvitationBody) -> SignedRequest:
         """Stamp a deleteInvitation request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2518,11 +2702,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_oauth2_credential(
-        self, input: TDeleteOauth2CredentialBody
-    ) -> TDeleteOauth2CredentialResponse:
+        self, input: DeleteOauth2CredentialBody
+    ) -> DeleteOauth2CredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2540,12 +2726,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_oauth2_credential",
             body,
             "deleteOauth2CredentialResult",
-            TDeleteOauth2CredentialResponse,
+            DeleteOauth2CredentialResponse,
         )
 
     def stamp_delete_oauth2_credential(
-        self, input: TDeleteOauth2CredentialBody
-    ) -> TSignedRequest:
+        self, input: DeleteOauth2CredentialBody
+    ) -> SignedRequest:
         """Stamp a deleteOauth2Credential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2565,11 +2751,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_oauth_providers(
-        self, input: TDeleteOauthProvidersBody
-    ) -> TDeleteOauthProvidersResponse:
+        self, input: DeleteOauthProvidersBody
+    ) -> DeleteOauthProvidersResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2587,12 +2775,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_oauth_providers",
             body,
             "deleteOauthProvidersResult",
-            TDeleteOauthProvidersResponse,
+            DeleteOauthProvidersResponse,
         )
 
     def stamp_delete_oauth_providers(
-        self, input: TDeleteOauthProvidersBody
-    ) -> TSignedRequest:
+        self, input: DeleteOauthProvidersBody
+    ) -> SignedRequest:
         """Stamp a deleteOauthProviders request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2612,9 +2800,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def delete_policies(self, input: TDeletePoliciesBody) -> TDeletePoliciesResponse:
+    def delete_policies(self, input: DeletePoliciesBody) -> DeletePoliciesResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2632,10 +2822,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_policies",
             body,
             "deletePoliciesResult",
-            TDeletePoliciesResponse,
+            DeletePoliciesResponse,
         )
 
-    def stamp_delete_policies(self, input: TDeletePoliciesBody) -> TSignedRequest:
+    def stamp_delete_policies(self, input: DeletePoliciesBody) -> SignedRequest:
         """Stamp a deletePolicies request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2655,9 +2845,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def delete_policy(self, input: TDeletePolicyBody) -> TDeletePolicyResponse:
+    def delete_policy(self, input: DeletePolicyBody) -> DeletePolicyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2675,10 +2867,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_policy",
             body,
             "deletePolicyResult",
-            TDeletePolicyResponse,
+            DeletePolicyResponse,
         )
 
-    def stamp_delete_policy(self, input: TDeletePolicyBody) -> TSignedRequest:
+    def stamp_delete_policy(self, input: DeletePolicyBody) -> SignedRequest:
         """Stamp a deletePolicy request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2698,11 +2890,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_private_key_tags(
-        self, input: TDeletePrivateKeyTagsBody
-    ) -> TDeletePrivateKeyTagsResponse:
+        self, input: DeletePrivateKeyTagsBody
+    ) -> DeletePrivateKeyTagsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2720,12 +2914,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_private_key_tags",
             body,
             "deletePrivateKeyTagsResult",
-            TDeletePrivateKeyTagsResponse,
+            DeletePrivateKeyTagsResponse,
         )
 
     def stamp_delete_private_key_tags(
-        self, input: TDeletePrivateKeyTagsBody
-    ) -> TSignedRequest:
+        self, input: DeletePrivateKeyTagsBody
+    ) -> SignedRequest:
         """Stamp a deletePrivateKeyTags request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2745,11 +2939,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_private_keys(
-        self, input: TDeletePrivateKeysBody
-    ) -> TDeletePrivateKeysResponse:
+        self, input: DeletePrivateKeysBody
+    ) -> DeletePrivateKeysResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2767,12 +2963,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_private_keys",
             body,
             "deletePrivateKeysResult",
-            TDeletePrivateKeysResponse,
+            DeletePrivateKeysResponse,
         )
 
-    def stamp_delete_private_keys(
-        self, input: TDeletePrivateKeysBody
-    ) -> TSignedRequest:
+    def stamp_delete_private_keys(self, input: DeletePrivateKeysBody) -> SignedRequest:
         """Stamp a deletePrivateKeys request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2792,11 +2986,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_smart_contract_interface(
-        self, input: TDeleteSmartContractInterfaceBody
-    ) -> TDeleteSmartContractInterfaceResponse:
+        self, input: DeleteSmartContractInterfaceBody
+    ) -> DeleteSmartContractInterfaceResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2814,12 +3010,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_smart_contract_interface",
             body,
             "deleteSmartContractInterfaceResult",
-            TDeleteSmartContractInterfaceResponse,
+            DeleteSmartContractInterfaceResponse,
         )
 
     def stamp_delete_smart_contract_interface(
-        self, input: TDeleteSmartContractInterfaceBody
-    ) -> TSignedRequest:
+        self, input: DeleteSmartContractInterfaceBody
+    ) -> SignedRequest:
         """Stamp a deleteSmartContractInterface request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2839,11 +3035,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_sub_organization(
-        self, input: TDeleteSubOrganizationBody
-    ) -> TDeleteSubOrganizationResponse:
+        self, input: DeleteSubOrganizationBody
+    ) -> DeleteSubOrganizationResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2861,12 +3059,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_sub_organization",
             body,
             "deleteSubOrganizationResult",
-            TDeleteSubOrganizationResponse,
+            DeleteSubOrganizationResponse,
         )
 
     def stamp_delete_sub_organization(
-        self, input: TDeleteSubOrganizationBody
-    ) -> TSignedRequest:
+        self, input: DeleteSubOrganizationBody
+    ) -> SignedRequest:
         """Stamp a deleteSubOrganization request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2886,9 +3084,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def delete_user_tags(self, input: TDeleteUserTagsBody) -> TDeleteUserTagsResponse:
+    def delete_user_tags(self, input: DeleteUserTagsBody) -> DeleteUserTagsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2906,10 +3106,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_user_tags",
             body,
             "deleteUserTagsResult",
-            TDeleteUserTagsResponse,
+            DeleteUserTagsResponse,
         )
 
-    def stamp_delete_user_tags(self, input: TDeleteUserTagsBody) -> TSignedRequest:
+    def stamp_delete_user_tags(self, input: DeleteUserTagsBody) -> SignedRequest:
         """Stamp a deleteUserTags request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2929,9 +3129,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def delete_users(self, input: TDeleteUsersBody) -> TDeleteUsersResponse:
+    def delete_users(self, input: DeleteUsersBody) -> DeleteUsersResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2949,10 +3151,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_users",
             body,
             "deleteUsersResult",
-            TDeleteUsersResponse,
+            DeleteUsersResponse,
         )
 
-    def stamp_delete_users(self, input: TDeleteUsersBody) -> TSignedRequest:
+    def stamp_delete_users(self, input: DeleteUsersBody) -> SignedRequest:
         """Stamp a deleteUsers request without sending it."""
 
         # Convert Pydantic model to dict
@@ -2972,11 +3174,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def delete_wallet_accounts(
-        self, input: TDeleteWalletAccountsBody
-    ) -> TDeleteWalletAccountsResponse:
+        self, input: DeleteWalletAccountsBody
+    ) -> DeleteWalletAccountsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -2994,12 +3198,12 @@ class TurnkeyClient:
             "/public/v1/submit/delete_wallet_accounts",
             body,
             "deleteWalletAccountsResult",
-            TDeleteWalletAccountsResponse,
+            DeleteWalletAccountsResponse,
         )
 
     def stamp_delete_wallet_accounts(
-        self, input: TDeleteWalletAccountsBody
-    ) -> TSignedRequest:
+        self, input: DeleteWalletAccountsBody
+    ) -> SignedRequest:
         """Stamp a deleteWalletAccounts request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3019,9 +3223,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def delete_wallets(self, input: TDeleteWalletsBody) -> TDeleteWalletsResponse:
+    def delete_wallets(self, input: DeleteWalletsBody) -> DeleteWalletsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3039,10 +3245,10 @@ class TurnkeyClient:
             "/public/v1/submit/delete_wallets",
             body,
             "deleteWalletsResult",
-            TDeleteWalletsResponse,
+            DeleteWalletsResponse,
         )
 
-    def stamp_delete_wallets(self, input: TDeleteWalletsBody) -> TSignedRequest:
+    def stamp_delete_wallets(self, input: DeleteWalletsBody) -> SignedRequest:
         """Stamp a deleteWallets request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3062,9 +3268,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def email_auth(self, input: TEmailAuthBody) -> TEmailAuthResponse:
+    def email_auth(self, input: EmailAuthBody) -> EmailAuthResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3079,10 +3287,10 @@ class TurnkeyClient:
         }
 
         return self._activity(
-            "/public/v1/submit/email_auth", body, "emailAuthResult", TEmailAuthResponse
+            "/public/v1/submit/email_auth", body, "emailAuthResult", EmailAuthResponse
         )
 
-    def stamp_email_auth(self, input: TEmailAuthBody) -> TSignedRequest:
+    def stamp_email_auth(self, input: EmailAuthBody) -> SignedRequest:
         """Stamp a emailAuth request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3102,11 +3310,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def eth_send_raw_transaction(
-        self, input: TEthSendRawTransactionBody
-    ) -> TEthSendRawTransactionResponse:
+        self, input: EthSendRawTransactionBody
+    ) -> EthSendRawTransactionResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3124,12 +3334,12 @@ class TurnkeyClient:
             "/public/v1/submit/eth_send_raw_transaction",
             body,
             "ethSendRawTransactionResult",
-            TEthSendRawTransactionResponse,
+            EthSendRawTransactionResponse,
         )
 
     def stamp_eth_send_raw_transaction(
-        self, input: TEthSendRawTransactionBody
-    ) -> TSignedRequest:
+        self, input: EthSendRawTransactionBody
+    ) -> SignedRequest:
         """Stamp a ethSendRawTransaction request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3149,11 +3359,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def eth_send_transaction(
-        self, input: TEthSendTransactionBody
-    ) -> TEthSendTransactionResponse:
+        self, input: EthSendTransactionBody
+    ) -> EthSendTransactionResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3171,12 +3383,12 @@ class TurnkeyClient:
             "/public/v1/submit/eth_send_transaction",
             body,
             "ethSendTransactionResult",
-            TEthSendTransactionResponse,
+            EthSendTransactionResponse,
         )
 
     def stamp_eth_send_transaction(
-        self, input: TEthSendTransactionBody
-    ) -> TSignedRequest:
+        self, input: EthSendTransactionBody
+    ) -> SignedRequest:
         """Stamp a ethSendTransaction request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3196,11 +3408,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def export_private_key(
-        self, input: TExportPrivateKeyBody
-    ) -> TExportPrivateKeyResponse:
+        self, input: ExportPrivateKeyBody
+    ) -> ExportPrivateKeyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3218,10 +3432,10 @@ class TurnkeyClient:
             "/public/v1/submit/export_private_key",
             body,
             "exportPrivateKeyResult",
-            TExportPrivateKeyResponse,
+            ExportPrivateKeyResponse,
         )
 
-    def stamp_export_private_key(self, input: TExportPrivateKeyBody) -> TSignedRequest:
+    def stamp_export_private_key(self, input: ExportPrivateKeyBody) -> SignedRequest:
         """Stamp a exportPrivateKey request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3241,9 +3455,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def export_wallet(self, input: TExportWalletBody) -> TExportWalletResponse:
+    def export_wallet(self, input: ExportWalletBody) -> ExportWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3261,10 +3477,10 @@ class TurnkeyClient:
             "/public/v1/submit/export_wallet",
             body,
             "exportWalletResult",
-            TExportWalletResponse,
+            ExportWalletResponse,
         )
 
-    def stamp_export_wallet(self, input: TExportWalletBody) -> TSignedRequest:
+    def stamp_export_wallet(self, input: ExportWalletBody) -> SignedRequest:
         """Stamp a exportWallet request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3284,11 +3500,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def export_wallet_account(
-        self, input: TExportWalletAccountBody
-    ) -> TExportWalletAccountResponse:
+        self, input: ExportWalletAccountBody
+    ) -> ExportWalletAccountResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3306,12 +3524,12 @@ class TurnkeyClient:
             "/public/v1/submit/export_wallet_account",
             body,
             "exportWalletAccountResult",
-            TExportWalletAccountResponse,
+            ExportWalletAccountResponse,
         )
 
     def stamp_export_wallet_account(
-        self, input: TExportWalletAccountBody
-    ) -> TSignedRequest:
+        self, input: ExportWalletAccountBody
+    ) -> SignedRequest:
         """Stamp a exportWalletAccount request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3331,11 +3549,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def import_private_key(
-        self, input: TImportPrivateKeyBody
-    ) -> TImportPrivateKeyResponse:
+        self, input: ImportPrivateKeyBody
+    ) -> ImportPrivateKeyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3353,10 +3573,10 @@ class TurnkeyClient:
             "/public/v1/submit/import_private_key",
             body,
             "importPrivateKeyResult",
-            TImportPrivateKeyResponse,
+            ImportPrivateKeyResponse,
         )
 
-    def stamp_import_private_key(self, input: TImportPrivateKeyBody) -> TSignedRequest:
+    def stamp_import_private_key(self, input: ImportPrivateKeyBody) -> SignedRequest:
         """Stamp a importPrivateKey request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3376,9 +3596,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def import_wallet(self, input: TImportWalletBody) -> TImportWalletResponse:
+    def import_wallet(self, input: ImportWalletBody) -> ImportWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3396,10 +3618,10 @@ class TurnkeyClient:
             "/public/v1/submit/import_wallet",
             body,
             "importWalletResult",
-            TImportWalletResponse,
+            ImportWalletResponse,
         )
 
-    def stamp_import_wallet(self, input: TImportWalletBody) -> TSignedRequest:
+    def stamp_import_wallet(self, input: ImportWalletBody) -> SignedRequest:
         """Stamp a importWallet request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3419,9 +3641,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def init_fiat_on_ramp(self, input: TInitFiatOnRampBody) -> TInitFiatOnRampResponse:
+    def init_fiat_on_ramp(self, input: InitFiatOnRampBody) -> InitFiatOnRampResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3439,10 +3663,10 @@ class TurnkeyClient:
             "/public/v1/submit/init_fiat_on_ramp",
             body,
             "initFiatOnRampResult",
-            TInitFiatOnRampResponse,
+            InitFiatOnRampResponse,
         )
 
-    def stamp_init_fiat_on_ramp(self, input: TInitFiatOnRampBody) -> TSignedRequest:
+    def stamp_init_fiat_on_ramp(self, input: InitFiatOnRampBody) -> SignedRequest:
         """Stamp a initFiatOnRamp request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3462,11 +3686,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def init_import_private_key(
-        self, input: TInitImportPrivateKeyBody
-    ) -> TInitImportPrivateKeyResponse:
+        self, input: InitImportPrivateKeyBody
+    ) -> InitImportPrivateKeyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3484,12 +3710,12 @@ class TurnkeyClient:
             "/public/v1/submit/init_import_private_key",
             body,
             "initImportPrivateKeyResult",
-            TInitImportPrivateKeyResponse,
+            InitImportPrivateKeyResponse,
         )
 
     def stamp_init_import_private_key(
-        self, input: TInitImportPrivateKeyBody
-    ) -> TSignedRequest:
+        self, input: InitImportPrivateKeyBody
+    ) -> SignedRequest:
         """Stamp a initImportPrivateKey request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3509,11 +3735,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def init_import_wallet(
-        self, input: TInitImportWalletBody
-    ) -> TInitImportWalletResponse:
+        self, input: InitImportWalletBody
+    ) -> InitImportWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3531,10 +3759,10 @@ class TurnkeyClient:
             "/public/v1/submit/init_import_wallet",
             body,
             "initImportWalletResult",
-            TInitImportWalletResponse,
+            InitImportWalletResponse,
         )
 
-    def stamp_init_import_wallet(self, input: TInitImportWalletBody) -> TSignedRequest:
+    def stamp_init_import_wallet(self, input: InitImportWalletBody) -> SignedRequest:
         """Stamp a initImportWallet request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3554,9 +3782,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def init_otp(self, input: TInitOtpBody) -> TInitOtpResponse:
+    def init_otp(self, input: InitOtpBody) -> InitOtpResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3571,10 +3801,10 @@ class TurnkeyClient:
         }
 
         return self._activity(
-            "/public/v1/submit/init_otp", body, "initOtpResult", TInitOtpResponse
+            "/public/v1/submit/init_otp", body, "initOtpResult", InitOtpResponse
         )
 
-    def stamp_init_otp(self, input: TInitOtpBody) -> TSignedRequest:
+    def stamp_init_otp(self, input: InitOtpBody) -> SignedRequest:
         """Stamp a initOtp request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3594,9 +3824,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def init_otp_auth(self, input: TInitOtpAuthBody) -> TInitOtpAuthResponse:
+    def init_otp_auth(self, input: InitOtpAuthBody) -> InitOtpAuthResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3614,10 +3846,10 @@ class TurnkeyClient:
             "/public/v1/submit/init_otp_auth",
             body,
             "initOtpAuthResultV2",
-            TInitOtpAuthResponse,
+            InitOtpAuthResponse,
         )
 
-    def stamp_init_otp_auth(self, input: TInitOtpAuthBody) -> TSignedRequest:
+    def stamp_init_otp_auth(self, input: InitOtpAuthBody) -> SignedRequest:
         """Stamp a initOtpAuth request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3637,11 +3869,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def init_user_email_recovery(
-        self, input: TInitUserEmailRecoveryBody
-    ) -> TInitUserEmailRecoveryResponse:
+        self, input: InitUserEmailRecoveryBody
+    ) -> InitUserEmailRecoveryResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3659,12 +3893,12 @@ class TurnkeyClient:
             "/public/v1/submit/init_user_email_recovery",
             body,
             "initUserEmailRecoveryResult",
-            TInitUserEmailRecoveryResponse,
+            InitUserEmailRecoveryResponse,
         )
 
     def stamp_init_user_email_recovery(
-        self, input: TInitUserEmailRecoveryBody
-    ) -> TSignedRequest:
+        self, input: InitUserEmailRecoveryBody
+    ) -> SignedRequest:
         """Stamp a initUserEmailRecovery request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3684,9 +3918,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def oauth(self, input: TOauthBody) -> TOauthResponse:
+    def oauth(self, input: OauthBody) -> OauthResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3701,10 +3937,10 @@ class TurnkeyClient:
         }
 
         return self._activity(
-            "/public/v1/submit/oauth", body, "oauthResult", TOauthResponse
+            "/public/v1/submit/oauth", body, "oauthResult", OauthResponse
         )
 
-    def stamp_oauth(self, input: TOauthBody) -> TSignedRequest:
+    def stamp_oauth(self, input: OauthBody) -> SignedRequest:
         """Stamp a oauth request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3724,11 +3960,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def oauth2_authenticate(
-        self, input: TOauth2AuthenticateBody
-    ) -> TOauth2AuthenticateResponse:
+        self, input: Oauth2AuthenticateBody
+    ) -> Oauth2AuthenticateResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3746,12 +3984,10 @@ class TurnkeyClient:
             "/public/v1/submit/oauth2_authenticate",
             body,
             "oauth2AuthenticateResult",
-            TOauth2AuthenticateResponse,
+            Oauth2AuthenticateResponse,
         )
 
-    def stamp_oauth2_authenticate(
-        self, input: TOauth2AuthenticateBody
-    ) -> TSignedRequest:
+    def stamp_oauth2_authenticate(self, input: Oauth2AuthenticateBody) -> SignedRequest:
         """Stamp a oauth2Authenticate request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3771,9 +4007,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def oauth_login(self, input: TOauthLoginBody) -> TOauthLoginResponse:
+    def oauth_login(self, input: OauthLoginBody) -> OauthLoginResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3791,10 +4029,10 @@ class TurnkeyClient:
             "/public/v1/submit/oauth_login",
             body,
             "oauthLoginResult",
-            TOauthLoginResponse,
+            OauthLoginResponse,
         )
 
-    def stamp_oauth_login(self, input: TOauthLoginBody) -> TSignedRequest:
+    def stamp_oauth_login(self, input: OauthLoginBody) -> SignedRequest:
         """Stamp a oauthLogin request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3814,9 +4052,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def otp_auth(self, input: TOtpAuthBody) -> TOtpAuthResponse:
+    def otp_auth(self, input: OtpAuthBody) -> OtpAuthResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3831,10 +4071,10 @@ class TurnkeyClient:
         }
 
         return self._activity(
-            "/public/v1/submit/otp_auth", body, "otpAuthResult", TOtpAuthResponse
+            "/public/v1/submit/otp_auth", body, "otpAuthResult", OtpAuthResponse
         )
 
-    def stamp_otp_auth(self, input: TOtpAuthBody) -> TSignedRequest:
+    def stamp_otp_auth(self, input: OtpAuthBody) -> SignedRequest:
         """Stamp a otpAuth request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3854,9 +4094,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def otp_login(self, input: TOtpLoginBody) -> TOtpLoginResponse:
+    def otp_login(self, input: OtpLoginBody) -> OtpLoginResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3871,10 +4113,10 @@ class TurnkeyClient:
         }
 
         return self._activity(
-            "/public/v1/submit/otp_login", body, "otpLoginResult", TOtpLoginResponse
+            "/public/v1/submit/otp_login", body, "otpLoginResult", OtpLoginResponse
         )
 
-    def stamp_otp_login(self, input: TOtpLoginBody) -> TSignedRequest:
+    def stamp_otp_login(self, input: OtpLoginBody) -> SignedRequest:
         """Stamp a otpLogin request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3894,9 +4136,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def recover_user(self, input: TRecoverUserBody) -> TRecoverUserResponse:
+    def recover_user(self, input: RecoverUserBody) -> RecoverUserResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3914,10 +4158,10 @@ class TurnkeyClient:
             "/public/v1/submit/recover_user",
             body,
             "recoverUserResult",
-            TRecoverUserResponse,
+            RecoverUserResponse,
         )
 
-    def stamp_recover_user(self, input: TRecoverUserBody) -> TSignedRequest:
+    def stamp_recover_user(self, input: RecoverUserBody) -> SignedRequest:
         """Stamp a recoverUser request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3937,9 +4181,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def reject_activity(self, input: TRejectActivityBody) -> TRejectActivityResponse:
+    def reject_activity(self, input: RejectActivityBody) -> RejectActivityResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3954,10 +4200,10 @@ class TurnkeyClient:
         }
 
         return self._activity_decision(
-            "/public/v1/submit/reject_activity", body, TRejectActivityResponse
+            "/public/v1/submit/reject_activity", body, RejectActivityResponse
         )
 
-    def stamp_reject_activity(self, input: TRejectActivityBody) -> TSignedRequest:
+    def stamp_reject_activity(self, input: RejectActivityBody) -> SignedRequest:
         """Stamp a rejectActivity request without sending it."""
 
         # Convert Pydantic model to dict
@@ -3977,11 +4223,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY_DECISION
+        )
 
     def remove_organization_feature(
-        self, input: TRemoveOrganizationFeatureBody
-    ) -> TRemoveOrganizationFeatureResponse:
+        self, input: RemoveOrganizationFeatureBody
+    ) -> RemoveOrganizationFeatureResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -3999,12 +4247,12 @@ class TurnkeyClient:
             "/public/v1/submit/remove_organization_feature",
             body,
             "removeOrganizationFeatureResult",
-            TRemoveOrganizationFeatureResponse,
+            RemoveOrganizationFeatureResponse,
         )
 
     def stamp_remove_organization_feature(
-        self, input: TRemoveOrganizationFeatureBody
-    ) -> TSignedRequest:
+        self, input: RemoveOrganizationFeatureBody
+    ) -> SignedRequest:
         """Stamp a removeOrganizationFeature request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4024,11 +4272,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def set_organization_feature(
-        self, input: TSetOrganizationFeatureBody
-    ) -> TSetOrganizationFeatureResponse:
+        self, input: SetOrganizationFeatureBody
+    ) -> SetOrganizationFeatureResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4046,12 +4296,12 @@ class TurnkeyClient:
             "/public/v1/submit/set_organization_feature",
             body,
             "setOrganizationFeatureResult",
-            TSetOrganizationFeatureResponse,
+            SetOrganizationFeatureResponse,
         )
 
     def stamp_set_organization_feature(
-        self, input: TSetOrganizationFeatureBody
-    ) -> TSignedRequest:
+        self, input: SetOrganizationFeatureBody
+    ) -> SignedRequest:
         """Stamp a setOrganizationFeature request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4071,9 +4321,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def sign_raw_payload(self, input: TSignRawPayloadBody) -> TSignRawPayloadResponse:
+    def sign_raw_payload(self, input: SignRawPayloadBody) -> SignRawPayloadResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4091,10 +4343,10 @@ class TurnkeyClient:
             "/public/v1/submit/sign_raw_payload",
             body,
             "signRawPayloadResult",
-            TSignRawPayloadResponse,
+            SignRawPayloadResponse,
         )
 
-    def stamp_sign_raw_payload(self, input: TSignRawPayloadBody) -> TSignedRequest:
+    def stamp_sign_raw_payload(self, input: SignRawPayloadBody) -> SignedRequest:
         """Stamp a signRawPayload request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4114,11 +4366,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def sign_raw_payloads(
-        self, input: TSignRawPayloadsBody
-    ) -> TSignRawPayloadsResponse:
+    def sign_raw_payloads(self, input: SignRawPayloadsBody) -> SignRawPayloadsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4136,10 +4388,10 @@ class TurnkeyClient:
             "/public/v1/submit/sign_raw_payloads",
             body,
             "signRawPayloadsResult",
-            TSignRawPayloadsResponse,
+            SignRawPayloadsResponse,
         )
 
-    def stamp_sign_raw_payloads(self, input: TSignRawPayloadsBody) -> TSignedRequest:
+    def stamp_sign_raw_payloads(self, input: SignRawPayloadsBody) -> SignedRequest:
         """Stamp a signRawPayloads request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4159,9 +4411,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def sign_transaction(self, input: TSignTransactionBody) -> TSignTransactionResponse:
+    def sign_transaction(self, input: SignTransactionBody) -> SignTransactionResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4179,10 +4433,10 @@ class TurnkeyClient:
             "/public/v1/submit/sign_transaction",
             body,
             "signTransactionResult",
-            TSignTransactionResponse,
+            SignTransactionResponse,
         )
 
-    def stamp_sign_transaction(self, input: TSignTransactionBody) -> TSignedRequest:
+    def stamp_sign_transaction(self, input: SignTransactionBody) -> SignedRequest:
         """Stamp a signTransaction request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4202,9 +4456,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def stamp_login(self, input: TStampLoginBody) -> TStampLoginResponse:
+    def stamp_login(self, input: StampLoginBody) -> StampLoginResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4222,10 +4478,10 @@ class TurnkeyClient:
             "/public/v1/submit/stamp_login",
             body,
             "stampLoginResult",
-            TStampLoginResponse,
+            StampLoginResponse,
         )
 
-    def stamp_stamp_login(self, input: TStampLoginBody) -> TSignedRequest:
+    def stamp_stamp_login(self, input: StampLoginBody) -> SignedRequest:
         """Stamp a stampLogin request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4245,11 +4501,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def update_fiat_on_ramp_credential(
-        self, input: TUpdateFiatOnRampCredentialBody
-    ) -> TUpdateFiatOnRampCredentialResponse:
+        self, input: UpdateFiatOnRampCredentialBody
+    ) -> UpdateFiatOnRampCredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4267,12 +4525,12 @@ class TurnkeyClient:
             "/public/v1/submit/update_fiat_on_ramp_credential",
             body,
             "updateFiatOnRampCredentialResult",
-            TUpdateFiatOnRampCredentialResponse,
+            UpdateFiatOnRampCredentialResponse,
         )
 
     def stamp_update_fiat_on_ramp_credential(
-        self, input: TUpdateFiatOnRampCredentialBody
-    ) -> TSignedRequest:
+        self, input: UpdateFiatOnRampCredentialBody
+    ) -> SignedRequest:
         """Stamp a updateFiatOnRampCredential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4292,11 +4550,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def update_oauth2_credential(
-        self, input: TUpdateOauth2CredentialBody
-    ) -> TUpdateOauth2CredentialResponse:
+        self, input: UpdateOauth2CredentialBody
+    ) -> UpdateOauth2CredentialResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4314,12 +4574,12 @@ class TurnkeyClient:
             "/public/v1/submit/update_oauth2_credential",
             body,
             "updateOauth2CredentialResult",
-            TUpdateOauth2CredentialResponse,
+            UpdateOauth2CredentialResponse,
         )
 
     def stamp_update_oauth2_credential(
-        self, input: TUpdateOauth2CredentialBody
-    ) -> TSignedRequest:
+        self, input: UpdateOauth2CredentialBody
+    ) -> SignedRequest:
         """Stamp a updateOauth2Credential request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4339,9 +4599,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def update_policy(self, input: TUpdatePolicyBody) -> TUpdatePolicyResponse:
+    def update_policy(self, input: UpdatePolicyBody) -> UpdatePolicyResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4359,10 +4621,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_policy",
             body,
             "updatePolicyResultV2",
-            TUpdatePolicyResponse,
+            UpdatePolicyResponse,
         )
 
-    def stamp_update_policy(self, input: TUpdatePolicyBody) -> TSignedRequest:
+    def stamp_update_policy(self, input: UpdatePolicyBody) -> SignedRequest:
         """Stamp a updatePolicy request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4382,11 +4644,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def update_private_key_tag(
-        self, input: TUpdatePrivateKeyTagBody
-    ) -> TUpdatePrivateKeyTagResponse:
+        self, input: UpdatePrivateKeyTagBody
+    ) -> UpdatePrivateKeyTagResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4404,12 +4668,12 @@ class TurnkeyClient:
             "/public/v1/submit/update_private_key_tag",
             body,
             "updatePrivateKeyTagResult",
-            TUpdatePrivateKeyTagResponse,
+            UpdatePrivateKeyTagResponse,
         )
 
     def stamp_update_private_key_tag(
-        self, input: TUpdatePrivateKeyTagBody
-    ) -> TSignedRequest:
+        self, input: UpdatePrivateKeyTagBody
+    ) -> SignedRequest:
         """Stamp a updatePrivateKeyTag request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4429,11 +4693,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def update_root_quorum(
-        self, input: TUpdateRootQuorumBody
-    ) -> TUpdateRootQuorumResponse:
+        self, input: UpdateRootQuorumBody
+    ) -> UpdateRootQuorumResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4451,10 +4717,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_root_quorum",
             body,
             "updateRootQuorumResult",
-            TUpdateRootQuorumResponse,
+            UpdateRootQuorumResponse,
         )
 
-    def stamp_update_root_quorum(self, input: TUpdateRootQuorumBody) -> TSignedRequest:
+    def stamp_update_root_quorum(self, input: UpdateRootQuorumBody) -> SignedRequest:
         """Stamp a updateRootQuorum request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4474,9 +4740,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def update_user(self, input: TUpdateUserBody) -> TUpdateUserResponse:
+    def update_user(self, input: UpdateUserBody) -> UpdateUserResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4494,10 +4762,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_user",
             body,
             "updateUserResult",
-            TUpdateUserResponse,
+            UpdateUserResponse,
         )
 
-    def stamp_update_user(self, input: TUpdateUserBody) -> TSignedRequest:
+    def stamp_update_user(self, input: UpdateUserBody) -> SignedRequest:
         """Stamp a updateUser request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4517,11 +4785,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def update_user_email(
-        self, input: TUpdateUserEmailBody
-    ) -> TUpdateUserEmailResponse:
+    def update_user_email(self, input: UpdateUserEmailBody) -> UpdateUserEmailResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4539,10 +4807,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_user_email",
             body,
             "updateUserEmailResult",
-            TUpdateUserEmailResponse,
+            UpdateUserEmailResponse,
         )
 
-    def stamp_update_user_email(self, input: TUpdateUserEmailBody) -> TSignedRequest:
+    def stamp_update_user_email(self, input: UpdateUserEmailBody) -> SignedRequest:
         """Stamp a updateUserEmail request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4562,9 +4830,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def update_user_name(self, input: TUpdateUserNameBody) -> TUpdateUserNameResponse:
+    def update_user_name(self, input: UpdateUserNameBody) -> UpdateUserNameResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4582,10 +4852,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_user_name",
             body,
             "updateUserNameResult",
-            TUpdateUserNameResponse,
+            UpdateUserNameResponse,
         )
 
-    def stamp_update_user_name(self, input: TUpdateUserNameBody) -> TSignedRequest:
+    def stamp_update_user_name(self, input: UpdateUserNameBody) -> SignedRequest:
         """Stamp a updateUserName request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4605,11 +4875,13 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
     def update_user_phone_number(
-        self, input: TUpdateUserPhoneNumberBody
-    ) -> TUpdateUserPhoneNumberResponse:
+        self, input: UpdateUserPhoneNumberBody
+    ) -> UpdateUserPhoneNumberResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4627,12 +4899,12 @@ class TurnkeyClient:
             "/public/v1/submit/update_user_phone_number",
             body,
             "updateUserPhoneNumberResult",
-            TUpdateUserPhoneNumberResponse,
+            UpdateUserPhoneNumberResponse,
         )
 
     def stamp_update_user_phone_number(
-        self, input: TUpdateUserPhoneNumberBody
-    ) -> TSignedRequest:
+        self, input: UpdateUserPhoneNumberBody
+    ) -> SignedRequest:
         """Stamp a updateUserPhoneNumber request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4652,9 +4924,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def update_user_tag(self, input: TUpdateUserTagBody) -> TUpdateUserTagResponse:
+    def update_user_tag(self, input: UpdateUserTagBody) -> UpdateUserTagResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4672,10 +4946,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_user_tag",
             body,
             "updateUserTagResult",
-            TUpdateUserTagResponse,
+            UpdateUserTagResponse,
         )
 
-    def stamp_update_user_tag(self, input: TUpdateUserTagBody) -> TSignedRequest:
+    def stamp_update_user_tag(self, input: UpdateUserTagBody) -> SignedRequest:
         """Stamp a updateUserTag request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4695,9 +4969,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def update_wallet(self, input: TUpdateWalletBody) -> TUpdateWalletResponse:
+    def update_wallet(self, input: UpdateWalletBody) -> UpdateWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4715,10 +4991,10 @@ class TurnkeyClient:
             "/public/v1/submit/update_wallet",
             body,
             "updateWalletResult",
-            TUpdateWalletResponse,
+            UpdateWalletResponse,
         )
 
-    def stamp_update_wallet(self, input: TUpdateWalletBody) -> TSignedRequest:
+    def stamp_update_wallet(self, input: UpdateWalletBody) -> SignedRequest:
         """Stamp a updateWallet request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4738,9 +5014,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def verify_otp(self, input: TVerifyOtpBody) -> TVerifyOtpResponse:
+    def verify_otp(self, input: VerifyOtpBody) -> VerifyOtpResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4755,10 +5033,10 @@ class TurnkeyClient:
         }
 
         return self._activity(
-            "/public/v1/submit/verify_otp", body, "verifyOtpResult", TVerifyOtpResponse
+            "/public/v1/submit/verify_otp", body, "verifyOtpResult", VerifyOtpResponse
         )
 
-    def stamp_verify_otp(self, input: TVerifyOtpBody) -> TSignedRequest:
+    def stamp_verify_otp(self, input: VerifyOtpBody) -> SignedRequest:
         """Stamp a verifyOtp request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4778,9 +5056,11 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
 
-    def test_rate_limits(self, input: TTestRateLimitsBody) -> TTestRateLimitsResponse:
+    def test_rate_limits(self, input: TestRateLimitsBody) -> TestRateLimitsResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
 
@@ -4789,10 +5069,10 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         return self._request(
-            "/tkhq/api/v1/test_rate_limits", body, TTestRateLimitsResponse
+            "/tkhq/api/v1/test_rate_limits", body, TestRateLimitsResponse
         )
 
-    def stamp_test_rate_limits(self, input: TTestRateLimitsBody) -> TSignedRequest:
+    def stamp_test_rate_limits(self, input: TestRateLimitsBody) -> SignedRequest:
         """Stamp a testRateLimits request without sending it."""
 
         # Convert Pydantic model to dict
@@ -4806,4 +5086,6 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )

@@ -1,9 +1,8 @@
 """Test Turnkey HTTP client query methods"""
 
-from turnkey_http.utils import send_signed_request
 from turnkey_sdk_types import (
-    TGetOrganizationResponse,
-    TGetOrganizationBody,
+    GetOrganizationBody,
+    GetOrganizationResponse,
     TurnkeyNetworkError,
 )
 
@@ -86,12 +85,10 @@ def test_stamp_get_organization_send_signed_request(client, org_id):
     print("\n🔧 Testing stamp + send for getOrganization")
 
     # Stamp only (queries have flat bodies)
-    signed_req = client.stamp_get_organization(TGetOrganizationBody())
+    signed_req = client.stamp_get_organization(GetOrganizationBody())
 
-    # Manually send stamped request; parse into typed response
-    org_resp = send_signed_request(
-        signed_req, parser=lambda p: TGetOrganizationResponse(**p)
-    )
+    # Send stamped request via client with type
+    org_resp = client.send_signed_request(signed_req, GetOrganizationResponse)
 
     assert org_resp is not None
     assert org_resp.organizationData is not None
@@ -107,7 +104,7 @@ def test_organization_id_override_query(client):
 
     # Create request with WRONG organization ID to prove override works
     wrong_org_id = "00000000-0000-0000-0000-000000000000"
-    request = TGetOrganizationBody(organizationId=wrong_org_id)
+    request = GetOrganizationBody(organizationId=wrong_org_id)
 
     # This should fail because we're using a wrong organization ID
     with pytest.raises(TurnkeyNetworkError) as exc_info:

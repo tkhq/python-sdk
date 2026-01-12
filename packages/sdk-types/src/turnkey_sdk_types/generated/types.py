@@ -5229,112 +5229,112 @@ class v1WebAuthnStamp(TurnkeyBaseModel):
 # --- API Types from Swagger Paths ---
 
 
-class TGetActivityResponse(TurnkeyBaseModel):
+class GetActivityResponse(TurnkeyBaseModel):
     activity: v1Activity = Field(
         description="An action that can be taken within the Turnkey infrastructure."
     )
 
 
-class TGetActivityBody(TurnkeyBaseModel):
+class GetActivityBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     activityId: str = Field(
         description="Unique identifier for a given activity object."
     )
 
 
-class TGetActivityInput(TurnkeyBaseModel):
-    body: TGetActivityBody
+class GetActivityInput(TurnkeyBaseModel):
+    body: GetActivityBody
 
 
-class TGetApiKeyResponse(TurnkeyBaseModel):
+class GetApiKeyResponse(TurnkeyBaseModel):
     apiKey: v1ApiKey = Field(description="An API key.")
 
 
-class TGetApiKeyBody(TurnkeyBaseModel):
+class GetApiKeyBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     apiKeyId: str = Field(description="Unique identifier for a given API key.")
 
 
-class TGetApiKeyInput(TurnkeyBaseModel):
-    body: TGetApiKeyBody
+class GetApiKeyInput(TurnkeyBaseModel):
+    body: GetApiKeyBody
 
 
-class TGetApiKeysResponse(TurnkeyBaseModel):
+class GetApiKeysResponse(TurnkeyBaseModel):
     apiKeys: List[v1ApiKey] = Field(description="A list of API keys.")
 
 
-class TGetApiKeysBody(TurnkeyBaseModel):
+class GetApiKeysBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     userId: Optional[str] = Field(
         default=None, description="Unique identifier for a given user."
     )
 
 
-class TGetApiKeysInput(TurnkeyBaseModel):
-    body: TGetApiKeysBody
+class GetApiKeysInput(TurnkeyBaseModel):
+    body: GetApiKeysBody
 
 
-class TGetAttestationDocumentResponse(TurnkeyBaseModel):
+class GetAttestationDocumentResponse(TurnkeyBaseModel):
     attestationDocument: str = Field(
         description="Raw (CBOR-encoded) attestation document."
     )
 
 
-class TGetAttestationDocumentBody(TurnkeyBaseModel):
+class GetAttestationDocumentBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     enclaveType: str = Field(
         description="The enclave type, one of: ump, notarizer, signer, evm-parser."
     )
 
 
-class TGetAttestationDocumentInput(TurnkeyBaseModel):
-    body: TGetAttestationDocumentBody
+class GetAttestationDocumentInput(TurnkeyBaseModel):
+    body: GetAttestationDocumentBody
 
 
-class TGetAuthenticatorResponse(TurnkeyBaseModel):
+class GetAuthenticatorResponse(TurnkeyBaseModel):
     authenticator: v1Authenticator = Field(description="An authenticator.")
 
 
-class TGetAuthenticatorBody(TurnkeyBaseModel):
+class GetAuthenticatorBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     authenticatorId: str = Field(
         description="Unique identifier for a given authenticator."
     )
 
 
-class TGetAuthenticatorInput(TurnkeyBaseModel):
-    body: TGetAuthenticatorBody
+class GetAuthenticatorInput(TurnkeyBaseModel):
+    body: GetAuthenticatorBody
 
 
-class TGetAuthenticatorsResponse(TurnkeyBaseModel):
+class GetAuthenticatorsResponse(TurnkeyBaseModel):
     authenticators: List[v1Authenticator] = Field(
         description="A list of authenticators."
     )
 
 
-class TGetAuthenticatorsBody(TurnkeyBaseModel):
+class GetAuthenticatorsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given user.")
 
 
-class TGetAuthenticatorsInput(TurnkeyBaseModel):
-    body: TGetAuthenticatorsBody
+class GetAuthenticatorsInput(TurnkeyBaseModel):
+    body: GetAuthenticatorsBody
 
 
-class TGetBootProofResponse(TurnkeyBaseModel):
+class GetBootProofResponse(TurnkeyBaseModel):
     bootProof: v1BootProof
 
 
-class TGetBootProofBody(TurnkeyBaseModel):
+class GetBootProofBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     ephemeralKey: str = Field(description="Hex encoded ephemeral public key.")
 
 
-class TGetBootProofInput(TurnkeyBaseModel):
-    body: TGetBootProofBody
+class GetBootProofInput(TurnkeyBaseModel):
+    body: GetBootProofBody
 
 
-class TGetGasUsageResponse(TurnkeyBaseModel):
+class GetGasUsageResponse(TurnkeyBaseModel):
     windowDurationMinutes: int = Field(
         description="The window duration (in minutes) for the organization or sub-organization."
     )
@@ -5346,28 +5346,28 @@ class TGetGasUsageResponse(TurnkeyBaseModel):
     )
 
 
-class TGetGasUsageBody(TurnkeyBaseModel):
+class GetGasUsageBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetGasUsageInput(TurnkeyBaseModel):
-    body: TGetGasUsageBody
+class GetGasUsageInput(TurnkeyBaseModel):
+    body: GetGasUsageBody
 
 
-class TGetLatestBootProofResponse(TurnkeyBaseModel):
+class GetLatestBootProofResponse(TurnkeyBaseModel):
     bootProof: v1BootProof
 
 
-class TGetLatestBootProofBody(TurnkeyBaseModel):
+class GetLatestBootProofBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     appName: str = Field(description="Name of enclave app.")
 
 
-class TGetLatestBootProofInput(TurnkeyBaseModel):
-    body: TGetLatestBootProofBody
+class GetLatestBootProofInput(TurnkeyBaseModel):
+    body: GetLatestBootProofBody
 
 
-class TGetNoncesResponse(TurnkeyBaseModel):
+class GetNoncesResponse(TurnkeyBaseModel):
     nonce: Optional[str] = Field(
         default=None,
         description="The standard on-chain nonce for the address, if requested.",
@@ -5378,7 +5378,7 @@ class TGetNoncesResponse(TurnkeyBaseModel):
     )
 
 
-class TGetNoncesBody(TurnkeyBaseModel):
+class GetNoncesBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     address: str = Field(description="The Ethereum address to query nonces for.")
     caip2: str = Field(
@@ -5393,49 +5393,49 @@ class TGetNoncesBody(TurnkeyBaseModel):
     )
 
 
-class TGetNoncesInput(TurnkeyBaseModel):
-    body: TGetNoncesBody
+class GetNoncesInput(TurnkeyBaseModel):
+    body: GetNoncesBody
 
 
-class TGetOauth2CredentialResponse(TurnkeyBaseModel):
+class GetOauth2CredentialResponse(TurnkeyBaseModel):
     oauth2Credential: v1Oauth2Credential
 
 
-class TGetOauth2CredentialBody(TurnkeyBaseModel):
+class GetOauth2CredentialBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     oauth2CredentialId: str = Field(
         description="Unique identifier for a given OAuth 2.0 Credential."
     )
 
 
-class TGetOauth2CredentialInput(TurnkeyBaseModel):
-    body: TGetOauth2CredentialBody
+class GetOauth2CredentialInput(TurnkeyBaseModel):
+    body: GetOauth2CredentialBody
 
 
-class TGetOauthProvidersResponse(TurnkeyBaseModel):
+class GetOauthProvidersResponse(TurnkeyBaseModel):
     oauthProviders: List[v1OauthProvider] = Field(
         description="A list of Oauth providers."
     )
 
 
-class TGetOauthProvidersBody(TurnkeyBaseModel):
+class GetOauthProvidersBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     userId: Optional[str] = Field(
         default=None, description="Unique identifier for a given user."
     )
 
 
-class TGetOauthProvidersInput(TurnkeyBaseModel):
-    body: TGetOauthProvidersBody
+class GetOauthProvidersInput(TurnkeyBaseModel):
+    body: GetOauthProvidersBody
 
 
-class TGetOnRampTransactionStatusResponse(TurnkeyBaseModel):
+class GetOnRampTransactionStatusResponse(TurnkeyBaseModel):
     transactionStatus: str = Field(
         description="The status of the fiat on ramp transaction."
     )
 
 
-class TGetOnRampTransactionStatusBody(TurnkeyBaseModel):
+class GetOnRampTransactionStatusBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     transactionId: str = Field(
         description="The unique identifier for the fiat on ramp transaction."
@@ -5446,82 +5446,82 @@ class TGetOnRampTransactionStatusBody(TurnkeyBaseModel):
     )
 
 
-class TGetOnRampTransactionStatusInput(TurnkeyBaseModel):
-    body: TGetOnRampTransactionStatusBody
+class GetOnRampTransactionStatusInput(TurnkeyBaseModel):
+    body: GetOnRampTransactionStatusBody
 
 
-class TGetOrganizationResponse(TurnkeyBaseModel):
+class GetOrganizationResponse(TurnkeyBaseModel):
     organizationData: v1OrganizationData = Field(
         description="Object representing the full current and deleted / disabled collection of users, policies, private keys, and invitations attributable to a particular organization."
     )
 
 
-class TGetOrganizationBody(TurnkeyBaseModel):
+class GetOrganizationBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetOrganizationInput(TurnkeyBaseModel):
-    body: TGetOrganizationBody
+class GetOrganizationInput(TurnkeyBaseModel):
+    body: GetOrganizationBody
 
 
-class TGetOrganizationConfigsResponse(TurnkeyBaseModel):
+class GetOrganizationConfigsResponse(TurnkeyBaseModel):
     configs: v1Config = Field(
         description="Organization configs including quorum settings and organization features."
     )
 
 
-class TGetOrganizationConfigsBody(TurnkeyBaseModel):
+class GetOrganizationConfigsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetOrganizationConfigsInput(TurnkeyBaseModel):
-    body: TGetOrganizationConfigsBody
+class GetOrganizationConfigsInput(TurnkeyBaseModel):
+    body: GetOrganizationConfigsBody
 
 
-class TGetPolicyResponse(TurnkeyBaseModel):
+class GetPolicyResponse(TurnkeyBaseModel):
     policy: v1Policy = Field(
         description="Object that codifies rules defining the actions that are permissible within an organization."
     )
 
 
-class TGetPolicyBody(TurnkeyBaseModel):
+class GetPolicyBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     policyId: str = Field(description="Unique identifier for a given policy.")
 
 
-class TGetPolicyInput(TurnkeyBaseModel):
-    body: TGetPolicyBody
+class GetPolicyInput(TurnkeyBaseModel):
+    body: GetPolicyBody
 
 
-class TGetPolicyEvaluationsResponse(TurnkeyBaseModel):
+class GetPolicyEvaluationsResponse(TurnkeyBaseModel):
     policyEvaluations: List[externalactivityv1PolicyEvaluation]
 
 
-class TGetPolicyEvaluationsBody(TurnkeyBaseModel):
+class GetPolicyEvaluationsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     activityId: str = Field(description="Unique identifier for a given activity.")
 
 
-class TGetPolicyEvaluationsInput(TurnkeyBaseModel):
-    body: TGetPolicyEvaluationsBody
+class GetPolicyEvaluationsInput(TurnkeyBaseModel):
+    body: GetPolicyEvaluationsBody
 
 
-class TGetPrivateKeyResponse(TurnkeyBaseModel):
+class GetPrivateKeyResponse(TurnkeyBaseModel):
     privateKey: v1PrivateKey = Field(
         description="Cryptographic public/private key pair that can be used for cryptocurrency needs or more generalized encryption."
     )
 
 
-class TGetPrivateKeyBody(TurnkeyBaseModel):
+class GetPrivateKeyBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     privateKeyId: str = Field(description="Unique identifier for a given private key.")
 
 
-class TGetPrivateKeyInput(TurnkeyBaseModel):
-    body: TGetPrivateKeyBody
+class GetPrivateKeyInput(TurnkeyBaseModel):
+    body: GetPrivateKeyBody
 
 
-class TGetSendTransactionStatusResponse(TurnkeyBaseModel):
+class GetSendTransactionStatusResponse(TurnkeyBaseModel):
     txStatus: str = Field(description="The current status of the send transaction.")
     eth: Optional[v1EthSendTransactionStatus] = Field(
         default=None, description="Ethereum-specific transaction status."
@@ -5532,67 +5532,67 @@ class TGetSendTransactionStatusResponse(TurnkeyBaseModel):
     )
 
 
-class TGetSendTransactionStatusBody(TurnkeyBaseModel):
+class GetSendTransactionStatusBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     sendTransactionStatusId: str = Field(
         description="The unique identifier of a send transaction request."
     )
 
 
-class TGetSendTransactionStatusInput(TurnkeyBaseModel):
-    body: TGetSendTransactionStatusBody
+class GetSendTransactionStatusInput(TurnkeyBaseModel):
+    body: GetSendTransactionStatusBody
 
 
-class TGetSmartContractInterfaceResponse(TurnkeyBaseModel):
+class GetSmartContractInterfaceResponse(TurnkeyBaseModel):
     smartContractInterface: externaldatav1SmartContractInterface = Field(
         description="Object to be used in conjunction with policies to guard transaction signing."
     )
 
 
-class TGetSmartContractInterfaceBody(TurnkeyBaseModel):
+class GetSmartContractInterfaceBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     smartContractInterfaceId: str = Field(
         description="Unique identifier for a given smart contract interface."
     )
 
 
-class TGetSmartContractInterfaceInput(TurnkeyBaseModel):
-    body: TGetSmartContractInterfaceBody
+class GetSmartContractInterfaceInput(TurnkeyBaseModel):
+    body: GetSmartContractInterfaceBody
 
 
-class TGetUserResponse(TurnkeyBaseModel):
+class GetUserResponse(TurnkeyBaseModel):
     user: v1User = Field(description="Web and/or API user within your organization.")
 
 
-class TGetUserBody(TurnkeyBaseModel):
+class GetUserBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given user.")
 
 
-class TGetUserInput(TurnkeyBaseModel):
-    body: TGetUserBody
+class GetUserInput(TurnkeyBaseModel):
+    body: GetUserBody
 
 
-class TGetWalletResponse(TurnkeyBaseModel):
+class GetWalletResponse(TurnkeyBaseModel):
     wallet: v1Wallet = Field(
         description="A collection of deterministically generated cryptographic public / private key pairs that share a common seed."
     )
 
 
-class TGetWalletBody(TurnkeyBaseModel):
+class GetWalletBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     walletId: str = Field(description="Unique identifier for a given wallet.")
 
 
-class TGetWalletInput(TurnkeyBaseModel):
-    body: TGetWalletBody
+class GetWalletInput(TurnkeyBaseModel):
+    body: GetWalletBody
 
 
-class TGetWalletAccountResponse(TurnkeyBaseModel):
+class GetWalletAccountResponse(TurnkeyBaseModel):
     account: v1WalletAccount = Field(description="The resulting wallet account.")
 
 
-class TGetWalletAccountBody(TurnkeyBaseModel):
+class GetWalletAccountBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     walletId: str = Field(description="Unique identifier for a given wallet.")
     address: Optional[str] = Field(
@@ -5603,15 +5603,15 @@ class TGetWalletAccountBody(TurnkeyBaseModel):
     )
 
 
-class TGetWalletAccountInput(TurnkeyBaseModel):
-    body: TGetWalletAccountBody
+class GetWalletAccountInput(TurnkeyBaseModel):
+    body: GetWalletAccountBody
 
 
-class TGetActivitiesResponse(TurnkeyBaseModel):
+class GetActivitiesResponse(TurnkeyBaseModel):
     activities: List[v1Activity] = Field(description="A list of activities.")
 
 
-class TGetActivitiesBody(TurnkeyBaseModel):
+class GetActivitiesBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     filterByStatus: Optional[List[v1ActivityStatus]] = Field(
         default=None,
@@ -5626,104 +5626,104 @@ class TGetActivitiesBody(TurnkeyBaseModel):
     )
 
 
-class TGetActivitiesInput(TurnkeyBaseModel):
-    body: TGetActivitiesBody
+class GetActivitiesInput(TurnkeyBaseModel):
+    body: GetActivitiesBody
 
 
-class TGetAppProofsResponse(TurnkeyBaseModel):
+class GetAppProofsResponse(TurnkeyBaseModel):
     appProofs: List[v1AppProof]
 
 
-class TGetAppProofsBody(TurnkeyBaseModel):
+class GetAppProofsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     activityId: str = Field(description="Unique identifier for a given activity.")
 
 
-class TGetAppProofsInput(TurnkeyBaseModel):
-    body: TGetAppProofsBody
+class GetAppProofsInput(TurnkeyBaseModel):
+    body: GetAppProofsBody
 
 
-class TListFiatOnRampCredentialsResponse(TurnkeyBaseModel):
+class ListFiatOnRampCredentialsResponse(TurnkeyBaseModel):
     fiatOnRampCredentials: List[v1FiatOnRampCredential]
 
 
-class TListFiatOnRampCredentialsBody(TurnkeyBaseModel):
+class ListFiatOnRampCredentialsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TListFiatOnRampCredentialsInput(TurnkeyBaseModel):
-    body: TListFiatOnRampCredentialsBody
+class ListFiatOnRampCredentialsInput(TurnkeyBaseModel):
+    body: ListFiatOnRampCredentialsBody
 
 
-class TListOauth2CredentialsResponse(TurnkeyBaseModel):
+class ListOauth2CredentialsResponse(TurnkeyBaseModel):
     oauth2Credentials: List[v1Oauth2Credential]
 
 
-class TListOauth2CredentialsBody(TurnkeyBaseModel):
+class ListOauth2CredentialsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TListOauth2CredentialsInput(TurnkeyBaseModel):
-    body: TListOauth2CredentialsBody
+class ListOauth2CredentialsInput(TurnkeyBaseModel):
+    body: ListOauth2CredentialsBody
 
 
-class TGetPoliciesResponse(TurnkeyBaseModel):
+class GetPoliciesResponse(TurnkeyBaseModel):
     policies: List[v1Policy] = Field(description="A list of policies.")
 
 
-class TGetPoliciesBody(TurnkeyBaseModel):
+class GetPoliciesBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetPoliciesInput(TurnkeyBaseModel):
-    body: TGetPoliciesBody
+class GetPoliciesInput(TurnkeyBaseModel):
+    body: GetPoliciesBody
 
 
-class TListPrivateKeyTagsResponse(TurnkeyBaseModel):
+class ListPrivateKeyTagsResponse(TurnkeyBaseModel):
     privateKeyTags: List[datav1Tag] = Field(description="A list of private key tags.")
 
 
-class TListPrivateKeyTagsBody(TurnkeyBaseModel):
+class ListPrivateKeyTagsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TListPrivateKeyTagsInput(TurnkeyBaseModel):
-    body: TListPrivateKeyTagsBody
+class ListPrivateKeyTagsInput(TurnkeyBaseModel):
+    body: ListPrivateKeyTagsBody
 
 
-class TGetPrivateKeysResponse(TurnkeyBaseModel):
+class GetPrivateKeysResponse(TurnkeyBaseModel):
     privateKeys: List[v1PrivateKey] = Field(description="A list of private keys.")
 
 
-class TGetPrivateKeysBody(TurnkeyBaseModel):
+class GetPrivateKeysBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetPrivateKeysInput(TurnkeyBaseModel):
-    body: TGetPrivateKeysBody
+class GetPrivateKeysInput(TurnkeyBaseModel):
+    body: GetPrivateKeysBody
 
 
-class TGetSmartContractInterfacesResponse(TurnkeyBaseModel):
+class GetSmartContractInterfacesResponse(TurnkeyBaseModel):
     smartContractInterfaces: List[externaldatav1SmartContractInterface] = Field(
         description="A list of smart contract interfaces."
     )
 
 
-class TGetSmartContractInterfacesBody(TurnkeyBaseModel):
+class GetSmartContractInterfacesBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetSmartContractInterfacesInput(TurnkeyBaseModel):
-    body: TGetSmartContractInterfacesBody
+class GetSmartContractInterfacesInput(TurnkeyBaseModel):
+    body: GetSmartContractInterfacesBody
 
 
-class TGetSubOrgIdsResponse(TurnkeyBaseModel):
+class GetSubOrgIdsResponse(TurnkeyBaseModel):
     organizationIds: List[str] = Field(
         description="List of unique identifiers for the matching sub-organizations."
     )
 
 
-class TGetSubOrgIdsBody(TurnkeyBaseModel):
+class GetSubOrgIdsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     filterType: Optional[str] = Field(
         default=None,
@@ -5738,41 +5738,41 @@ class TGetSubOrgIdsBody(TurnkeyBaseModel):
     )
 
 
-class TGetSubOrgIdsInput(TurnkeyBaseModel):
-    body: TGetSubOrgIdsBody
+class GetSubOrgIdsInput(TurnkeyBaseModel):
+    body: GetSubOrgIdsBody
 
 
-class TListUserTagsResponse(TurnkeyBaseModel):
+class ListUserTagsResponse(TurnkeyBaseModel):
     userTags: List[datav1Tag] = Field(description="A list of user tags.")
 
 
-class TListUserTagsBody(TurnkeyBaseModel):
+class ListUserTagsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TListUserTagsInput(TurnkeyBaseModel):
-    body: TListUserTagsBody
+class ListUserTagsInput(TurnkeyBaseModel):
+    body: ListUserTagsBody
 
 
-class TGetUsersResponse(TurnkeyBaseModel):
+class GetUsersResponse(TurnkeyBaseModel):
     users: List[v1User] = Field(description="A list of users.")
 
 
-class TGetUsersBody(TurnkeyBaseModel):
+class GetUsersBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetUsersInput(TurnkeyBaseModel):
-    body: TGetUsersBody
+class GetUsersInput(TurnkeyBaseModel):
+    body: GetUsersBody
 
 
-class TGetVerifiedSubOrgIdsResponse(TurnkeyBaseModel):
+class GetVerifiedSubOrgIdsResponse(TurnkeyBaseModel):
     organizationIds: List[str] = Field(
         description="List of unique identifiers for the matching sub-organizations."
     )
 
 
-class TGetVerifiedSubOrgIdsBody(TurnkeyBaseModel):
+class GetVerifiedSubOrgIdsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     filterType: Optional[str] = Field(
         default=None,
@@ -5787,17 +5787,17 @@ class TGetVerifiedSubOrgIdsBody(TurnkeyBaseModel):
     )
 
 
-class TGetVerifiedSubOrgIdsInput(TurnkeyBaseModel):
-    body: TGetVerifiedSubOrgIdsBody
+class GetVerifiedSubOrgIdsInput(TurnkeyBaseModel):
+    body: GetVerifiedSubOrgIdsBody
 
 
-class TGetWalletAccountsResponse(TurnkeyBaseModel):
+class GetWalletAccountsResponse(TurnkeyBaseModel):
     accounts: List[v1WalletAccount] = Field(
         description="A list of accounts generated from a wallet that share a common seed."
     )
 
 
-class TGetWalletAccountsBody(TurnkeyBaseModel):
+class GetWalletAccountsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     walletId: Optional[str] = Field(
         default=None,
@@ -5812,23 +5812,23 @@ class TGetWalletAccountsBody(TurnkeyBaseModel):
     )
 
 
-class TGetWalletAccountsInput(TurnkeyBaseModel):
-    body: TGetWalletAccountsBody
+class GetWalletAccountsInput(TurnkeyBaseModel):
+    body: GetWalletAccountsBody
 
 
-class TGetWalletsResponse(TurnkeyBaseModel):
+class GetWalletsResponse(TurnkeyBaseModel):
     wallets: List[v1Wallet] = Field(description="A list of wallets.")
 
 
-class TGetWalletsBody(TurnkeyBaseModel):
+class GetWalletsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetWalletsInput(TurnkeyBaseModel):
-    body: TGetWalletsBody
+class GetWalletsInput(TurnkeyBaseModel):
+    body: GetWalletsBody
 
 
-class TGetWhoamiResponse(TurnkeyBaseModel):
+class GetWhoamiResponse(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given organization."
     )
@@ -5839,50 +5839,52 @@ class TGetWhoamiResponse(TurnkeyBaseModel):
     username: str = Field(description="Human-readable name for a user.")
 
 
-class TGetWhoamiBody(TurnkeyBaseModel):
+class GetWhoamiBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
 
 
-class TGetWhoamiInput(TurnkeyBaseModel):
-    body: TGetWhoamiBody
+class GetWhoamiInput(TurnkeyBaseModel):
+    body: GetWhoamiBody
 
 
-class TApproveActivityResponse(TurnkeyBaseModel):
-    activity: v1Activity
+class ApproveActivityResponse(TurnkeyBaseModel):
+    activity: v1Activity = Field(
+        description="An action that can be taken within the Turnkey infrastructure."
+    )
 
 
-class TApproveActivityBody(TurnkeyBaseModel):
+class ApproveActivityBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     fingerprint: str = Field(description="An artifact verifying a User's action.")
 
 
-class TApproveActivityInput(TurnkeyBaseModel):
-    body: TApproveActivityBody
+class ApproveActivityInput(TurnkeyBaseModel):
+    body: ApproveActivityBody
 
 
-class TCreateApiKeysResponse(TurnkeyBaseModel):
+class CreateApiKeysResponse(TurnkeyBaseModel):
     activity: v1Activity
     apiKeyIds: List[str] = Field(description="A list of API Key IDs.")
 
 
-class TCreateApiKeysBody(TurnkeyBaseModel):
+class CreateApiKeysBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     apiKeys: List[v1ApiKeyParamsV2] = Field(description="A list of API Keys.")
     userId: str = Field(description="Unique identifier for a given User.")
 
 
-class TCreateApiKeysInput(TurnkeyBaseModel):
-    body: TCreateApiKeysBody
+class CreateApiKeysInput(TurnkeyBaseModel):
+    body: CreateApiKeysBody
 
 
-class TCreateApiOnlyUsersResponse(TurnkeyBaseModel):
+class CreateApiOnlyUsersResponse(TurnkeyBaseModel):
     activity: v1Activity
     userIds: List[str] = Field(description="A list of API-only User IDs.")
 
 
-class TCreateApiOnlyUsersBody(TurnkeyBaseModel):
+class CreateApiOnlyUsersBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     apiOnlyUsers: List[v1ApiOnlyUserParams] = Field(
@@ -5890,16 +5892,16 @@ class TCreateApiOnlyUsersBody(TurnkeyBaseModel):
     )
 
 
-class TCreateApiOnlyUsersInput(TurnkeyBaseModel):
-    body: TCreateApiOnlyUsersBody
+class CreateApiOnlyUsersInput(TurnkeyBaseModel):
+    body: CreateApiOnlyUsersBody
 
 
-class TCreateAuthenticatorsResponse(TurnkeyBaseModel):
+class CreateAuthenticatorsResponse(TurnkeyBaseModel):
     activity: v1Activity
     authenticatorIds: List[str] = Field(description="A list of Authenticator IDs.")
 
 
-class TCreateAuthenticatorsBody(TurnkeyBaseModel):
+class CreateAuthenticatorsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     authenticators: List[v1AuthenticatorParamsV2] = Field(
@@ -5908,18 +5910,18 @@ class TCreateAuthenticatorsBody(TurnkeyBaseModel):
     userId: str = Field(description="Unique identifier for a given User.")
 
 
-class TCreateAuthenticatorsInput(TurnkeyBaseModel):
-    body: TCreateAuthenticatorsBody
+class CreateAuthenticatorsInput(TurnkeyBaseModel):
+    body: CreateAuthenticatorsBody
 
 
-class TCreateFiatOnRampCredentialResponse(TurnkeyBaseModel):
+class CreateFiatOnRampCredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     fiatOnRampCredentialId: str = Field(
         description="Unique identifier of the Fiat On-Ramp credential that was created"
     )
 
 
-class TCreateFiatOnRampCredentialBody(TurnkeyBaseModel):
+class CreateFiatOnRampCredentialBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     onrampProvider: v1FiatOnRampProvider = Field(
@@ -5944,33 +5946,33 @@ class TCreateFiatOnRampCredentialBody(TurnkeyBaseModel):
     )
 
 
-class TCreateFiatOnRampCredentialInput(TurnkeyBaseModel):
-    body: TCreateFiatOnRampCredentialBody
+class CreateFiatOnRampCredentialInput(TurnkeyBaseModel):
+    body: CreateFiatOnRampCredentialBody
 
 
-class TCreateInvitationsResponse(TurnkeyBaseModel):
+class CreateInvitationsResponse(TurnkeyBaseModel):
     activity: v1Activity
     invitationIds: List[str] = Field(description="A list of Invitation IDs")
 
 
-class TCreateInvitationsBody(TurnkeyBaseModel):
+class CreateInvitationsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     invitations: List[v1InvitationParams] = Field(description="A list of Invitations.")
 
 
-class TCreateInvitationsInput(TurnkeyBaseModel):
-    body: TCreateInvitationsBody
+class CreateInvitationsInput(TurnkeyBaseModel):
+    body: CreateInvitationsBody
 
 
-class TCreateOauth2CredentialResponse(TurnkeyBaseModel):
+class CreateOauth2CredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     oauth2CredentialId: str = Field(
         description="Unique identifier of the OAuth 2.0 credential that was created"
     )
 
 
-class TCreateOauth2CredentialBody(TurnkeyBaseModel):
+class CreateOauth2CredentialBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     provider: v1Oauth2Provider = Field(description="The OAuth 2.0 provider")
@@ -5980,18 +5982,18 @@ class TCreateOauth2CredentialBody(TurnkeyBaseModel):
     )
 
 
-class TCreateOauth2CredentialInput(TurnkeyBaseModel):
-    body: TCreateOauth2CredentialBody
+class CreateOauth2CredentialInput(TurnkeyBaseModel):
+    body: CreateOauth2CredentialBody
 
 
-class TCreateOauthProvidersResponse(TurnkeyBaseModel):
+class CreateOauthProvidersResponse(TurnkeyBaseModel):
     activity: v1Activity
     providerIds: List[str] = Field(
         description="A list of unique identifiers for Oauth Providers"
     )
 
 
-class TCreateOauthProvidersBody(TurnkeyBaseModel):
+class CreateOauthProvidersBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="The ID of the User to add an Oauth provider to")
@@ -6000,18 +6002,18 @@ class TCreateOauthProvidersBody(TurnkeyBaseModel):
     )
 
 
-class TCreateOauthProvidersInput(TurnkeyBaseModel):
-    body: TCreateOauthProvidersBody
+class CreateOauthProvidersInput(TurnkeyBaseModel):
+    body: CreateOauthProvidersBody
 
 
-class TCreatePoliciesResponse(TurnkeyBaseModel):
+class CreatePoliciesResponse(TurnkeyBaseModel):
     activity: v1Activity
     policyIds: List[str] = Field(
         description="A list of unique identifiers for the created policies."
     )
 
 
-class TCreatePoliciesBody(TurnkeyBaseModel):
+class CreatePoliciesBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     policies: List[v1CreatePolicyIntentV3] = Field(
@@ -6019,16 +6021,16 @@ class TCreatePoliciesBody(TurnkeyBaseModel):
     )
 
 
-class TCreatePoliciesInput(TurnkeyBaseModel):
-    body: TCreatePoliciesBody
+class CreatePoliciesInput(TurnkeyBaseModel):
+    body: CreatePoliciesBody
 
 
-class TCreatePolicyResponse(TurnkeyBaseModel):
+class CreatePolicyResponse(TurnkeyBaseModel):
     activity: v1Activity
     policyId: str = Field(description="Unique identifier for a given Policy.")
 
 
-class TCreatePolicyBody(TurnkeyBaseModel):
+class CreatePolicyBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     policyName: str = Field(description="Human-readable name for a Policy.")
@@ -6044,11 +6046,11 @@ class TCreatePolicyBody(TurnkeyBaseModel):
     notes: str = Field(description="Notes for a Policy.")
 
 
-class TCreatePolicyInput(TurnkeyBaseModel):
-    body: TCreatePolicyBody
+class CreatePolicyInput(TurnkeyBaseModel):
+    body: CreatePolicyBody
 
 
-class TCreatePrivateKeyTagResponse(TurnkeyBaseModel):
+class CreatePrivateKeyTagResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeyTagId: str = Field(
         description="Unique identifier for a given Private Key Tag."
@@ -6056,7 +6058,7 @@ class TCreatePrivateKeyTagResponse(TurnkeyBaseModel):
     privateKeyIds: List[str] = Field(description="A list of Private Key IDs.")
 
 
-class TCreatePrivateKeyTagBody(TurnkeyBaseModel):
+class CreatePrivateKeyTagBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeyTagName: str = Field(
@@ -6065,28 +6067,28 @@ class TCreatePrivateKeyTagBody(TurnkeyBaseModel):
     privateKeyIds: List[str] = Field(description="A list of Private Key IDs.")
 
 
-class TCreatePrivateKeyTagInput(TurnkeyBaseModel):
-    body: TCreatePrivateKeyTagBody
+class CreatePrivateKeyTagInput(TurnkeyBaseModel):
+    body: CreatePrivateKeyTagBody
 
 
-class TCreatePrivateKeysResponse(TurnkeyBaseModel):
+class CreatePrivateKeysResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeys: List[v1PrivateKeyResult] = Field(
         description="A list of Private Key IDs and addresses."
     )
 
 
-class TCreatePrivateKeysBody(TurnkeyBaseModel):
+class CreatePrivateKeysBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeys: List[v1PrivateKeyParams] = Field(description="A list of Private Keys.")
 
 
-class TCreatePrivateKeysInput(TurnkeyBaseModel):
-    body: TCreatePrivateKeysBody
+class CreatePrivateKeysInput(TurnkeyBaseModel):
+    body: CreatePrivateKeysBody
 
 
-class TCreateReadOnlySessionResponse(TurnkeyBaseModel):
+class CreateReadOnlySessionResponse(TurnkeyBaseModel):
     activity: v1Activity
     organizationId: str = Field(
         description="Unique identifier for a given Organization. If the request is being made by a user and their Sub-Organization ID is unknown, this can be the Parent Organization ID. However, using the Sub-Organization ID is preferred due to performance reasons."
@@ -6102,16 +6104,16 @@ class TCreateReadOnlySessionResponse(TurnkeyBaseModel):
     )
 
 
-class TCreateReadOnlySessionBody(TurnkeyBaseModel):
+class CreateReadOnlySessionBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
 
 
-class TCreateReadOnlySessionInput(TurnkeyBaseModel):
-    body: TCreateReadOnlySessionBody
+class CreateReadOnlySessionInput(TurnkeyBaseModel):
+    body: CreateReadOnlySessionBody
 
 
-class TCreateReadWriteSessionResponse(TurnkeyBaseModel):
+class CreateReadWriteSessionResponse(TurnkeyBaseModel):
     activity: v1Activity
     organizationId: str = Field(
         description="Unique identifier for a given Organization. If the request is being made by a user and their Sub-Organization ID is unknown, this can be the Parent Organization ID. However, using the Sub-Organization ID is preferred due to performance reasons."
@@ -6125,7 +6127,7 @@ class TCreateReadWriteSessionResponse(TurnkeyBaseModel):
     credentialBundle: str = Field(description="HPKE encrypted credential bundle")
 
 
-class TCreateReadWriteSessionBody(TurnkeyBaseModel):
+class CreateReadWriteSessionBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     targetPublicKey: str = Field(
@@ -6148,18 +6150,18 @@ class TCreateReadWriteSessionBody(TurnkeyBaseModel):
     )
 
 
-class TCreateReadWriteSessionInput(TurnkeyBaseModel):
-    body: TCreateReadWriteSessionBody
+class CreateReadWriteSessionInput(TurnkeyBaseModel):
+    body: CreateReadWriteSessionBody
 
 
-class TCreateSmartContractInterfaceResponse(TurnkeyBaseModel):
+class CreateSmartContractInterfaceResponse(TurnkeyBaseModel):
     activity: v1Activity
     smartContractInterfaceId: str = Field(
         description="The ID of the created Smart Contract Interface."
     )
 
 
-class TCreateSmartContractInterfaceBody(TurnkeyBaseModel):
+class CreateSmartContractInterfaceBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     smartContractAddress: str = Field(
@@ -6177,18 +6179,18 @@ class TCreateSmartContractInterfaceBody(TurnkeyBaseModel):
     )
 
 
-class TCreateSmartContractInterfaceInput(TurnkeyBaseModel):
-    body: TCreateSmartContractInterfaceBody
+class CreateSmartContractInterfaceInput(TurnkeyBaseModel):
+    body: CreateSmartContractInterfaceBody
 
 
-class TCreateSubOrganizationResponse(TurnkeyBaseModel):
+class CreateSubOrganizationResponse(TurnkeyBaseModel):
     activity: v1Activity
     subOrganizationId: str
     wallet: Optional[v1WalletResult] = Field(default=None)
     rootUserIds: Optional[List[str]] = Field(default=None)
 
 
-class TCreateSubOrganizationBody(TurnkeyBaseModel):
+class CreateSubOrganizationBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     subOrganizationName: str = Field(description="Name for this sub-organization")
@@ -6223,49 +6225,49 @@ class TCreateSubOrganizationBody(TurnkeyBaseModel):
     )
 
 
-class TCreateSubOrganizationInput(TurnkeyBaseModel):
-    body: TCreateSubOrganizationBody
+class CreateSubOrganizationInput(TurnkeyBaseModel):
+    body: CreateSubOrganizationBody
 
 
-class TCreateUserTagResponse(TurnkeyBaseModel):
+class CreateUserTagResponse(TurnkeyBaseModel):
     activity: v1Activity
     userTagId: str = Field(description="Unique identifier for a given User Tag.")
     userIds: List[str] = Field(description="A list of User IDs.")
 
 
-class TCreateUserTagBody(TurnkeyBaseModel):
+class CreateUserTagBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userTagName: str = Field(description="Human-readable name for a User Tag.")
     userIds: List[str] = Field(description="A list of User IDs.")
 
 
-class TCreateUserTagInput(TurnkeyBaseModel):
-    body: TCreateUserTagBody
+class CreateUserTagInput(TurnkeyBaseModel):
+    body: CreateUserTagBody
 
 
-class TCreateUsersResponse(TurnkeyBaseModel):
+class CreateUsersResponse(TurnkeyBaseModel):
     activity: v1Activity
     userIds: List[str] = Field(description="A list of User IDs.")
 
 
-class TCreateUsersBody(TurnkeyBaseModel):
+class CreateUsersBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     users: List[v1UserParamsV3] = Field(description="A list of Users.")
 
 
-class TCreateUsersInput(TurnkeyBaseModel):
-    body: TCreateUsersBody
+class CreateUsersInput(TurnkeyBaseModel):
+    body: CreateUsersBody
 
 
-class TCreateWalletResponse(TurnkeyBaseModel):
+class CreateWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletId: str = Field(description="Unique identifier for a Wallet.")
     addresses: List[str] = Field(description="A list of account addresses.")
 
 
-class TCreateWalletBody(TurnkeyBaseModel):
+class CreateWalletBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     walletName: str = Field(description="Human-readable name for a Wallet.")
@@ -6278,16 +6280,16 @@ class TCreateWalletBody(TurnkeyBaseModel):
     )
 
 
-class TCreateWalletInput(TurnkeyBaseModel):
-    body: TCreateWalletBody
+class CreateWalletInput(TurnkeyBaseModel):
+    body: CreateWalletBody
 
 
-class TCreateWalletAccountsResponse(TurnkeyBaseModel):
+class CreateWalletAccountsResponse(TurnkeyBaseModel):
     activity: v1Activity
     addresses: List[str] = Field(description="A list of derived addresses.")
 
 
-class TCreateWalletAccountsBody(TurnkeyBaseModel):
+class CreateWalletAccountsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     walletId: str = Field(description="Unique identifier for a given Wallet.")
@@ -6300,52 +6302,52 @@ class TCreateWalletAccountsBody(TurnkeyBaseModel):
     )
 
 
-class TCreateWalletAccountsInput(TurnkeyBaseModel):
-    body: TCreateWalletAccountsBody
+class CreateWalletAccountsInput(TurnkeyBaseModel):
+    body: CreateWalletAccountsBody
 
 
-class TDeleteApiKeysResponse(TurnkeyBaseModel):
+class DeleteApiKeysResponse(TurnkeyBaseModel):
     activity: v1Activity
     apiKeyIds: List[str] = Field(description="A list of API Key IDs.")
 
 
-class TDeleteApiKeysBody(TurnkeyBaseModel):
+class DeleteApiKeysBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given User.")
     apiKeyIds: List[str] = Field(description="A list of API Key IDs.")
 
 
-class TDeleteApiKeysInput(TurnkeyBaseModel):
-    body: TDeleteApiKeysBody
+class DeleteApiKeysInput(TurnkeyBaseModel):
+    body: DeleteApiKeysBody
 
 
-class TDeleteAuthenticatorsResponse(TurnkeyBaseModel):
+class DeleteAuthenticatorsResponse(TurnkeyBaseModel):
     activity: v1Activity
     authenticatorIds: List[str] = Field(
         description="Unique identifier for a given Authenticator."
     )
 
 
-class TDeleteAuthenticatorsBody(TurnkeyBaseModel):
+class DeleteAuthenticatorsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given User.")
     authenticatorIds: List[str] = Field(description="A list of Authenticator IDs.")
 
 
-class TDeleteAuthenticatorsInput(TurnkeyBaseModel):
-    body: TDeleteAuthenticatorsBody
+class DeleteAuthenticatorsInput(TurnkeyBaseModel):
+    body: DeleteAuthenticatorsBody
 
 
-class TDeleteFiatOnRampCredentialResponse(TurnkeyBaseModel):
+class DeleteFiatOnRampCredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     fiatOnRampCredentialId: str = Field(
         description="Unique identifier of the Fiat On-Ramp credential that was deleted"
     )
 
 
-class TDeleteFiatOnRampCredentialBody(TurnkeyBaseModel):
+class DeleteFiatOnRampCredentialBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     fiatOnrampCredentialId: str = Field(
@@ -6353,16 +6355,16 @@ class TDeleteFiatOnRampCredentialBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteFiatOnRampCredentialInput(TurnkeyBaseModel):
-    body: TDeleteFiatOnRampCredentialBody
+class DeleteFiatOnRampCredentialInput(TurnkeyBaseModel):
+    body: DeleteFiatOnRampCredentialBody
 
 
-class TDeleteInvitationResponse(TurnkeyBaseModel):
+class DeleteInvitationResponse(TurnkeyBaseModel):
     activity: v1Activity
     invitationId: str = Field(description="Unique identifier for a given Invitation.")
 
 
-class TDeleteInvitationBody(TurnkeyBaseModel):
+class DeleteInvitationBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     invitationId: str = Field(
@@ -6370,18 +6372,18 @@ class TDeleteInvitationBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteInvitationInput(TurnkeyBaseModel):
-    body: TDeleteInvitationBody
+class DeleteInvitationInput(TurnkeyBaseModel):
+    body: DeleteInvitationBody
 
 
-class TDeleteOauth2CredentialResponse(TurnkeyBaseModel):
+class DeleteOauth2CredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     oauth2CredentialId: str = Field(
         description="Unique identifier of the OAuth 2.0 credential that was deleted"
     )
 
 
-class TDeleteOauth2CredentialBody(TurnkeyBaseModel):
+class DeleteOauth2CredentialBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     oauth2CredentialId: str = Field(
@@ -6389,18 +6391,18 @@ class TDeleteOauth2CredentialBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteOauth2CredentialInput(TurnkeyBaseModel):
-    body: TDeleteOauth2CredentialBody
+class DeleteOauth2CredentialInput(TurnkeyBaseModel):
+    body: DeleteOauth2CredentialBody
 
 
-class TDeleteOauthProvidersResponse(TurnkeyBaseModel):
+class DeleteOauthProvidersResponse(TurnkeyBaseModel):
     activity: v1Activity
     providerIds: List[str] = Field(
         description="A list of unique identifiers for Oauth Providers"
     )
 
 
-class TDeleteOauthProvidersBody(TurnkeyBaseModel):
+class DeleteOauthProvidersBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(
@@ -6411,18 +6413,18 @@ class TDeleteOauthProvidersBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteOauthProvidersInput(TurnkeyBaseModel):
-    body: TDeleteOauthProvidersBody
+class DeleteOauthProvidersInput(TurnkeyBaseModel):
+    body: DeleteOauthProvidersBody
 
 
-class TDeletePoliciesResponse(TurnkeyBaseModel):
+class DeletePoliciesResponse(TurnkeyBaseModel):
     activity: v1Activity
     policyIds: List[str] = Field(
         description="A list of unique identifiers for the deleted policies."
     )
 
 
-class TDeletePoliciesBody(TurnkeyBaseModel):
+class DeletePoliciesBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     policyIds: List[str] = Field(
@@ -6430,49 +6432,49 @@ class TDeletePoliciesBody(TurnkeyBaseModel):
     )
 
 
-class TDeletePoliciesInput(TurnkeyBaseModel):
-    body: TDeletePoliciesBody
+class DeletePoliciesInput(TurnkeyBaseModel):
+    body: DeletePoliciesBody
 
 
-class TDeletePolicyResponse(TurnkeyBaseModel):
+class DeletePolicyResponse(TurnkeyBaseModel):
     activity: v1Activity
     policyId: str = Field(description="Unique identifier for a given Policy.")
 
 
-class TDeletePolicyBody(TurnkeyBaseModel):
+class DeletePolicyBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     policyId: str = Field(description="Unique identifier for a given Policy.")
 
 
-class TDeletePolicyInput(TurnkeyBaseModel):
-    body: TDeletePolicyBody
+class DeletePolicyInput(TurnkeyBaseModel):
+    body: DeletePolicyBody
 
 
-class TDeletePrivateKeyTagsResponse(TurnkeyBaseModel):
+class DeletePrivateKeyTagsResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeyTagIds: List[str] = Field(description="A list of Private Key Tag IDs.")
     privateKeyIds: List[str] = Field(description="A list of Private Key IDs.")
 
 
-class TDeletePrivateKeyTagsBody(TurnkeyBaseModel):
+class DeletePrivateKeyTagsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeyTagIds: List[str] = Field(description="A list of Private Key Tag IDs.")
 
 
-class TDeletePrivateKeyTagsInput(TurnkeyBaseModel):
-    body: TDeletePrivateKeyTagsBody
+class DeletePrivateKeyTagsInput(TurnkeyBaseModel):
+    body: DeletePrivateKeyTagsBody
 
 
-class TDeletePrivateKeysResponse(TurnkeyBaseModel):
+class DeletePrivateKeysResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeyIds: List[str] = Field(
         description="A list of private key unique identifiers that were removed"
     )
 
 
-class TDeletePrivateKeysBody(TurnkeyBaseModel):
+class DeletePrivateKeysBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeyIds: List[str] = Field(
@@ -6484,18 +6486,18 @@ class TDeletePrivateKeysBody(TurnkeyBaseModel):
     )
 
 
-class TDeletePrivateKeysInput(TurnkeyBaseModel):
-    body: TDeletePrivateKeysBody
+class DeletePrivateKeysInput(TurnkeyBaseModel):
+    body: DeletePrivateKeysBody
 
 
-class TDeleteSmartContractInterfaceResponse(TurnkeyBaseModel):
+class DeleteSmartContractInterfaceResponse(TurnkeyBaseModel):
     activity: v1Activity
     smartContractInterfaceId: str = Field(
         description="The ID of the deleted Smart Contract Interface."
     )
 
 
-class TDeleteSmartContractInterfaceBody(TurnkeyBaseModel):
+class DeleteSmartContractInterfaceBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     smartContractInterfaceId: str = Field(
@@ -6503,18 +6505,18 @@ class TDeleteSmartContractInterfaceBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteSmartContractInterfaceInput(TurnkeyBaseModel):
-    body: TDeleteSmartContractInterfaceBody
+class DeleteSmartContractInterfaceInput(TurnkeyBaseModel):
+    body: DeleteSmartContractInterfaceBody
 
 
-class TDeleteSubOrganizationResponse(TurnkeyBaseModel):
+class DeleteSubOrganizationResponse(TurnkeyBaseModel):
     activity: v1Activity
     subOrganizationUuid: str = Field(
         description="Unique identifier of the sub organization that was removed"
     )
 
 
-class TDeleteSubOrganizationBody(TurnkeyBaseModel):
+class DeleteSubOrganizationBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     deleteWithoutExport: Optional[bool] = Field(
@@ -6523,49 +6525,49 @@ class TDeleteSubOrganizationBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteSubOrganizationInput(TurnkeyBaseModel):
-    body: TDeleteSubOrganizationBody
+class DeleteSubOrganizationInput(TurnkeyBaseModel):
+    body: DeleteSubOrganizationBody
 
 
-class TDeleteUserTagsResponse(TurnkeyBaseModel):
+class DeleteUserTagsResponse(TurnkeyBaseModel):
     activity: v1Activity
     userTagIds: List[str] = Field(description="A list of User Tag IDs.")
     userIds: List[str] = Field(description="A list of User IDs.")
 
 
-class TDeleteUserTagsBody(TurnkeyBaseModel):
+class DeleteUserTagsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userTagIds: List[str] = Field(description="A list of User Tag IDs.")
 
 
-class TDeleteUserTagsInput(TurnkeyBaseModel):
-    body: TDeleteUserTagsBody
+class DeleteUserTagsInput(TurnkeyBaseModel):
+    body: DeleteUserTagsBody
 
 
-class TDeleteUsersResponse(TurnkeyBaseModel):
+class DeleteUsersResponse(TurnkeyBaseModel):
     activity: v1Activity
     userIds: List[str] = Field(description="A list of User IDs.")
 
 
-class TDeleteUsersBody(TurnkeyBaseModel):
+class DeleteUsersBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userIds: List[str] = Field(description="A list of User IDs.")
 
 
-class TDeleteUsersInput(TurnkeyBaseModel):
-    body: TDeleteUsersBody
+class DeleteUsersInput(TurnkeyBaseModel):
+    body: DeleteUsersBody
 
 
-class TDeleteWalletAccountsResponse(TurnkeyBaseModel):
+class DeleteWalletAccountsResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletAccountIds: List[str] = Field(
         description="A list of wallet account unique identifiers that were removed"
     )
 
 
-class TDeleteWalletAccountsBody(TurnkeyBaseModel):
+class DeleteWalletAccountsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     walletAccountIds: List[str] = Field(
@@ -6577,18 +6579,18 @@ class TDeleteWalletAccountsBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteWalletAccountsInput(TurnkeyBaseModel):
-    body: TDeleteWalletAccountsBody
+class DeleteWalletAccountsInput(TurnkeyBaseModel):
+    body: DeleteWalletAccountsBody
 
 
-class TDeleteWalletsResponse(TurnkeyBaseModel):
+class DeleteWalletsResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletIds: List[str] = Field(
         description="A list of wallet unique identifiers that were removed"
     )
 
 
-class TDeleteWalletsBody(TurnkeyBaseModel):
+class DeleteWalletsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     walletIds: List[str] = Field(
@@ -6600,17 +6602,17 @@ class TDeleteWalletsBody(TurnkeyBaseModel):
     )
 
 
-class TDeleteWalletsInput(TurnkeyBaseModel):
-    body: TDeleteWalletsBody
+class DeleteWalletsInput(TurnkeyBaseModel):
+    body: DeleteWalletsBody
 
 
-class TEmailAuthResponse(TurnkeyBaseModel):
+class EmailAuthResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(description="Unique identifier for the authenticating User.")
     apiKeyId: str = Field(description="Unique identifier for the created API key.")
 
 
-class TEmailAuthBody(TurnkeyBaseModel):
+class EmailAuthBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     email: str = Field(description="Email of the authenticating user.")
@@ -6645,18 +6647,18 @@ class TEmailAuthBody(TurnkeyBaseModel):
     )
 
 
-class TEmailAuthInput(TurnkeyBaseModel):
-    body: TEmailAuthBody
+class EmailAuthInput(TurnkeyBaseModel):
+    body: EmailAuthBody
 
 
-class TEthSendRawTransactionResponse(TurnkeyBaseModel):
+class EthSendRawTransactionResponse(TurnkeyBaseModel):
     activity: v1Activity
     transactionHash: str = Field(
         description="The transaction hash of the sent transaction"
     )
 
 
-class TEthSendRawTransactionBody(TurnkeyBaseModel):
+class EthSendRawTransactionBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     signedTransaction: str = Field(
@@ -6667,18 +6669,18 @@ class TEthSendRawTransactionBody(TurnkeyBaseModel):
     )
 
 
-class TEthSendRawTransactionInput(TurnkeyBaseModel):
-    body: TEthSendRawTransactionBody
+class EthSendRawTransactionInput(TurnkeyBaseModel):
+    body: EthSendRawTransactionBody
 
 
-class TEthSendTransactionResponse(TurnkeyBaseModel):
+class EthSendTransactionResponse(TurnkeyBaseModel):
     activity: v1Activity
     sendTransactionStatusId: str = Field(
         description="The send_transaction_status ID associated with the transaction submission for sponsored transactions"
     )
 
 
-class TEthSendTransactionBody(TurnkeyBaseModel):
+class EthSendTransactionBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     from_: str = Field(
@@ -6720,11 +6722,11 @@ class TEthSendTransactionBody(TurnkeyBaseModel):
     )
 
 
-class TEthSendTransactionInput(TurnkeyBaseModel):
-    body: TEthSendTransactionBody
+class EthSendTransactionInput(TurnkeyBaseModel):
+    body: EthSendTransactionBody
 
 
-class TExportPrivateKeyResponse(TurnkeyBaseModel):
+class ExportPrivateKeyResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeyId: str = Field(description="Unique identifier for a given Private Key.")
     exportBundle: str = Field(
@@ -6732,7 +6734,7 @@ class TExportPrivateKeyResponse(TurnkeyBaseModel):
     )
 
 
-class TExportPrivateKeyBody(TurnkeyBaseModel):
+class ExportPrivateKeyBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeyId: str = Field(description="Unique identifier for a given Private Key.")
@@ -6741,11 +6743,11 @@ class TExportPrivateKeyBody(TurnkeyBaseModel):
     )
 
 
-class TExportPrivateKeyInput(TurnkeyBaseModel):
-    body: TExportPrivateKeyBody
+class ExportPrivateKeyInput(TurnkeyBaseModel):
+    body: ExportPrivateKeyBody
 
 
-class TExportWalletResponse(TurnkeyBaseModel):
+class ExportWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletId: str = Field(description="Unique identifier for a given Wallet.")
     exportBundle: str = Field(
@@ -6753,7 +6755,7 @@ class TExportWalletResponse(TurnkeyBaseModel):
     )
 
 
-class TExportWalletBody(TurnkeyBaseModel):
+class ExportWalletBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     walletId: str = Field(description="Unique identifier for a given Wallet.")
@@ -6766,11 +6768,11 @@ class TExportWalletBody(TurnkeyBaseModel):
     )
 
 
-class TExportWalletInput(TurnkeyBaseModel):
-    body: TExportWalletBody
+class ExportWalletInput(TurnkeyBaseModel):
+    body: ExportWalletBody
 
 
-class TExportWalletAccountResponse(TurnkeyBaseModel):
+class ExportWalletAccountResponse(TurnkeyBaseModel):
     activity: v1Activity
     address: str = Field(description="Address to identify Wallet Account.")
     exportBundle: str = Field(
@@ -6778,7 +6780,7 @@ class TExportWalletAccountResponse(TurnkeyBaseModel):
     )
 
 
-class TExportWalletAccountBody(TurnkeyBaseModel):
+class ExportWalletAccountBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     address: str = Field(description="Address to identify Wallet Account.")
@@ -6787,11 +6789,11 @@ class TExportWalletAccountBody(TurnkeyBaseModel):
     )
 
 
-class TExportWalletAccountInput(TurnkeyBaseModel):
-    body: TExportWalletAccountBody
+class ExportWalletAccountInput(TurnkeyBaseModel):
+    body: ExportWalletAccountBody
 
 
-class TImportPrivateKeyResponse(TurnkeyBaseModel):
+class ImportPrivateKeyResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeyId: str = Field(description="Unique identifier for a Private Key.")
     addresses: List[immutableactivityv1Address] = Field(
@@ -6799,7 +6801,7 @@ class TImportPrivateKeyResponse(TurnkeyBaseModel):
     )
 
 
-class TImportPrivateKeyBody(TurnkeyBaseModel):
+class ImportPrivateKeyBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="The ID of the User importing a Private Key.")
@@ -6815,17 +6817,17 @@ class TImportPrivateKeyBody(TurnkeyBaseModel):
     )
 
 
-class TImportPrivateKeyInput(TurnkeyBaseModel):
-    body: TImportPrivateKeyBody
+class ImportPrivateKeyInput(TurnkeyBaseModel):
+    body: ImportPrivateKeyBody
 
 
-class TImportWalletResponse(TurnkeyBaseModel):
+class ImportWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletId: str = Field(description="Unique identifier for a Wallet.")
     addresses: List[str] = Field(description="A list of account addresses.")
 
 
-class TImportWalletBody(TurnkeyBaseModel):
+class ImportWalletBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="The ID of the User importing a Wallet.")
@@ -6838,11 +6840,11 @@ class TImportWalletBody(TurnkeyBaseModel):
     )
 
 
-class TImportWalletInput(TurnkeyBaseModel):
-    body: TImportWalletBody
+class ImportWalletInput(TurnkeyBaseModel):
+    body: ImportWalletBody
 
 
-class TInitFiatOnRampResponse(TurnkeyBaseModel):
+class InitFiatOnRampResponse(TurnkeyBaseModel):
     activity: v1Activity
     onRampUrl: str = Field(description="Unique URL for a given fiat on-ramp flow.")
     onRampTransactionId: str = Field(
@@ -6854,7 +6856,7 @@ class TInitFiatOnRampResponse(TurnkeyBaseModel):
     )
 
 
-class TInitFiatOnRampBody(TurnkeyBaseModel):
+class InitFiatOnRampBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     onrampProvider: v1FiatOnRampProvider = Field(
@@ -6899,50 +6901,50 @@ class TInitFiatOnRampBody(TurnkeyBaseModel):
     )
 
 
-class TInitFiatOnRampInput(TurnkeyBaseModel):
-    body: TInitFiatOnRampBody
+class InitFiatOnRampInput(TurnkeyBaseModel):
+    body: InitFiatOnRampBody
 
 
-class TInitImportPrivateKeyResponse(TurnkeyBaseModel):
+class InitImportPrivateKeyResponse(TurnkeyBaseModel):
     activity: v1Activity
     importBundle: str = Field(
         description="Import bundle containing a public key and signature to use for importing client data."
     )
 
 
-class TInitImportPrivateKeyBody(TurnkeyBaseModel):
+class InitImportPrivateKeyBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="The ID of the User importing a Private Key.")
 
 
-class TInitImportPrivateKeyInput(TurnkeyBaseModel):
-    body: TInitImportPrivateKeyBody
+class InitImportPrivateKeyInput(TurnkeyBaseModel):
+    body: InitImportPrivateKeyBody
 
 
-class TInitImportWalletResponse(TurnkeyBaseModel):
+class InitImportWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     importBundle: str = Field(
         description="Import bundle containing a public key and signature to use for importing client data."
     )
 
 
-class TInitImportWalletBody(TurnkeyBaseModel):
+class InitImportWalletBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="The ID of the User importing a Wallet.")
 
 
-class TInitImportWalletInput(TurnkeyBaseModel):
-    body: TInitImportWalletBody
+class InitImportWalletInput(TurnkeyBaseModel):
+    body: InitImportWalletBody
 
 
-class TInitOtpResponse(TurnkeyBaseModel):
+class InitOtpResponse(TurnkeyBaseModel):
     activity: v1Activity
     otpId: str = Field(description="Unique identifier for an OTP authentication")
 
 
-class TInitOtpBody(TurnkeyBaseModel):
+class InitOtpBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpType: str = Field(
@@ -6988,16 +6990,16 @@ class TInitOtpBody(TurnkeyBaseModel):
     )
 
 
-class TInitOtpInput(TurnkeyBaseModel):
-    body: TInitOtpBody
+class InitOtpInput(TurnkeyBaseModel):
+    body: InitOtpBody
 
 
-class TInitOtpAuthResponse(TurnkeyBaseModel):
+class InitOtpAuthResponse(TurnkeyBaseModel):
     activity: v1Activity
     otpId: str = Field(description="Unique identifier for an OTP authentication")
 
 
-class TInitOtpAuthBody(TurnkeyBaseModel):
+class InitOtpAuthBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpType: str = Field(
@@ -7043,16 +7045,16 @@ class TInitOtpAuthBody(TurnkeyBaseModel):
     )
 
 
-class TInitOtpAuthInput(TurnkeyBaseModel):
-    body: TInitOtpAuthBody
+class InitOtpAuthInput(TurnkeyBaseModel):
+    body: InitOtpAuthBody
 
 
-class TInitUserEmailRecoveryResponse(TurnkeyBaseModel):
+class InitUserEmailRecoveryResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(description="Unique identifier for the user being recovered.")
 
 
-class TInitUserEmailRecoveryBody(TurnkeyBaseModel):
+class InitUserEmailRecoveryBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     email: str = Field(description="Email of the user starting recovery")
@@ -7079,18 +7081,18 @@ class TInitUserEmailRecoveryBody(TurnkeyBaseModel):
     )
 
 
-class TInitUserEmailRecoveryInput(TurnkeyBaseModel):
-    body: TInitUserEmailRecoveryBody
+class InitUserEmailRecoveryInput(TurnkeyBaseModel):
+    body: InitUserEmailRecoveryBody
 
 
-class TOauthResponse(TurnkeyBaseModel):
+class OauthResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(description="Unique identifier for the authenticating User.")
     apiKeyId: str = Field(description="Unique identifier for the created API key.")
     credentialBundle: str = Field(description="HPKE encrypted credential bundle")
 
 
-class TOauthBody(TurnkeyBaseModel):
+class OauthBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     oidcToken: str = Field(description="Base64 encoded OIDC token")
@@ -7111,18 +7113,18 @@ class TOauthBody(TurnkeyBaseModel):
     )
 
 
-class TOauthInput(TurnkeyBaseModel):
-    body: TOauthBody
+class OauthInput(TurnkeyBaseModel):
+    body: OauthBody
 
 
-class TOauth2AuthenticateResponse(TurnkeyBaseModel):
+class Oauth2AuthenticateResponse(TurnkeyBaseModel):
     activity: v1Activity
     oidcToken: str = Field(
         description="Base64 encoded OIDC token issued by Turnkey to be used with the LoginWithOAuth activity"
     )
 
 
-class TOauth2AuthenticateBody(TurnkeyBaseModel):
+class Oauth2AuthenticateBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     oauth2CredentialId: str = Field(
@@ -7147,18 +7149,18 @@ class TOauth2AuthenticateBody(TurnkeyBaseModel):
     )
 
 
-class TOauth2AuthenticateInput(TurnkeyBaseModel):
-    body: TOauth2AuthenticateBody
+class Oauth2AuthenticateInput(TurnkeyBaseModel):
+    body: Oauth2AuthenticateBody
 
 
-class TOauthLoginResponse(TurnkeyBaseModel):
+class OauthLoginResponse(TurnkeyBaseModel):
     activity: v1Activity
     session: str = Field(
         description="Signed JWT containing an expiry, public key, session type, user id, and organization id"
     )
 
 
-class TOauthLoginBody(TurnkeyBaseModel):
+class OauthLoginBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     oidcToken: str = Field(description="Base64 encoded OIDC token")
@@ -7175,11 +7177,11 @@ class TOauthLoginBody(TurnkeyBaseModel):
     )
 
 
-class TOauthLoginInput(TurnkeyBaseModel):
-    body: TOauthLoginBody
+class OauthLoginInput(TurnkeyBaseModel):
+    body: OauthLoginBody
 
 
-class TOtpAuthResponse(TurnkeyBaseModel):
+class OtpAuthResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(description="Unique identifier for the authenticating User.")
     apiKeyId: Optional[str] = Field(
@@ -7190,7 +7192,7 @@ class TOtpAuthResponse(TurnkeyBaseModel):
     )
 
 
-class TOtpAuthBody(TurnkeyBaseModel):
+class OtpAuthBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpId: str = Field(
@@ -7214,18 +7216,18 @@ class TOtpAuthBody(TurnkeyBaseModel):
     )
 
 
-class TOtpAuthInput(TurnkeyBaseModel):
-    body: TOtpAuthBody
+class OtpAuthInput(TurnkeyBaseModel):
+    body: OtpAuthBody
 
 
-class TOtpLoginResponse(TurnkeyBaseModel):
+class OtpLoginResponse(TurnkeyBaseModel):
     activity: v1Activity
     session: str = Field(
         description="Signed JWT containing an expiry, public key, session type, user id, and organization id"
     )
 
 
-class TOtpLoginBody(TurnkeyBaseModel):
+class OtpLoginBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     verificationToken: str = Field(
@@ -7248,16 +7250,16 @@ class TOtpLoginBody(TurnkeyBaseModel):
     )
 
 
-class TOtpLoginInput(TurnkeyBaseModel):
-    body: TOtpLoginBody
+class OtpLoginInput(TurnkeyBaseModel):
+    body: OtpLoginBody
 
 
-class TRecoverUserResponse(TurnkeyBaseModel):
+class RecoverUserResponse(TurnkeyBaseModel):
     activity: v1Activity
     authenticatorId: List[str] = Field(description="ID of the authenticator created.")
 
 
-class TRecoverUserBody(TurnkeyBaseModel):
+class RecoverUserBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     authenticator: v1AuthenticatorParamsV2 = Field(
@@ -7268,49 +7270,51 @@ class TRecoverUserBody(TurnkeyBaseModel):
     )
 
 
-class TRecoverUserInput(TurnkeyBaseModel):
-    body: TRecoverUserBody
+class RecoverUserInput(TurnkeyBaseModel):
+    body: RecoverUserBody
 
 
-class TRejectActivityResponse(TurnkeyBaseModel):
-    activity: v1Activity
+class RejectActivityResponse(TurnkeyBaseModel):
+    activity: v1Activity = Field(
+        description="An action that can be taken within the Turnkey infrastructure."
+    )
 
 
-class TRejectActivityBody(TurnkeyBaseModel):
+class RejectActivityBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     fingerprint: str = Field(description="An artifact verifying a User's action.")
 
 
-class TRejectActivityInput(TurnkeyBaseModel):
-    body: TRejectActivityBody
+class RejectActivityInput(TurnkeyBaseModel):
+    body: RejectActivityBody
 
 
-class TRemoveOrganizationFeatureResponse(TurnkeyBaseModel):
+class RemoveOrganizationFeatureResponse(TurnkeyBaseModel):
     activity: v1Activity
     features: List[v1Feature] = Field(
         description="Resulting list of organization features."
     )
 
 
-class TRemoveOrganizationFeatureBody(TurnkeyBaseModel):
+class RemoveOrganizationFeatureBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     name: v1FeatureName = Field(description="Name of the feature to remove")
 
 
-class TRemoveOrganizationFeatureInput(TurnkeyBaseModel):
-    body: TRemoveOrganizationFeatureBody
+class RemoveOrganizationFeatureInput(TurnkeyBaseModel):
+    body: RemoveOrganizationFeatureBody
 
 
-class TSetOrganizationFeatureResponse(TurnkeyBaseModel):
+class SetOrganizationFeatureResponse(TurnkeyBaseModel):
     activity: v1Activity
     features: List[v1Feature] = Field(
         description="Resulting list of organization features."
     )
 
 
-class TSetOrganizationFeatureBody(TurnkeyBaseModel):
+class SetOrganizationFeatureBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     name: v1FeatureName = Field(description="Name of the feature to set")
@@ -7319,18 +7323,18 @@ class TSetOrganizationFeatureBody(TurnkeyBaseModel):
     )
 
 
-class TSetOrganizationFeatureInput(TurnkeyBaseModel):
-    body: TSetOrganizationFeatureBody
+class SetOrganizationFeatureInput(TurnkeyBaseModel):
+    body: SetOrganizationFeatureBody
 
 
-class TSignRawPayloadResponse(TurnkeyBaseModel):
+class SignRawPayloadResponse(TurnkeyBaseModel):
     activity: v1Activity
     r: str = Field(description="Component of an ECSDA signature.")
     s: str = Field(description="Component of an ECSDA signature.")
     v: str = Field(description="Component of an ECSDA signature.")
 
 
-class TSignRawPayloadBody(TurnkeyBaseModel):
+class SignRawPayloadBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     signWith: str = Field(
@@ -7345,16 +7349,16 @@ class TSignRawPayloadBody(TurnkeyBaseModel):
     )
 
 
-class TSignRawPayloadInput(TurnkeyBaseModel):
-    body: TSignRawPayloadBody
+class SignRawPayloadInput(TurnkeyBaseModel):
+    body: SignRawPayloadBody
 
 
-class TSignRawPayloadsResponse(TurnkeyBaseModel):
+class SignRawPayloadsResponse(TurnkeyBaseModel):
     activity: v1Activity
     signatures: Optional[List[v1SignRawPayloadResult]] = Field(default=None)
 
 
-class TSignRawPayloadsBody(TurnkeyBaseModel):
+class SignRawPayloadsBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     signWith: str = Field(
@@ -7371,16 +7375,16 @@ class TSignRawPayloadsBody(TurnkeyBaseModel):
     )
 
 
-class TSignRawPayloadsInput(TurnkeyBaseModel):
-    body: TSignRawPayloadsBody
+class SignRawPayloadsInput(TurnkeyBaseModel):
+    body: SignRawPayloadsBody
 
 
-class TSignTransactionResponse(TurnkeyBaseModel):
+class SignTransactionResponse(TurnkeyBaseModel):
     activity: v1Activity
     signedTransaction: str
 
 
-class TSignTransactionBody(TurnkeyBaseModel):
+class SignTransactionBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     signWith: str = Field(
@@ -7392,18 +7396,18 @@ class TSignTransactionBody(TurnkeyBaseModel):
     type: v1TransactionType
 
 
-class TSignTransactionInput(TurnkeyBaseModel):
-    body: TSignTransactionBody
+class SignTransactionInput(TurnkeyBaseModel):
+    body: SignTransactionBody
 
 
-class TStampLoginResponse(TurnkeyBaseModel):
+class StampLoginResponse(TurnkeyBaseModel):
     activity: v1Activity
     session: str = Field(
         description="Signed JWT containing an expiry, public key, session type, user id, and organization id"
     )
 
 
-class TStampLoginBody(TurnkeyBaseModel):
+class StampLoginBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     publicKey: str = Field(
@@ -7419,18 +7423,18 @@ class TStampLoginBody(TurnkeyBaseModel):
     )
 
 
-class TStampLoginInput(TurnkeyBaseModel):
-    body: TStampLoginBody
+class StampLoginInput(TurnkeyBaseModel):
+    body: StampLoginBody
 
 
-class TUpdateFiatOnRampCredentialResponse(TurnkeyBaseModel):
+class UpdateFiatOnRampCredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     fiatOnRampCredentialId: str = Field(
         description="Unique identifier of the Fiat On-Ramp credential that was updated"
     )
 
 
-class TUpdateFiatOnRampCredentialBody(TurnkeyBaseModel):
+class UpdateFiatOnRampCredentialBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     fiatOnrampCredentialId: str = Field(
@@ -7455,18 +7459,18 @@ class TUpdateFiatOnRampCredentialBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateFiatOnRampCredentialInput(TurnkeyBaseModel):
-    body: TUpdateFiatOnRampCredentialBody
+class UpdateFiatOnRampCredentialInput(TurnkeyBaseModel):
+    body: UpdateFiatOnRampCredentialBody
 
 
-class TUpdateOauth2CredentialResponse(TurnkeyBaseModel):
+class UpdateOauth2CredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     oauth2CredentialId: str = Field(
         description="Unique identifier of the OAuth 2.0 credential that was updated"
     )
 
 
-class TUpdateOauth2CredentialBody(TurnkeyBaseModel):
+class UpdateOauth2CredentialBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     oauth2CredentialId: str = Field(
@@ -7479,16 +7483,16 @@ class TUpdateOauth2CredentialBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateOauth2CredentialInput(TurnkeyBaseModel):
-    body: TUpdateOauth2CredentialBody
+class UpdateOauth2CredentialInput(TurnkeyBaseModel):
+    body: UpdateOauth2CredentialBody
 
 
-class TUpdatePolicyResponse(TurnkeyBaseModel):
+class UpdatePolicyResponse(TurnkeyBaseModel):
     activity: v1Activity
     policyId: str = Field(description="Unique identifier for a given Policy.")
 
 
-class TUpdatePolicyBody(TurnkeyBaseModel):
+class UpdatePolicyBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     policyId: str = Field(description="Unique identifier for a given Policy.")
@@ -7512,18 +7516,18 @@ class TUpdatePolicyBody(TurnkeyBaseModel):
     )
 
 
-class TUpdatePolicyInput(TurnkeyBaseModel):
-    body: TUpdatePolicyBody
+class UpdatePolicyInput(TurnkeyBaseModel):
+    body: UpdatePolicyBody
 
 
-class TUpdatePrivateKeyTagResponse(TurnkeyBaseModel):
+class UpdatePrivateKeyTagResponse(TurnkeyBaseModel):
     activity: v1Activity
     privateKeyTagId: str = Field(
         description="Unique identifier for a given Private Key Tag."
     )
 
 
-class TUpdatePrivateKeyTagBody(TurnkeyBaseModel):
+class UpdatePrivateKeyTagBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeyTagId: str = Field(
@@ -7541,15 +7545,15 @@ class TUpdatePrivateKeyTagBody(TurnkeyBaseModel):
     )
 
 
-class TUpdatePrivateKeyTagInput(TurnkeyBaseModel):
-    body: TUpdatePrivateKeyTagBody
+class UpdatePrivateKeyTagInput(TurnkeyBaseModel):
+    body: UpdatePrivateKeyTagBody
 
 
-class TUpdateRootQuorumResponse(TurnkeyBaseModel):
+class UpdateRootQuorumResponse(TurnkeyBaseModel):
     activity: v1Activity
 
 
-class TUpdateRootQuorumBody(TurnkeyBaseModel):
+class UpdateRootQuorumBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     threshold: int = Field(
@@ -7560,16 +7564,16 @@ class TUpdateRootQuorumBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateRootQuorumInput(TurnkeyBaseModel):
-    body: TUpdateRootQuorumBody
+class UpdateRootQuorumInput(TurnkeyBaseModel):
+    body: UpdateRootQuorumBody
 
 
-class TUpdateUserResponse(TurnkeyBaseModel):
+class UpdateUserResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(description="A User ID.")
 
 
-class TUpdateUserBody(TurnkeyBaseModel):
+class UpdateUserBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given User.")
@@ -7589,18 +7593,18 @@ class TUpdateUserBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateUserInput(TurnkeyBaseModel):
-    body: TUpdateUserBody
+class UpdateUserInput(TurnkeyBaseModel):
+    body: UpdateUserBody
 
 
-class TUpdateUserEmailResponse(TurnkeyBaseModel):
+class UpdateUserEmailResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(
         description="Unique identifier of the User whose email was updated."
     )
 
 
-class TUpdateUserEmailBody(TurnkeyBaseModel):
+class UpdateUserEmailBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given User.")
@@ -7613,36 +7617,36 @@ class TUpdateUserEmailBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateUserEmailInput(TurnkeyBaseModel):
-    body: TUpdateUserEmailBody
+class UpdateUserEmailInput(TurnkeyBaseModel):
+    body: UpdateUserEmailBody
 
 
-class TUpdateUserNameResponse(TurnkeyBaseModel):
+class UpdateUserNameResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(
         description="Unique identifier of the User whose name was updated."
     )
 
 
-class TUpdateUserNameBody(TurnkeyBaseModel):
+class UpdateUserNameBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given User.")
     userName: str = Field(description="Human-readable name for a User.")
 
 
-class TUpdateUserNameInput(TurnkeyBaseModel):
-    body: TUpdateUserNameBody
+class UpdateUserNameInput(TurnkeyBaseModel):
+    body: UpdateUserNameBody
 
 
-class TUpdateUserPhoneNumberResponse(TurnkeyBaseModel):
+class UpdateUserPhoneNumberResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(
         description="Unique identifier of the User whose phone number was updated."
     )
 
 
-class TUpdateUserPhoneNumberBody(TurnkeyBaseModel):
+class UpdateUserPhoneNumberBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="Unique identifier for a given User.")
@@ -7655,16 +7659,16 @@ class TUpdateUserPhoneNumberBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateUserPhoneNumberInput(TurnkeyBaseModel):
-    body: TUpdateUserPhoneNumberBody
+class UpdateUserPhoneNumberInput(TurnkeyBaseModel):
+    body: UpdateUserPhoneNumberBody
 
 
-class TUpdateUserTagResponse(TurnkeyBaseModel):
+class UpdateUserTagResponse(TurnkeyBaseModel):
     activity: v1Activity
     userTagId: str = Field(description="Unique identifier for a given User Tag.")
 
 
-class TUpdateUserTagBody(TurnkeyBaseModel):
+class UpdateUserTagBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userTagId: str = Field(description="Unique identifier for a given User Tag.")
@@ -7678,16 +7682,16 @@ class TUpdateUserTagBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateUserTagInput(TurnkeyBaseModel):
-    body: TUpdateUserTagBody
+class UpdateUserTagInput(TurnkeyBaseModel):
+    body: UpdateUserTagBody
 
 
-class TUpdateWalletResponse(TurnkeyBaseModel):
+class UpdateWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletId: str = Field(description="A Wallet ID.")
 
 
-class TUpdateWalletBody(TurnkeyBaseModel):
+class UpdateWalletBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     walletId: str = Field(description="Unique identifier for a given Wallet.")
@@ -7696,18 +7700,18 @@ class TUpdateWalletBody(TurnkeyBaseModel):
     )
 
 
-class TUpdateWalletInput(TurnkeyBaseModel):
-    body: TUpdateWalletBody
+class UpdateWalletInput(TurnkeyBaseModel):
+    body: UpdateWalletBody
 
 
-class TVerifyOtpResponse(TurnkeyBaseModel):
+class VerifyOtpResponse(TurnkeyBaseModel):
     activity: v1Activity
     verificationToken: str = Field(
         description="Signed JWT containing a unique id, expiry, verification type, contact. Verification status of a user is updated when the token is consumed (in OTP_LOGIN requests)"
     )
 
 
-class TVerifyOtpBody(TurnkeyBaseModel):
+class VerifyOtpBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpId: str = Field(
@@ -7724,19 +7728,20 @@ class TVerifyOtpBody(TurnkeyBaseModel):
     )
 
 
-class TVerifyOtpInput(TurnkeyBaseModel):
-    body: TVerifyOtpBody
+class VerifyOtpInput(TurnkeyBaseModel):
+    body: VerifyOtpBody
 
 
-class TNOOPCodegenAnchorResponse(TurnkeyBaseModel):
-    activity: v1Activity
+class NOOPCodegenAnchorResponse(TurnkeyBaseModel):
+    stamp: v1WebAuthnStamp
+    tokenUsage: Optional[v1TokenUsage] = Field(default=None)
 
 
-class TTestRateLimitsResponse(TurnkeyBaseModel):
+class TestRateLimitsResponse(TurnkeyBaseModel):
     pass
 
 
-class TTestRateLimitsBody(TurnkeyBaseModel):
+class TestRateLimitsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     isSetLimit: bool = Field(
         description="Whether or not to set a limit on this request."
@@ -7746,5 +7751,5 @@ class TTestRateLimitsBody(TurnkeyBaseModel):
     )
 
 
-class TTestRateLimitsInput(TurnkeyBaseModel):
-    body: TTestRateLimitsBody
+class TestRateLimitsInput(TurnkeyBaseModel):
+    body: TestRateLimitsBody

@@ -195,9 +195,7 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
         if not operation_id:
             continue
 
-        operation_name_without_namespace = operation_id.replace(
-            f"{namespace}_", f"{prefix}T"
-        )
+        operation_name_without_namespace = operation_id.replace(f"{namespace}_", prefix)
         method_name = (
             operation_name_without_namespace[0].lower()
             + operation_name_without_namespace[1:]

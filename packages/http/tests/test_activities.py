@@ -5,11 +5,10 @@ import secrets
 from turnkey_sdk_types import (
     v1ApiKeyParamsV2,
     v1ApiKeyCurve,
-    TCreateApiKeysBody,
-    TGetActivityResponse,
+    CreateApiKeysBody,
+    CreateApiKeysResponse,
     TurnkeyNetworkError,
 )
-from turnkey_http.utils import send_signed_request
 
 
 def test_create_api_keys(client, user_id):
@@ -30,7 +29,7 @@ def test_create_api_keys(client, user_id):
     )
 
     # Create the typed request
-    request = TCreateApiKeysBody(userId=user_id, apiKeys=[api_key])
+    request = CreateApiKeysBody(userId=user_id, apiKeys=[api_key])
 
     # Make the createApiKeys request with typed input
     response = client.create_api_keys(request)
@@ -74,7 +73,7 @@ def test_organization_id_override(client, user_id):
 
     # Create request with WRONG organization ID to prove override works
     wrong_org_id = "00000000-0000-0000-0000-000000000000"
-    request = TCreateApiKeysBody(
+    request = CreateApiKeysBody(
         organizationId=wrong_org_id,  # Override with wrong org ID
         userId=user_id,
         apiKeys=[api_key],
@@ -110,26 +109,19 @@ def test_stamp_create_api_keys_send_signed_request(client, user_id):
         expirationSeconds="3600",
     )
 
-    request = TCreateApiKeysBody(userId=user_id, apiKeys=[api_key])
+    request = CreateApiKeysBody(userId=user_id, apiKeys=[api_key])
 
     # Stamp only (do not auto-send)
     signed_req = client.stamp_create_api_keys(request)
 
-    # Manually send stamped request; initial response is activity-only
-    activity_resp = send_signed_request(
-        signed_req, parser=lambda p: TGetActivityResponse(**p)
-    )
+    # Send stamped request via client with type (includes polling)
+    resp = client.send_signed_request(signed_req, CreateApiKeysResponse)
 
-    assert activity_resp is not None
-    assert activity_resp.activity is not None
-    assert activity_resp.activity.id is not None
-    assert activity_resp.activity.status in [
-        "ACTIVITY_STATUS_COMPLETED",
-        "ACTIVITY_STATUS_PENDING",
-        "ACTIVITY_STATUS_CONSENSUS_NEEDED",
-        "ACTIVITY_STATUS_FAILED",
-        "ACTIVITY_STATUS_REJECTED",
-    ]
+    assert resp is not None
+    assert resp.activity is not None
+    assert resp.activity.id is not None
+    assert resp.apiKeyIds is not None
+    assert isinstance(resp.apiKeyIds, list)
     print(
-        f"✅ Stamped createApiKeys submitted; activity {activity_resp.activity.id} status: {activity_resp.activity.status}"
+        f"✅ Stamped createApiKeys submitted; activity {resp.activity.id} apiKeyIds: {resp.apiKeyIds}"
     )

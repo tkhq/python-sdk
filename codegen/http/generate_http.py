@@ -148,6 +148,29 @@ class TurnkeyClient:
         response_data = response.json()
         return response_type(**response_data)
     
+    def _poll_for_completion(self, activity: Any) -> Any:
+        \"\"\"Poll until activity reaches terminal status.
+        
+        Args:
+            activity: Initial activity object with id and status attributes.
+            
+        Returns:
+            Activity object after reaching terminal status or max retries.
+        \"\"\"
+        if activity.status in TERMINAL_ACTIVITY_STATUSES:
+            return activity
+        
+        attempts = 0
+        while attempts < self.max_polling_retries:
+            time.sleep(self.polling_interval_ms / 1000.0)
+            poll_response = self.get_activity(GetActivityBody(activityId=activity.id))
+            activity = poll_response.activity
+            if activity.status in TERMINAL_ACTIVITY_STATUSES:
+                break
+            attempts += 1
+        
+        return activity
+    
     def _activity(self, url: str, body: Dict[str, Any], result_key: str, response_type: type) -> Any:
         \"\"\"Execute an activity and poll for completion.
         
@@ -161,27 +184,10 @@ class TurnkeyClient:
             Parsed response as Pydantic model with flattened result fields
         \"\"\"
         # Make initial request, we parse as activity response without result fields
-        initial_response = self._request(url, body, TGetActivityResponse)
+        initial_response = self._request(url, body, GetActivityResponse)
         
-        # Check if we need to poll
-        activity = initial_response.activity
-        
-        if activity.status not in TERMINAL_ACTIVITY_STATUSES:
-            # Poll for completion
-            activity_id = activity.id
-            attempts = 0
-            
-            while attempts < self.max_polling_retries:
-                time.sleep(self.polling_interval_ms / 1000.0)
-                
-                # Poll activity status
-                poll_response = self.get_activity(TGetActivityBody(activityId=activity_id))
-                activity = poll_response.activity
-                
-                if activity.status in TERMINAL_ACTIVITY_STATUSES:
-                    break
-                
-                attempts += 1
+        # Poll for completion
+        activity = self._poll_for_completion(initial_response.activity)
         
         # If activity completed successfully, flatten result fields into response
         if activity.status == "ACTIVITY_STATUS_COMPLETED" and hasattr(activity, 'result') and activity.result:
@@ -214,6 +220,77 @@ class TurnkeyClient:
             Parsed response as Pydantic model
         \"\"\"
         return self._request(url, body, response_type)
+
+    @overload
+    def send_signed_request(self, signed_request: SignedRequest, response_type: Callable[[Any], T]) -> T: ...
+    
+    @overload
+    def send_signed_request(self, signed_request: SignedRequest) -> Any: ...
+    
+    def send_signed_request(self, signed_request: SignedRequest, response_type: Callable[[Any], T] | None = None) -> Any:
+        \"\"\"Submit a signed request and poll for activity completion if needed.
+        
+        You can pass in the SignedRequest returned by any of the SDK's
+        stamping methods (stamp_create_api_keys, stamp_get_policies, etc.).
+        
+        For activities, this will poll until the activity reaches a terminal status.
+        
+        Args:
+            signed_request: A SignedRequest object returned by a stamping method.
+            response_type: Optional callable to convert the JSON payload to a typed value.
+                          Typically a Pydantic model class.
+            
+        Returns:
+            The parsed response via response_type, or raw JSON dict if no type provided.
+            
+        Raises:
+            TurnkeyNetworkError: If the request fails.
+        \"\"\"
+        headers = {
+            signed_request.stamp.stamp_header_name: signed_request.stamp.stamp_header_value,
+            "Content-Type": "application/json",
+            "X-Client-Version": VERSION,
+        }
+        
+        try:
+            response = requests.post(
+                signed_request.url,
+                headers=headers,
+                data=signed_request.body,
+                timeout=self.default_timeout
+            )
+        except requests.RequestException as exc:
+            raise TurnkeyNetworkError(
+                "Signed request failed",
+                None,
+                TurnkeyErrorCodes.NETWORK_ERROR,
+                str(exc)
+            ) from exc
+        
+        if not response.ok:
+            try:
+                error_data = response.json()
+                error_message = error_data.get("message", str(error_data))
+            except ValueError:
+                error_message = response.text or f"{response.status_code} {response.reason}"
+            
+            raise TurnkeyNetworkError(
+                error_message,
+                response.status_code,
+                TurnkeyErrorCodes.BAD_RESPONSE,
+                response.text
+            )
+        
+        payload = response.json()
+        
+        # Poll for activity completion if this is an activity request
+        if signed_request.type == RequestType.ACTIVITY:
+            activity_response = GetActivityResponse(**payload)
+            activity = self._poll_for_completion(activity_response.activity)
+            # Return updated payload with polled activity
+            payload["activity"] = activity.model_dump(by_alias=True, exclude_none=True) if hasattr(activity, 'model_dump') else payload["activity"]
+        
+        return response_type(payload) if response_type is not None else payload
 """)
 
     # Generate methods for each endpoint
@@ -241,8 +318,8 @@ class TurnkeyClient:
         # Extract description from OpenAPI spec
         summary = operation.get("summary", "")
 
-        input_type = f"T{operation_name_without_namespace}Body"
-        response_type = f"T{operation_name_without_namespace}Response"
+        input_type = f"{operation_name_without_namespace}Body"
+        response_type = f"{operation_name_without_namespace}Response"
 
         unversioned_activity_type = (
             f"ACTIVITY_TYPE_{to_snake_case(operation_name_without_namespace).upper()}"
@@ -274,7 +351,7 @@ class TurnkeyClient:
         
         return self._request("{path}", body, {response_type})
     
-    def stamp_{snake_method_name}(self, input: Optional[{input_type}] = None) -> TSignedRequest:
+    def stamp_{snake_method_name}(self, input: Optional[{input_type}] = None) -> SignedRequest:
         \"\"\"Stamp a {method_name} request without sending it.\"\"\"
         
         if input is None:
@@ -294,7 +371,7 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
         
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY)
 """)
             else:
                 # Method has required parameters so input is required, not Optional
@@ -312,7 +389,7 @@ class TurnkeyClient:
         
         return self._request("{path}", body, {response_type})
     
-    def stamp_{snake_method_name}(self, input: {input_type}) -> TSignedRequest:
+    def stamp_{snake_method_name}(self, input: {input_type}) -> SignedRequest:
         \"\"\"Stamp a {method_name} request without sending it.\"\"\"
         
         # Convert Pydantic model to dict
@@ -329,7 +406,7 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
         
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY)
 """)
 
         elif method_type == "activity":
@@ -353,7 +430,7 @@ class TurnkeyClient:
         
         return self._activity("{path}", body, "{versioned_method_name}", {response_type})
     
-    def stamp_{snake_method_name}(self, input: {input_type}) -> TSignedRequest:
+    def stamp_{snake_method_name}(self, input: {input_type}) -> SignedRequest:
         \"\"\"Stamp a {method_name} request without sending it.\"\"\"
         
         # Convert Pydantic model to dict
@@ -373,7 +450,7 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
         
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY)
 """)
 
         elif method_type == "activityDecision":
@@ -394,7 +471,7 @@ class TurnkeyClient:
         
         return self._activity_decision("{path}", body, {response_type})
     
-    def stamp_{snake_method_name}(self, input: {input_type}) -> TSignedRequest:
+    def stamp_{snake_method_name}(self, input: {input_type}) -> SignedRequest:
         \"\"\"Stamp a {method_name} request without sending it.\"\"\"
         
         # Convert Pydantic model to dict
@@ -414,7 +491,7 @@ class TurnkeyClient:
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
         
-        return TSignedRequest(url=full_url, body=body_str, stamp=stamp)
+        return SignedRequest(url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY_DECISION)
 """)
 
     return "\n".join(code_buffer)
@@ -451,13 +528,12 @@ def main():
 
     # Build full output
     output = f"{COMMENT_HEADER}\n\n"
-    output += "import json\nimport time\nfrom typing import Any, Dict, Optional\nimport requests\n"
-    output += "from dataclasses import dataclass\n"
-    output += "from turnkey_api_key_stamper import ApiKeyStamper, TStamp\n"
+    output += "import json\nimport time\nfrom typing import Any, Callable, Dict, Optional, TypeVar, overload\nimport requests\n"
+    output += "from turnkey_api_key_stamper import ApiKeyStamper\n"
     output += "from turnkey_sdk_types import *\n"
     output += "from ..version import VERSION\n\n"
+    output += "T = TypeVar('T')\n\n"
     output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n\n"
-    output += """@dataclass\nclass TSignedRequest:\n    \"\"\"A signed request ready to be sent to the Turnkey API.\"\"\"\n    \n    url: str\n    body: str\n    stamp: TStamp\n\n"""
     output += client_code
 
     # Ensure output directory exists
