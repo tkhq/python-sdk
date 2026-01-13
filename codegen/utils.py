@@ -3,6 +3,8 @@
 import re
 from typing import Dict, Any
 
+from constants import VERSIONED_ACTIVITY_TYPES
+
 
 def to_snake_case(name: str) -> str:
     """Convert camelCase to snake_case.
@@ -76,3 +78,60 @@ def method_type_from_method_name(method_name: str) -> str:
     ):
         return "query"
     return "activity"
+
+
+def resolve_versioned_activity_type(activity_type: str) -> str:
+    """Resolve an activity type to its versioned form.
+
+    Args:
+        activity_type: The unversioned activity type (e.g., "ACTIVITY_TYPE_CREATE_USERS")
+
+    Returns:
+        The versioned activity type if found in the mapping, otherwise the input activity type
+
+    Example:
+        >>> resolve_versioned_activity_type("ACTIVITY_TYPE_CREATE_USERS")
+        "ACTIVITY_TYPE_CREATE_USERS_V3"
+        >>> resolve_versioned_activity_type("ACTIVITY_TYPE_UNKNOWN")
+        "ACTIVITY_TYPE_UNKNOWN"
+    """
+    versioned = VERSIONED_ACTIVITY_TYPES.get(activity_type)
+    return versioned[0] if versioned else activity_type
+
+
+def get_versioned_intent_type(activity_type: str) -> str | None:
+    """Get the versioned intent type for an activity.
+
+    Args:
+        activity_type: The unversioned activity type (e.g., "ACTIVITY_TYPE_CREATE_USERS")
+
+    Returns:
+        The intent type name if found in the mapping, None otherwise
+
+    Example:
+        >>> get_versioned_intent_type("ACTIVITY_TYPE_CREATE_USERS")
+        "v1CreateUsersIntentV3"
+        >>> get_versioned_intent_type("ACTIVITY_TYPE_UNKNOWN")
+        None
+    """
+    versioned = VERSIONED_ACTIVITY_TYPES.get(activity_type)
+    return versioned[1] if versioned else None
+
+
+def get_versioned_result_type(activity_type: str) -> str | None:
+    """Get the versioned result type for an activity.
+
+    Args:
+        activity_type: The unversioned activity type (e.g., "ACTIVITY_TYPE_CREATE_USERS")
+
+    Returns:
+        The result type name if found in the mapping, None otherwise
+
+    Example:
+        >>> get_versioned_result_type("ACTIVITY_TYPE_CREATE_USERS")
+        "v1CreateUsersResult"
+        >>> get_versioned_result_type("ACTIVITY_TYPE_UNKNOWN")
+        None
+    """
+    versioned = VERSIONED_ACTIVITY_TYPES.get(activity_type)
+    return versioned[2] if versioned else None

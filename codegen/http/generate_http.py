@@ -13,7 +13,6 @@ sys.path.insert(0, str(CODEGEN_DIR))
 
 from constants import (
     COMMENT_HEADER,
-    VERSIONED_ACTIVITY_TYPES,
     METHODS_WITH_ONLY_OPTIONAL_PARAMETERS,
     TERMINAL_ACTIVITY_STATUSES,
 )
@@ -21,6 +20,7 @@ from utils import (
     to_snake_case,
     extract_latest_versions,
     method_type_from_method_name,
+    resolve_versioned_activity_type,
 )
 
 # Get the project root directory
@@ -222,12 +222,12 @@ class TurnkeyClient:
         return self._request(url, body, response_type)
 
     @overload
-    def send_signed_request(self, signed_request: SignedRequest, response_type: Callable[[Any], T]) -> T: ...
+    def send_signed_request(self, signed_request: SignedRequest, response_type: type[T]) -> T: ...
     
     @overload
     def send_signed_request(self, signed_request: SignedRequest) -> Any: ...
     
-    def send_signed_request(self, signed_request: SignedRequest, response_type: Callable[[Any], T] | None = None) -> Any:
+    def send_signed_request(self, signed_request: SignedRequest, response_type: type[T] | None = None) -> Any:
         \"\"\"Submit a signed request and poll for activity completion if needed.
         
         You can pass in the SignedRequest returned by any of the SDK's
@@ -287,10 +287,25 @@ class TurnkeyClient:
         if signed_request.type == RequestType.ACTIVITY:
             activity_response = GetActivityResponse(**payload)
             activity = self._poll_for_completion(activity_response.activity)
-            # Return updated payload with polled activity
-            payload["activity"] = activity.model_dump(by_alias=True, exclude_none=True) if hasattr(activity, 'model_dump') else payload["activity"]
+            
+            # Update payload with polled activity
+            activity_dict = activity.model_dump(by_alias=True, exclude_none=True) if hasattr(activity, 'model_dump') else {}
+            payload["activity"] = activity_dict
+            
+            # Extract result fields if activity completed successfully
+            if activity.status == "ACTIVITY_STATUS_COMPLETED" and hasattr(activity, 'result') and activity.result:
+                result = activity.result
+                # Find the first result field (e.g., createApiKeysResult, createPolicyResult, etc.)
+                for attr_name in dir(result):
+                    if not attr_name.startswith('_') and attr_name.endswith('Result'):
+                        result_data = getattr(result, attr_name, None)
+                        if result_data and hasattr(result_data, 'model_dump'):
+                            # Flatten result fields into payload
+                            result_dict = result_data.model_dump(by_alias=True, exclude_none=True)
+                            payload.update(result_dict)
+                            break
         
-        return response_type(payload) if response_type is not None else payload
+        return response_type(**payload) if response_type is not None else payload
 """)
 
     # Generate methods for each endpoint
@@ -324,8 +339,8 @@ class TurnkeyClient:
         unversioned_activity_type = (
             f"ACTIVITY_TYPE_{to_snake_case(operation_name_without_namespace).upper()}"
         )
-        versioned_activity_type = VERSIONED_ACTIVITY_TYPES.get(
-            unversioned_activity_type, unversioned_activity_type
+        versioned_activity_type = resolve_versioned_activity_type(
+            unversioned_activity_type
         )
 
         # Generate method

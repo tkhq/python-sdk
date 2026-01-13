@@ -15,10 +15,14 @@ sys.path.insert(0, str(CODEGEN_DIR))
 from pydantic_helpers import needs_field_alias, safe_property_name
 from constants import (
     COMMENT_HEADER,
-    VERSIONED_ACTIVITY_TYPES,
     METHODS_WITH_ONLY_OPTIONAL_PARAMETERS,
 )
-from utils import extract_latest_versions, method_type_from_method_name
+from utils import (
+    extract_latest_versions,
+    method_type_from_method_name,
+    get_versioned_intent_type,
+    get_versioned_result_type,
+)
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -248,14 +252,9 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                             activity_type_key = strip_version_suffix(
                                 type_prop["enum"][0]
                             )
-                            mapped = VERSIONED_ACTIVITY_TYPES.get(activity_type_key)
-                            if mapped:
-                                version_suffix_match = re.search(r"(V\d+)$", mapped)
-                                version_suffix = (
-                                    version_suffix_match.group(1)
-                                    if version_suffix_match
-                                    else ""
-                                )
+                            versioned_result = get_versioned_result_type(
+                                activity_type_key
+                            )
 
                             base_activity = re.sub(r"^v\d+", "", req_type_name)
                             base_activity = re.sub(
@@ -265,20 +264,9 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                             result_key = None
 
                             if result_base in latest_versions:
-                                if version_suffix:
-                                    candidate = next(
-                                        (
-                                            k
-                                            for k in definitions.keys()
-                                            if k.startswith(
-                                                "v1" + base_activity + "Result"
-                                            )
-                                            and k.endswith(version_suffix)
-                                        ),
-                                        None,
-                                    )
-                                    if candidate:
-                                        result_key = candidate
+                                # Use mapped result type directly if available
+                                if versioned_result and versioned_result in definitions:
+                                    result_key = versioned_result
                                 if not result_key:
                                     result_key = latest_versions[result_base][
                                         "full_name"
@@ -355,29 +343,11 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                     activity_type_key = strip_version_suffix(
                         request_type_def["properties"]["type"]["enum"][0]
                     )
-                    mapped = VERSIONED_ACTIVITY_TYPES.get(activity_type_key)
-                    version_suffix = None
-                    if mapped:
-                        version_suffix_match = re.search(r"(V\d+)$", mapped)
-                        version_suffix = (
-                            version_suffix_match.group(1)
-                            if version_suffix_match
-                            else ""
-                        )
+                    versioned_intent = get_versioned_intent_type(activity_type_key)
 
                     adjusted_intent_type_name = intent_type_name
-                    if version_suffix or mapped:
-                        candidate = next(
-                            (
-                                k
-                                for k in definitions.keys()
-                                if k.startswith("v1" + base_activity + "Intent")
-                                and k.endswith(version_suffix)
-                            ),
-                            None,
-                        )
-                        if candidate:
-                            adjusted_intent_type_name = candidate
+                    if versioned_intent and versioned_intent in definitions:
+                        adjusted_intent_type_name = versioned_intent
 
                     intent_def = definitions.get(adjusted_intent_type_name)
                     output += generate_inline_properties(intent_def, is_all_optional)
