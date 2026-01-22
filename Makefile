@@ -1,15 +1,21 @@
-.PHONY: generate generate-types generate-http test format typecheck install clean help
+.PHONY: generate generate-types generate-http test format typecheck install clean help changeset changeset-status changeset-version changeset-changelog
 
 help:
 	@echo "Available commands:"
-	@echo "  make generate       - Generate all code (types + HTTP client)"
-	@echo "  make generate-types - Generate type definitions"
-	@echo "  make generate-http  - Generate HTTP client"
-	@echo "  make test          - Run tests"
-	@echo "  make format        - Format all Python files with ruff"
-	@echo "  make typecheck     - Run mypy type checking"
-	@echo "  make install       - Install all packages in dev mode"
-	@echo "  make clean         - Remove generated files and caches"
+	@echo "  make generate            - Generate all code (types + HTTP client)"
+	@echo "  make generate-types      - Generate type definitions"
+	@echo "  make generate-http       - Generate HTTP client"
+	@echo "  make test               - Run tests"
+	@echo "  make format             - Format all Python files with ruff"
+	@echo "  make typecheck          - Run mypy type checking"
+	@echo "  make install            - Install all packages in dev mode"
+	@echo "  make clean              - Remove generated files and caches"
+	@echo ""
+	@echo "Changeset commands:"
+	@echo "  make changeset          - Create a new changeset file"
+	@echo "  make changeset-status   - Show pending changesets"
+	@echo "  make changeset-version  - Apply version bumps from changesets"
+	@echo "  make changeset-changelog - Generate changelogs from applied changesets"
 
 generate: generate-types generate-http
 
@@ -49,3 +55,17 @@ clean:
 	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✅ Cleanup complete"
+
+# Changeset management
+changeset:
+	@python changesets/manage.py new
+
+changeset-status:
+	@python changesets/manage.py status
+
+changeset-version:
+	@python changesets/manage.py version
+
+changeset-changelog:
+	@python changesets/manage.py changelog
+
