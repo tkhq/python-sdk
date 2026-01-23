@@ -4,7 +4,7 @@
 import re
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 import shutil
@@ -13,6 +13,7 @@ import shutil
 @dataclass
 class Changeset:
     """Represents a changeset file with modules, type, and summary."""
+
     file: Path
     modules: List[str]  # e.g., ["api-key-stamper", "http", "sdk-types"]
     type: str  # patch | minor | major | beta
@@ -35,7 +36,8 @@ class ChangesetManager:
             return []
 
         files = sorted(
-            f for f in target_dir.iterdir()
+            f
+            for f in target_dir.iterdir()
             if f.is_file() and f.suffix in {".yml", ".yaml", ".md"}
         )
 
@@ -50,80 +52,43 @@ class ChangesetManager:
         """Parse a changeset file (YAML or Markdown front-matter)."""
         text = file.read_text()
 
-        # Try YAML array form first
+        # YAML array form:
         # type: minor
         # packages: [ api-key-stamper, http ]
         # changelog: |-
         #   summary...
-        type_match = re.search(r'(?mi)^\s*type\s*:\s*"?(major|minor|patch|beta)"?\s*$', text)
-        array_match = re.search(r'(?ms)^\s*packages\s*:\s*\[(.*?)\]\s*$', text)
+        type_match = re.search(
+            r'(?mi)^\s*type\s*:\s*"?(major|minor|patch|beta)"?\s*$', text
+        )
+        array_match = re.search(r"(?ms)^\s*packages\s*:\s*\[(.*?)\]\s*$", text)
 
-        if array_match:
-            packages = [
-                p.strip().strip('"\'')
-                for p in array_match.group(1).split(',')
-                if p.strip()
-            ]
-            if packages:
-                bump_type = type_match.group(1).lower() if type_match else "patch"
-                summary = self._extract_changelog(text)
-                return [Changeset(file, packages, bump_type, summary)]
-
-        # Try YAML mapping form
-        # packages:
-        #   api-key-stamper: minor
-        #   http: patch
-        mapping_match = re.search(r'(?ms)^\s*packages\s*:\s*\n(.*?)(^\S|\Z)', text)
-        if mapping_match:
-            entries = []
-            for line in mapping_match.group(1).splitlines():
-                entry_match = re.match(r'^\s+(.+?)\s*:\s*(major|minor|patch|beta)\s*$', line)
-                if entry_match:
-                    entries.append((entry_match.group(1).strip(), entry_match.group(2).strip()))
-
-            if entries:
-                summary = self._extract_changelog(text)
-                return [
-                    Changeset(file, [mod], bump, summary)
-                    for mod, bump in entries
-                ]
-
-        # Try Markdown front-matter
-        # ---
-        # type: minor
-        # packages:
-        #   - api-key-stamper
-        #   - http
-        # ---
-        # body...
-        fm_match = re.match(r'(?s)^---\s*(.*?)\s*---\s*(.*)$', text)
-        if fm_match:
-            front, body = fm_match.groups()
-
-            type_fm = re.search(r'(?mi)^\s*type\s*:\s*"?(major|minor|patch|beta)"?\s*$', front)
-            packages_fm = re.findall(r'(?m)^\s*-\s*(.+)\s*$', front)
-
-            if packages_fm:
-                bump_type = type_fm.group(1).lower() if type_fm else "patch"
-                return [Changeset(file, packages_fm, bump_type, body.strip())]
-
-        return []
+        packages = [
+            p.strip().strip("\"'") for p in array_match.group(1).split(",") if p.strip()
+        ]
+        if packages:
+            bump_type = type_match.group(1).lower() if type_match else "patch"
+            summary = self._extract_changelog(text)
+            return [Changeset(file, packages, bump_type, summary)]
 
     def _extract_changelog(self, text: str) -> str:
         """Extract changelog content from YAML."""
-        match = re.search(r'(?ms)^\s*changelog\s*:\s*\|-\s*\n(.*)$', text)
+        match = re.search(r"(?ms)^\s*changelog\s*:\s*\|-\s*\n(.*)$", text)
         if not match:
             return ""
         body = match.group(1)
-        return '\n'.join(line.removeprefix("  ") for line in body.splitlines()).strip()
+        return "\n".join(line.removeprefix("  ") for line in body.splitlines()).strip()
 
     def bump_version(self, version: str, bump: str) -> str:
         """Bump a semantic version string."""
-        match = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z\.-]+))?$', version)
+        match = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z\.-]+))?$", version)
         if not match:
             return version
 
-        major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        major, minor, patch = (
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+        )
         pre = match.group(4) or ""
 
         bump = bump.lower()
@@ -169,7 +134,9 @@ class ChangesetManager:
         pattern = r'(^\s*version\s*=\s*["\'])([^"\']+)(["\'])'
 
         if re.search(pattern, text, re.MULTILINE):
-            updated = re.sub(pattern, rf'\g<1>{new_version}\g<3>', text, flags=re.MULTILINE)
+            updated = re.sub(
+                pattern, rf"\g<1>{new_version}\g<3>", text, flags=re.MULTILINE
+            )
             pyproject.write_text(updated)
             return True
 
@@ -187,15 +154,19 @@ def cmd_new(manager: ChangesetManager):
     print("  3) major  - Breaking changes")
     print("  4) beta   - Pre-release")
     choice = input("\nSelect type [1-4]: ").strip()
-    
+
     type_map = {"1": "patch", "2": "minor", "3": "major", "4": "beta"}
     bump_type = type_map.get(choice, "patch")
 
     # Get packages
-    packages_list = [p.name for p in manager.packages_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+    packages_list = [
+        p.name
+        for p in manager.packages_dir.iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    ]
     print(f"\nAvailable packages: {', '.join(packages_list)}")
     packages_input = input("Packages (comma-separated): ").strip()
-    packages = [p.strip() for p in packages_input.split(',') if p.strip()]
+    packages = [p.strip() for p in packages_input.split(",") if p.strip()]
 
     if not packages:
         print("Error: At least one package is required")
@@ -210,16 +181,14 @@ def cmd_new(manager: ChangesetManager):
             lines.append(line)
     except EOFError:
         pass
-    
-    changelog = '\n'.join(lines).strip()
+
+    changelog = "\n".join(lines).strip()
     if not changelog:
         changelog = "No description provided"
 
     # Generate filename
-    name = input("\nChangeset filename (without extension): ").strip()
-    if not name:
-        name = f"change-{date.today().strftime('%Y%m%d')}"
-    
+    name = f"change-{datetime.now().strftime('%Y%m%d-%H:%M:%S')}"
+
     filepath = manager.changeset_dir / f"{name}.yml"
     if filepath.exists():
         print(f"Error: {filepath} already exists")
@@ -228,7 +197,7 @@ def cmd_new(manager: ChangesetManager):
     # Write changeset
     manager.changeset_dir.mkdir(exist_ok=True)
     content = f"""type: {bump_type}
-packages: [ {', '.join(packages)} ]
+packages: [ {", ".join(packages)} ]
 changelog: |-
   {changelog}
 """
@@ -290,10 +259,16 @@ def cmd_version(manager: ChangesetManager):
 
             # Update version.py for http module
             if module == "http":
-                version_file = manager.packages_dir / "http" / "src" / "turnkey_http" / "version.py"
+                version_file = (
+                    manager.packages_dir
+                    / "http"
+                    / "src"
+                    / "turnkey_http"
+                    / "version.py"
+                )
                 version_file.write_text(
                     f'"""Auto-generated version file. Do not edit manually."""\n\n'
-                    f'VERSION = "turnkey/python-sdk@{next_version}"\n'
+                    f'VERSION = "turnkey-python-http@{next_version}"\n'
                 )
         else:
             print(f"  - {module}: failed to write version")
@@ -371,7 +346,7 @@ def cmd_changelog(manager: ChangesetManager):
             split_idx = existing.find("\n\n")
             if split_idx >= 0:
                 header = existing[:split_idx].rstrip()
-                rest = existing[split_idx + 2:]
+                rest = existing[split_idx + 2 :]
             else:
                 header = existing.rstrip()
                 rest = ""

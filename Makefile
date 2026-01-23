@@ -1,4 +1,4 @@
-.PHONY: generate generate-types generate-http test format typecheck install clean help changeset changeset-status changeset-version changeset-changelog
+.PHONY: generate generate-types generate-http test format format-check typecheck install clean help changeset changeset-status changeset-version changeset-changelog build
 
 help:
 	@echo "Available commands:"
@@ -9,6 +9,7 @@ help:
 	@echo "  make format             - Format all Python files with ruff"
 	@echo "  make typecheck          - Run mypy type checking"
 	@echo "  make install            - Install all packages in dev mode"
+	@echo "  make build              - Build all packages for distribution"
 	@echo "  make clean              - Remove generated files and caches"
 	@echo ""
 	@echo "Changeset commands:"
@@ -35,6 +36,11 @@ format:
 	@echo "🎨 Formatting code..."
 	@ruff format .
 
+format-check:
+	@echo "🔍 Checking code format..."
+	@ruff format --check .
+	@echo "✅ Code format is correct"
+
 typecheck:
 	@echo "🔍 Running type checks..."
 	@mypy packages/
@@ -47,6 +53,17 @@ install:
 	@pip install -e ./packages/api-key-stamper[dev]
 	@pip install -e ./packages/http[dev]
 	@echo "✅ All packages installed"
+
+build:
+	@echo "📦 Building packages for distribution..."
+	@pip install build
+	@for pkg in packages/*/; do \
+		if [ -f "$$pkg/pyproject.toml" ]; then \
+			echo "Building $$pkg..."; \
+			python -m build "$$pkg"; \
+		fi \
+	done
+	@echo "✅ All packages built"
 
 clean:
 	@echo "🧹 Cleaning up..."
