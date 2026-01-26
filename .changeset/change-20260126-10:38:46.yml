@@ -1,4 +1,0 @@
-type: minor
-packages: [ api-key-stamper, sdk-types, http ]
-changelog: |-
-  Initial release
