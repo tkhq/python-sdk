@@ -37,3 +37,6 @@ exclude = [
     "^dist/",
     "^\\.eggs/",
 ]
+
+[tool.setuptools.packages.find]
+exclude = ["schema*", "codegen*", "changesets*"]

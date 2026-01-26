@@ -1,4 +1,3 @@
-"""Package version for Turnkey HTTP client."""
+"""Auto-generated version file. Do not edit manually."""
 
-# Version is updated automatically during publish
-VERSION = "turnkey-http@0.1.0"
+VERSION = "turnkey-python-http@0.1.0"
