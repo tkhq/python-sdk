@@ -183,6 +183,7 @@ jobs:
         with:
           packages-dir: dist-to-publish/
           repository-url: https://test.pypi.org/legacy/ # publishing to Test PyPI for now
+          verbose: true
       
       - name: Success
         run: |
