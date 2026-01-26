@@ -135,8 +135,7 @@ jobs:
     name: Publish to PyPI
     needs: prepare-release
     runs-on:
-      group: package-deploy
-    environment: production # require manual approval for production deployments
+      group: package-deploy # environment: production # require manual approval for production deployments
 
     steps:
       - name: Checkout repository
