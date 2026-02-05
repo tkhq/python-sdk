@@ -268,7 +268,7 @@ def cmd_version(manager: ChangesetManager):
                 )
                 version_file.write_text(
                     f'"""Auto-generated version file. Do not edit manually."""\n\n'
-                    f'VERSION = "turnkey-python-http@{next_version}"\n'
+                    f'VERSION = "turnkey-python/{next_version}"\n'
                 )
         else:
             print(f"  - {module}: failed to write version")
