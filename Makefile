@@ -1,4 +1,4 @@
-.PHONY: generate generate-types generate-http test format format-check typecheck install clean help changeset changeset-status changeset-version changeset-changelog build
+.PHONY: generate generate-types generate-http test format format-check typecheck install clean help changeset changeset-status changeset-version changeset-changelog build prepare-release
 
 help:
 	@echo "Available commands:"
@@ -17,6 +17,7 @@ help:
 	@echo "  make changeset-status   - Show pending changesets"
 	@echo "  make changeset-version  - Apply version bumps from changesets"
 	@echo "  make changeset-changelog - Generate changelogs from applied changesets"
+	@echo "  make prepare-release     - Run version bump, changelog generation, and build for release preparation"
 
 generate: generate-types generate-http
 
@@ -85,4 +86,7 @@ changeset-version:
 
 changeset-changelog:
 	@python changesets/manage.py changelog
+
+prepare-release: changeset-version changeset-changelog build
+	@echo "✅ Release preparation complete"
 
