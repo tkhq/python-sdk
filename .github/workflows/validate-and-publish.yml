@@ -46,9 +46,16 @@ jobs:
       - name: Run type checking
         run: make typecheck
 
-  prepare-release:
-    runs-on: ubuntu-latest
+      - name: Build packages
+        run: make build
+
+  publish:
+    name: Publish to PyPI
     needs: build
+    environment: production
+    runs-on:
+      group: package-deploy # environment: production # require manual approval for production deployments
+
     steps:
       # https://github.com/actions/checkout
       - name: Checkout
@@ -61,29 +68,6 @@ jobs:
 
       - name: Build packages
         run: make build
-
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: release-artifacts-${{ needs.build.outputs.version }}
-          path: |
-            packages/*/dist/
-            .changeset/**
-          retention-days: 7
-
-  publish:
-    name: Publish to PyPI
-    needs: [build, prepare-release]
-    environment: production
-    runs-on:
-      group: package-deploy # environment: production # require manual approval for production deployments
-
-    steps:
-      - name: Download release artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: release-artifacts-${{ needs.build.outputs.version }}
-          path: .
 
       - name: Prepare packages for publishing
         run: |
