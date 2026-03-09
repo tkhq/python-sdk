@@ -395,6 +395,16 @@ class v1ActivityType(str, Enum):
     ACTIVITY_TYPE_INIT_OTP_AUTH_V3 = "ACTIVITY_TYPE_INIT_OTP_AUTH_V3"
     ACTIVITY_TYPE_INIT_OTP_V2 = "ACTIVITY_TYPE_INIT_OTP_V2"
     ACTIVITY_TYPE_UPSERT_GAS_USAGE_CONFIG = "ACTIVITY_TYPE_UPSERT_GAS_USAGE_CONFIG"
+    ACTIVITY_TYPE_CREATE_TVC_APP = "ACTIVITY_TYPE_CREATE_TVC_APP"
+    ACTIVITY_TYPE_CREATE_TVC_DEPLOYMENT = "ACTIVITY_TYPE_CREATE_TVC_DEPLOYMENT"
+    ACTIVITY_TYPE_CREATE_TVC_MANIFEST_APPROVALS = (
+        "ACTIVITY_TYPE_CREATE_TVC_MANIFEST_APPROVALS"
+    )
+    ACTIVITY_TYPE_SOL_SEND_TRANSACTION = "ACTIVITY_TYPE_SOL_SEND_TRANSACTION"
+    ACTIVITY_TYPE_INIT_OTP_V3 = "ACTIVITY_TYPE_INIT_OTP_V3"
+    ACTIVITY_TYPE_VERIFY_OTP_V2 = "ACTIVITY_TYPE_VERIFY_OTP_V2"
+    ACTIVITY_TYPE_OTP_LOGIN_V2 = "ACTIVITY_TYPE_OTP_LOGIN_V2"
+    ACTIVITY_TYPE_UPDATE_ORGANIZATION_NAME = "ACTIVITY_TYPE_UPDATE_ORGANIZATION_NAME"
 
 
 class v1AddressFormat(str, Enum):
@@ -504,6 +514,49 @@ class v1ApproveActivityRequest(TurnkeyBaseModel):
     )
     parameters: v1ApproveActivityIntent
     generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1AssetBalance(TurnkeyBaseModel):
+    caip19: Optional[str] = Field(
+        default=None, description="The caip-19 asset identifier"
+    )
+    symbol: Optional[str] = Field(default=None, description="The asset symbol")
+    balance: Optional[str] = Field(
+        default=None, description="The balance in atomic units"
+    )
+    decimals: Optional[int] = Field(
+        default=None, description="The number of decimals this asset uses"
+    )
+    display: Optional[v1AssetBalanceDisplay] = Field(
+        default=None,
+        description="Normalized balance values for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise. Use the balance field instead.",
+    )
+    name: Optional[str] = Field(default=None, description="The asset name")
+
+
+class v1AssetBalanceDisplay(TurnkeyBaseModel):
+    usd: Optional[str] = Field(
+        default=None,
+        description="USD value for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise.",
+    )
+    crypto: Optional[str] = Field(
+        default=None,
+        description="Normalized crypto value for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise.",
+    )
+
+
+class v1AssetMetadata(TurnkeyBaseModel):
+    caip19: Optional[str] = Field(
+        default=None, description="The caip-19 asset identifier"
+    )
+    symbol: Optional[str] = Field(default=None, description="The asset symbol")
+    decimals: Optional[int] = Field(
+        default=None, description="The number of decimals this asset uses"
+    )
+    logoUrl: Optional[str] = Field(
+        default=None, description="The url of the asset logo"
+    )
+    name: Optional[str] = Field(default=None, description="The asset name")
 
 
 class v1Attestation(TurnkeyBaseModel):
@@ -659,18 +712,6 @@ class v1CreateApiOnlyUsersIntent(TurnkeyBaseModel):
     apiOnlyUsers: List[v1ApiOnlyUserParams] = Field(
         description="A list of API-only Users to create."
     )
-
-
-class v1CreateApiOnlyUsersRequest(TurnkeyBaseModel):
-    type: str
-    timestampMs: str = Field(
-        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
-    )
-    organizationId: str = Field(
-        description="Unique identifier for a given Organization."
-    )
-    parameters: v1CreateApiOnlyUsersIntent
-    generateAppProofs: Optional[bool] = Field(default=None)
 
 
 class v1CreateApiOnlyUsersResult(TurnkeyBaseModel):
@@ -1291,6 +1332,103 @@ class v1CreateSubOrganizationResultV7(TurnkeyBaseModel):
     rootUserIds: Optional[List[str]] = Field(default=None)
 
 
+class v1CreateTvcAppIntent(TurnkeyBaseModel):
+    name: str = Field(description="The name of the new TVC application")
+    quorumPublicKey: str = Field(
+        description="Quorum public key to use for this application"
+    )
+    manifestSetId: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for an existing TVC operator set to use as the Manifest Set for this TVC application. If left empty, a new Manifest Set configuration is required",
+    )
+    manifestSetParams: Optional[v1TvcOperatorSetParams] = Field(
+        default=None,
+        description="Configuration to create a new TVC operator set, used as the Manifest Set for this TVC application. If left empty, a Manifest Set ID is required",
+    )
+    shareSetId: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for an existing TVC operator set to use as the Share Set for this TVC application. If left empty, a new Share Set configuration is required",
+    )
+    shareSetParams: Optional[v1TvcOperatorSetParams] = Field(
+        default=None,
+        description="Configuration to create a new TVC operator set, used as the Share Set for this TVC application. If left empty, a Share Set ID is required",
+    )
+    enableEgress: Optional[bool] = Field(
+        default=None,
+        description="Enables network egress for this TVC app. Default if not provided: false.",
+    )
+
+
+class v1CreateTvcAppResult(TurnkeyBaseModel):
+    appId: str = Field(description="The unique identifier for the TVC application")
+    manifestSetId: str = Field(
+        description="The unique identifier for the TVC manifest set"
+    )
+    manifestSetOperatorIds: List[str] = Field(
+        description="The unique identifier(s) of the manifest set operators"
+    )
+    manifestSetThreshold: int = Field(
+        description="The required number of approvals for the manifest set"
+    )
+
+
+class v1CreateTvcDeploymentIntent(TurnkeyBaseModel):
+    appId: str = Field(
+        description="The unique identifier of the to-be-deployed TVC application"
+    )
+    qosVersion: str = Field(
+        description="The QuorumOS version to use to deploy this application"
+    )
+    pivotContainerImageUrl: str = Field(
+        description="URL of the container containing the pivot binary"
+    )
+    pivotPath: str = Field(description="Location of the binary in the pivot container")
+    pivotArgs: List[str] = Field(
+        description='Arguments to pass to the pivot binary at startup. Encoded as a list of strings, for example ["--foo", "bar"]'
+    )
+    expectedPivotDigest: str = Field(
+        description="Digest of the pivot binary in the pivot container. This value will be inserted in the QOS manifest to ensure application integrity."
+    )
+    nonce: Optional[int] = Field(
+        default=None,
+        description="Optional nonce to ensure uniqueness of the deployment manifest. If not provided, it defaults to the current Unix timestamp in seconds.",
+    )
+    pivotContainerEncryptedPullSecret: Optional[str] = Field(
+        default=None,
+        description="Optional encrypted pull secret to authorize Turnkey to pull the pivot container image. If your image is public, leave this empty.",
+    )
+    pivotBindAddresses: Optional[List[str]] = Field(
+        default=None,
+        description='Address(es) on which the pivot binary listens. A bind address can be a port alone (e.g. "3000") or an ip:port (e.g. "127.0.0.1:3000"). If provided as a port alone, the IP is assumed to be 0.0.0.0',
+    )
+    debugMode: Optional[bool] = Field(
+        default=None,
+        description="Optional flag to indicate whether to deploy the TVC app in debug mode, which includes additional logging and debugging tools. Default is false.",
+    )
+
+
+class v1CreateTvcDeploymentResult(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="The unique identifier for the TVC deployment"
+    )
+    manifestId: str = Field(description="The unique identifier for the TVC manifest")
+
+
+class v1CreateTvcManifestApprovalsIntent(TurnkeyBaseModel):
+    manifestId: str = Field(
+        description="Unique identifier of the TVC deployment to approve"
+    )
+    approvals: List[v1TvcManifestApproval] = Field(
+        description="List of manifest approvals"
+    )
+
+
+class v1CreateTvcManifestApprovalsResult(TurnkeyBaseModel):
+    approvalIds: List[str] = Field(
+        description="The unique identifier(s) for the manifest approvals"
+    )
+
+
 class v1CreateUserTagIntent(TurnkeyBaseModel):
     userTagName: str = Field(description="Human-readable name for a User Tag.")
     userIds: List[str] = Field(description="A list of User IDs.")
@@ -1418,6 +1556,16 @@ class v1CredentialType(str, Enum):
 class v1Curve(str, Enum):
     CURVE_SECP256K1 = "CURVE_SECP256K1"
     CURVE_ED25519 = "CURVE_ED25519"
+    CURVE_P256 = "CURVE_P256"
+
+
+class v1CustomRevertError(TurnkeyBaseModel):
+    errorName: Optional[str] = Field(
+        default=None, description="The name of the custom error."
+    )
+    paramsJson: Optional[str] = Field(
+        default=None, description="The decoded parameters as a JSON object."
+    )
 
 
 class v1DeleteApiKeysIntent(TurnkeyBaseModel):
@@ -2033,18 +2181,6 @@ class v1EthSendRawTransactionIntent(TurnkeyBaseModel):
     )
 
 
-class v1EthSendRawTransactionRequest(TurnkeyBaseModel):
-    type: str
-    timestampMs: str = Field(
-        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
-    )
-    organizationId: str = Field(
-        description="Unique identifier for a given Organization."
-    )
-    parameters: v1EthSendRawTransactionIntent
-    generateAppProofs: Optional[bool] = Field(default=None)
-
-
 class v1EthSendRawTransactionResult(TurnkeyBaseModel):
     transactionHash: str = Field(
         description="The transaction hash of the sent transaction"
@@ -2105,7 +2241,7 @@ class v1EthSendTransactionRequest(TurnkeyBaseModel):
 
 class v1EthSendTransactionResult(TurnkeyBaseModel):
     sendTransactionStatusId: str = Field(
-        description="The send_transaction_status ID associated with the transaction submission for sponsored transactions"
+        description="The send_transaction_status ID associated with the transaction submission"
     )
 
 
@@ -2397,21 +2533,6 @@ class v1GetAppProofsResponse(TurnkeyBaseModel):
     appProofs: List[v1AppProof]
 
 
-class v1GetAttestationDocumentRequest(TurnkeyBaseModel):
-    organizationId: str = Field(
-        description="Unique identifier for a given organization."
-    )
-    enclaveType: str = Field(
-        description="The enclave type, one of: ump, notarizer, signer, evm-parser."
-    )
-
-
-class v1GetAttestationDocumentResponse(TurnkeyBaseModel):
-    attestationDocument: str = Field(
-        description="Raw (CBOR-encoded) attestation document."
-    )
-
-
 class v1GetAuthenticatorRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given organization."
@@ -2476,7 +2597,7 @@ class v1GetNoncesRequest(TurnkeyBaseModel):
     )
     address: str = Field(description="The Ethereum address to query nonces for.")
     caip2: str = Field(
-        description="The network identifier in CAIP-2 format (e.g., 'eip155:1' for Ethereum mainnet)."
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
     )
     nonce: Optional[bool] = Field(
         default=None, description="Whether to fetch the standard on-chain nonce."
@@ -2557,18 +2678,6 @@ class v1GetOrganizationConfigsResponse(TurnkeyBaseModel):
     )
 
 
-class v1GetOrganizationRequest(TurnkeyBaseModel):
-    organizationId: str = Field(
-        description="Unique identifier for a given organization."
-    )
-
-
-class v1GetOrganizationResponse(TurnkeyBaseModel):
-    organizationData: v1OrganizationData = Field(
-        description="Object representing the full current and deleted / disabled collection of users, policies, private keys, and invitations attributable to a particular organization."
-    )
-
-
 class v1GetPoliciesRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given organization."
@@ -2643,6 +2752,10 @@ class v1GetSendTransactionStatusResponse(TurnkeyBaseModel):
     txError: Optional[str] = Field(
         default=None,
         description="The error encountered when broadcasting or confirming the transaction, if any.",
+    )
+    error: Optional[v1TxError] = Field(
+        default=None,
+        description="Structured error information including revert details, if available.",
     )
 
 
@@ -2777,6 +2890,22 @@ class v1GetWalletAccountsRequest(TurnkeyBaseModel):
 class v1GetWalletAccountsResponse(TurnkeyBaseModel):
     accounts: List[v1WalletAccount] = Field(
         description="A list of accounts generated from a wallet that share a common seed."
+    )
+
+
+class v1GetWalletAddressBalancesRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given organization."
+    )
+    address: str = Field(description="Address corresponding to a wallet account.")
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+
+
+class v1GetWalletAddressBalancesResponse(TurnkeyBaseModel):
+    balances: Optional[List[v1AssetBalance]] = Field(
+        default=None, description="List of asset balances"
     )
 
 
@@ -3214,6 +3343,48 @@ class v1InitOtpIntentV2(TurnkeyBaseModel):
     )
 
 
+class v1InitOtpIntentV3(TurnkeyBaseModel):
+    otpType: str = Field(
+        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+    )
+    contact: str = Field(description="Email or phone number to send the OTP code to")
+    appName: str = Field(description="The name of the application.")
+    otpLength: Optional[int] = Field(
+        default=None, description="Optional length of the OTP code. Default = 9"
+    )
+    emailCustomization: Optional[v1EmailCustomizationParamsV2] = Field(
+        default=None,
+        description="Optional parameters for customizing emails. If not provided, the default email will be used.",
+    )
+    smsCustomization: Optional[v1SmsCustomizationParams] = Field(
+        default=None,
+        description="Optional parameters for customizing SMS message. If not provided, the default sms message will be used.",
+    )
+    userIdentifier: Optional[str] = Field(
+        default=None,
+        description="Optional client-generated user identifier to enable per-user rate limiting for SMS auth. We recommend using a hash of the client-side IP address.",
+    )
+    sendFromEmailAddress: Optional[str] = Field(
+        default=None,
+        description="Optional custom email address from which to send the OTP email",
+    )
+    alphanumeric: Optional[bool] = Field(
+        default=None,
+        description="Optional flag to specify if the OTP code should be alphanumeric (Crockford’s Base32). If set to false, OTP code will only be numeric. Default = true",
+    )
+    sendFromEmailSenderName: Optional[str] = Field(
+        default=None,
+        description="Optional custom sender name for use with sendFromEmailAddress; if left empty, will default to 'Notifications'",
+    )
+    expirationSeconds: Optional[str] = Field(
+        default=None,
+        description="Expiration window (in seconds) indicating how long the OTP is valid for. If not provided, a default of 5 minutes will be used. Maximum value is 600 seconds (10 minutes)",
+    )
+    replyToEmailAddress: Optional[str] = Field(
+        default=None, description="Optional custom email address to use as reply-to"
+    )
+
+
 class v1InitOtpRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -3222,12 +3393,19 @@ class v1InitOtpRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1InitOtpIntentV2
+    parameters: v1InitOtpIntentV3
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
 class v1InitOtpResult(TurnkeyBaseModel):
     otpId: str = Field(description="Unique identifier for an OTP authentication")
+
+
+class v1InitOtpResultV2(TurnkeyBaseModel):
+    otpId: str = Field(description="Unique identifier for an OTP flow")
+    otpEncryptionTargetBundle: str = Field(
+        description="Signed bundle containing a target encryption key to use when submitting OTP codes."
+    )
 
 
 class v1InitUserEmailRecoveryIntent(TurnkeyBaseModel):
@@ -3503,31 +3681,19 @@ class v1Intent(TurnkeyBaseModel):
     upsertGasUsageConfigIntent: Optional[v1UpsertGasUsageConfigIntent] = Field(
         default=None
     )
-
-
-class v1Invitation(TurnkeyBaseModel):
-    invitationId: str = Field(
-        description="Unique identifier for a given Invitation object."
+    createTvcAppIntent: Optional[v1CreateTvcAppIntent] = Field(default=None)
+    createTvcDeploymentIntent: Optional[v1CreateTvcDeploymentIntent] = Field(
+        default=None
     )
-    receiverUserName: str = Field(
-        description="The name of the intended Invitation recipient."
+    createTvcManifestApprovalsIntent: Optional[v1CreateTvcManifestApprovalsIntent] = (
+        Field(default=None)
     )
-    receiverEmail: str = Field(
-        description="The email address of the intended Invitation recipient."
-    )
-    receiverUserTags: List[str] = Field(
-        description="A list of tags assigned to the Invitation recipient."
-    )
-    accessType: v1AccessType = Field(
-        description="The User's permissible access method(s)."
-    )
-    status: v1InvitationStatus = Field(
-        description="The current processing status of a specified Invitation."
-    )
-    createdAt: externaldatav1Timestamp
-    updatedAt: externaldatav1Timestamp
-    senderUserId: str = Field(
-        description="Unique identifier for the Sender of an Invitation."
+    solSendTransactionIntent: Optional[v1SolSendTransactionIntent] = Field(default=None)
+    initOtpIntentV3: Optional[v1InitOtpIntentV3] = Field(default=None)
+    verifyOtpIntentV2: Optional[v1VerifyOtpIntentV2] = Field(default=None)
+    otpLoginIntentV2: Optional[v1OtpLoginIntentV2] = Field(default=None)
+    updateOrganizationNameIntent: Optional[v1UpdateOrganizationNameIntent] = Field(
+        default=None
     )
 
 
@@ -3547,12 +3713,6 @@ class v1InvitationParams(TurnkeyBaseModel):
     senderUserId: str = Field(
         description="Unique identifier for the Sender of an Invitation."
     )
-
-
-class v1InvitationStatus(str, Enum):
-    INVITATION_STATUS_CREATED = "INVITATION_STATUS_CREATED"
-    INVITATION_STATUS_ACCEPTED = "INVITATION_STATUS_ACCEPTED"
-    INVITATION_STATUS_REVOKED = "INVITATION_STATUS_REVOKED"
 
 
 class v1ListFiatOnRampCredentialsRequest(TurnkeyBaseModel):
@@ -3585,6 +3745,21 @@ class v1ListPrivateKeyTagsResponse(TurnkeyBaseModel):
     privateKeyTags: List[datav1Tag] = Field(description="A list of private key tags.")
 
 
+class v1ListSupportedAssetsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given organization."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+
+
+class v1ListSupportedAssetsResponse(TurnkeyBaseModel):
+    assets: Optional[List[v1AssetMetadata]] = Field(
+        default=None, description="List of asset metadata"
+    )
+
+
 class v1ListUserTagsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given organization."
@@ -3614,6 +3789,19 @@ class v1MnemonicLanguage(str, Enum):
 class v1NOOPCodegenAnchorResponse(TurnkeyBaseModel):
     stamp: v1WebAuthnStamp
     tokenUsage: Optional[v1TokenUsage] = Field(default=None)
+
+
+class v1NativeRevertError(TurnkeyBaseModel):
+    nativeType: Optional[str] = Field(
+        default=None,
+        description="The type of native error: 'error_string', 'panic', or 'execution_reverted'.",
+    )
+    message: Optional[str] = Field(
+        default=None, description="The error message for Error(string) reverts."
+    )
+    panicCode: Optional[str] = Field(
+        default=None, description="The panic code for Panic(uint256) reverts."
+    )
 
 
 class v1Oauth2AuthenticateIntent(TurnkeyBaseModel):
@@ -3783,22 +3971,6 @@ class v1Operator(str, Enum):
     OPERATOR_CONTAINS_ALL = "OPERATOR_CONTAINS_ALL"
 
 
-class v1OrganizationData(TurnkeyBaseModel):
-    organizationId: Optional[str] = Field(default=None)
-    name: Optional[str] = Field(default=None)
-    users: Optional[List[v1User]] = Field(default=None)
-    policies: Optional[List[v1Policy]] = Field(default=None)
-    privateKeys: Optional[List[v1PrivateKey]] = Field(default=None)
-    invitations: Optional[List[v1Invitation]] = Field(default=None)
-    tags: Optional[List[datav1Tag]] = Field(default=None)
-    rootQuorum: Optional[externaldatav1Quorum] = Field(default=None)
-    features: Optional[List[v1Feature]] = Field(default=None)
-    wallets: Optional[List[v1Wallet]] = Field(default=None)
-    smartContractInterfaceReferences: Optional[
-        List[v1SmartContractInterfaceReference]
-    ] = Field(default=None)
-
-
 class v1OtpAuthIntent(TurnkeyBaseModel):
     otpId: str = Field(
         description="ID representing the result of an init OTP activity."
@@ -3864,6 +4036,26 @@ class v1OtpLoginIntent(TurnkeyBaseModel):
     )
 
 
+class v1OtpLoginIntentV2(TurnkeyBaseModel):
+    verificationToken: str = Field(
+        description="Signed Verification Token containing a unique id, expiry, verification type, contact"
+    )
+    publicKey: str = Field(
+        description="Client-side public key generated by the user, used as the session public key upon successful login"
+    )
+    clientSignature: v1ClientSignature = Field(
+        description="Required signature proving authorization for this login. The signature is over the verification token ID and the public key. Required for secure OTP login process."
+    )
+    expirationSeconds: Optional[str] = Field(
+        default=None,
+        description="Expiration window (in seconds) indicating how long the Session is valid for. If not provided, a default of 15 minutes will be used.",
+    )
+    invalidateExisting: Optional[bool] = Field(
+        default=None,
+        description="Invalidate all other previously generated Login sessions",
+    )
+
+
 class v1OtpLoginRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -3872,7 +4064,7 @@ class v1OtpLoginRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1OtpLoginIntent
+    parameters: v1OtpLoginIntentV2
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
@@ -4226,6 +4418,40 @@ class v1Result(TurnkeyBaseModel):
     upsertGasUsageConfigResult: Optional[v1UpsertGasUsageConfigResult] = Field(
         default=None
     )
+    createTvcAppResult: Optional[v1CreateTvcAppResult] = Field(default=None)
+    createTvcDeploymentResult: Optional[v1CreateTvcDeploymentResult] = Field(
+        default=None
+    )
+    createTvcManifestApprovalsResult: Optional[v1CreateTvcManifestApprovalsResult] = (
+        Field(default=None)
+    )
+    solSendTransactionResult: Optional[v1SolSendTransactionResult] = Field(default=None)
+    initOtpResultV2: Optional[v1InitOtpResultV2] = Field(default=None)
+    updateOrganizationNameResult: Optional[v1UpdateOrganizationNameResult] = Field(
+        default=None
+    )
+
+
+class v1RevertChainEntry(TurnkeyBaseModel):
+    address: Optional[str] = Field(
+        default=None, description="The contract address where the revert occurred."
+    )
+    errorType: Optional[str] = Field(
+        default=None, description="Type of error: 'unknown', 'native', or 'custom'."
+    )
+    displayMessage: Optional[str] = Field(
+        default=None, description="Human-readable message describing this revert."
+    )
+    unknown: Optional[v1UnknownRevertError] = Field(
+        default=None, description="Details for unknown error types."
+    )
+    native: Optional[v1NativeRevertError] = Field(
+        default=None,
+        description="Details for native Solidity errors (Error, Panic, execution reverted).",
+    )
+    custom: Optional[v1CustomRevertError] = Field(
+        default=None, description="Details for custom contract errors."
+    )
 
 
 class v1RootUserParams(TurnkeyBaseModel):
@@ -4453,12 +4679,6 @@ class v1SimpleClientExtensionResults(TurnkeyBaseModel):
     )
 
 
-class v1SmartContractInterfaceReference(TurnkeyBaseModel):
-    smartContractInterfaceId: Optional[str] = Field(default=None)
-    smartContractAddress: Optional[str] = Field(default=None)
-    digest: Optional[str] = Field(default=None)
-
-
 class v1SmartContractInterfaceType(str, Enum):
     SMART_CONTRACT_INTERFACE_TYPE_ETHEREUM = "SMART_CONTRACT_INTERFACE_TYPE_ETHEREUM"
     SMART_CONTRACT_INTERFACE_TYPE_SOLANA = "SMART_CONTRACT_INTERFACE_TYPE_SOLANA"
@@ -4468,6 +4688,43 @@ class v1SmsCustomizationParams(TurnkeyBaseModel):
     template: Optional[str] = Field(
         default=None,
         description="Template containing references to .OtpCode i.e Your OTP is {{.OtpCode}}",
+    )
+
+
+class v1SolSendTransactionIntent(TurnkeyBaseModel):
+    unsignedTransaction: str = Field(
+        description="Base64-encoded serialized unsigned Solana transaction"
+    )
+    signWith: str = Field(
+        description="A wallet or private key address to sign with. This does not support private key IDs."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet)."
+    )
+    recentBlockhash: Optional[str] = Field(
+        default=None,
+        description="user-provided blockhash for replay protection / deadline control. If omitted and sponsor=true, we fetch a fresh blockhash during execution",
+    )
+
+
+class v1SolSendTransactionRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1SolSendTransactionIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1SolSendTransactionResult(TurnkeyBaseModel):
+    sendTransactionStatusId: str = Field(
+        description="The send_transaction_status ID associated with the transaction submission"
     )
 
 
@@ -4508,22 +4765,6 @@ class v1TagType(str, Enum):
     TAG_TYPE_PRIVATE_KEY = "TAG_TYPE_PRIVATE_KEY"
 
 
-class v1TestRateLimitsRequest(TurnkeyBaseModel):
-    organizationId: str = Field(
-        description="Unique identifier for a given organization. If the request is being made by a WebAuthN user and their sub-organization ID is unknown, this can be the parent organization ID; using the sub-organization ID when possible is preferred due to performance reasons."
-    )
-    isSetLimit: bool = Field(
-        description="Whether or not to set a limit on this request."
-    )
-    limit: int = Field(
-        description="Rate limit to set for org, if is_set_limit is set to true."
-    )
-
-
-class v1TestRateLimitsResponse(TurnkeyBaseModel):
-    pass
-
-
 class v1TokenUsage(TurnkeyBaseModel):
     type: v1UsageType = Field(description="Type of token usage")
     tokenId: str = Field(description="Unique identifier for the verification token")
@@ -4536,6 +4777,55 @@ class v1TransactionType(str, Enum):
     TRANSACTION_TYPE_SOLANA = "TRANSACTION_TYPE_SOLANA"
     TRANSACTION_TYPE_TRON = "TRANSACTION_TYPE_TRON"
     TRANSACTION_TYPE_BITCOIN = "TRANSACTION_TYPE_BITCOIN"
+    TRANSACTION_TYPE_TEMPO = "TRANSACTION_TYPE_TEMPO"
+
+
+class v1TvcManifestApproval(TurnkeyBaseModel):
+    operatorId: str = Field(
+        description="Unique identifier of the operator providing this approval"
+    )
+    signature: str = Field(
+        description="Signature from the operator approving the manifest"
+    )
+
+
+class v1TvcOperatorParams(TurnkeyBaseModel):
+    name: str = Field(description="The name for this new operator")
+    publicKey: str = Field(description="Public key for this operator")
+
+
+class v1TvcOperatorSetParams(TurnkeyBaseModel):
+    name: str = Field(description="Short description for this new operator set")
+    newOperators: Optional[List[v1TvcOperatorParams]] = Field(
+        default=None, description="Operators to create as part of this new operator set"
+    )
+    existingOperatorIds: Optional[List[str]] = Field(
+        default=None,
+        description="Existing operators to use as part of this new operator set",
+    )
+    threshold: int = Field(
+        description="The threshold of operators needed to reach consensus in this new Operator Set"
+    )
+
+
+class v1TxError(TurnkeyBaseModel):
+    message: Optional[str] = Field(
+        default=None,
+        description="Human-readable error message describing what went wrong.",
+    )
+    revertChain: Optional[List[v1RevertChainEntry]] = Field(
+        default=None,
+        description="Chain of revert errors from nested contract calls, ordered from outermost to innermost.",
+    )
+
+
+class v1UnknownRevertError(TurnkeyBaseModel):
+    selector: Optional[str] = Field(
+        default=None, description="The 4-byte error selector, if available."
+    )
+    data: Optional[str] = Field(
+        default=None, description="The raw error data, hex-encoded."
+    )
 
 
 class v1UpdateAllowedOriginsIntent(TurnkeyBaseModel):
@@ -4599,6 +4889,10 @@ class v1UpdateAuthProxyConfigIntent(TurnkeyBaseModel):
     verificationTokenRequiredForGetAccountPii: Optional[bool] = Field(
         default=None,
         description="Verification token required for get account with PII (email/phone number). Default false.",
+    )
+    socialLinkingClientIds: Optional[List[str]] = Field(
+        default=None,
+        description="Whitelisted OAuth client IDs for social account linking. When a user authenticates via a social provider with an email matching an existing account, the accounts will be linked if the client ID is in this list and the issuer is considered a trusted provider.",
     )
 
 
@@ -4677,6 +4971,26 @@ class v1UpdateOauth2CredentialResult(TurnkeyBaseModel):
     oauth2CredentialId: str = Field(
         description="Unique identifier of the OAuth 2.0 credential that was updated"
     )
+
+
+class v1UpdateOrganizationNameIntent(TurnkeyBaseModel):
+    organizationName: str = Field(description="New name for the Organization.")
+
+
+class v1UpdateOrganizationNameRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpdateOrganizationNameIntent
+
+
+class v1UpdateOrganizationNameResult(TurnkeyBaseModel):
+    organizationId: str = Field(description="Unique identifier for the Organization.")
+    organizationName: str = Field(description="The updated organization name.")
 
 
 class v1UpdatePolicyIntent(TurnkeyBaseModel):
@@ -4978,6 +5292,10 @@ class v1UpsertGasUsageConfigIntent(TurnkeyBaseModel):
     windowDurationMinutes: str = Field(
         description="Rolling sponsorship window duration, expressed in minutes."
     )
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether gas sponsorship is enabled for the organization.",
+    )
 
 
 class v1UpsertGasUsageConfigResult(TurnkeyBaseModel):
@@ -5088,6 +5406,19 @@ class v1VerifyOtpIntent(TurnkeyBaseModel):
     )
 
 
+class v1VerifyOtpIntentV2(TurnkeyBaseModel):
+    otpId: str = Field(
+        description="UUID representing an OTP flow. A new UUID is created for each init OTP activity."
+    )
+    encryptedOtpBundle: str = Field(
+        description="Encrypted bundle containing the OTP code and a client-generated public key. Turnkey's secure enclaves will decrypt this bundle, verify the OTP code, and issue a new Verification Token. Encrypted using the target encryption key provided in the INIT_OTP activity result."
+    )
+    expirationSeconds: Optional[str] = Field(
+        default=None,
+        description="Expiration window (in seconds) indicating how long the verification token is valid for. If not provided, a default of 1 hour will be used. Maximum value is 86400 seconds (24 hours)",
+    )
+
+
 class v1VerifyOtpRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -5096,7 +5427,7 @@ class v1VerifyOtpRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1VerifyOtpIntent
+    parameters: v1VerifyOtpIntentV2
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
@@ -5274,23 +5605,6 @@ class GetApiKeysInput(TurnkeyBaseModel):
     body: GetApiKeysBody
 
 
-class GetAttestationDocumentResponse(TurnkeyBaseModel):
-    attestationDocument: str = Field(
-        description="Raw (CBOR-encoded) attestation document."
-    )
-
-
-class GetAttestationDocumentBody(TurnkeyBaseModel):
-    organizationId: Optional[str] = None
-    enclaveType: str = Field(
-        description="The enclave type, one of: ump, notarizer, signer, evm-parser."
-    )
-
-
-class GetAttestationDocumentInput(TurnkeyBaseModel):
-    body: GetAttestationDocumentBody
-
-
 class GetAuthenticatorResponse(TurnkeyBaseModel):
     authenticator: v1Authenticator = Field(description="An authenticator.")
 
@@ -5382,7 +5696,7 @@ class GetNoncesBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     address: str = Field(description="The Ethereum address to query nonces for.")
     caip2: str = Field(
-        description="The network identifier in CAIP-2 format (e.g., 'eip155:1' for Ethereum mainnet)."
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
     )
     nonce: Optional[bool] = Field(
         default=None, description="Whether to fetch the standard on-chain nonce."
@@ -5450,20 +5764,6 @@ class GetOnRampTransactionStatusInput(TurnkeyBaseModel):
     body: GetOnRampTransactionStatusBody
 
 
-class GetOrganizationResponse(TurnkeyBaseModel):
-    organizationData: v1OrganizationData = Field(
-        description="Object representing the full current and deleted / disabled collection of users, policies, private keys, and invitations attributable to a particular organization."
-    )
-
-
-class GetOrganizationBody(TurnkeyBaseModel):
-    organizationId: Optional[str] = None
-
-
-class GetOrganizationInput(TurnkeyBaseModel):
-    body: GetOrganizationBody
-
-
 class GetOrganizationConfigsResponse(TurnkeyBaseModel):
     configs: v1Config = Field(
         description="Organization configs including quorum settings and organization features."
@@ -5529,6 +5829,10 @@ class GetSendTransactionStatusResponse(TurnkeyBaseModel):
     txError: Optional[str] = Field(
         default=None,
         description="The error encountered when broadcasting or confirming the transaction, if any.",
+    )
+    error: Optional[v1TxError] = Field(
+        default=None,
+        description="Structured error information including revert details, if available.",
     )
 
 
@@ -5605,6 +5909,24 @@ class GetWalletAccountBody(TurnkeyBaseModel):
 
 class GetWalletAccountInput(TurnkeyBaseModel):
     body: GetWalletAccountBody
+
+
+class GetWalletAddressBalancesResponse(TurnkeyBaseModel):
+    balances: Optional[List[v1AssetBalance]] = Field(
+        default=None, description="List of asset balances"
+    )
+
+
+class GetWalletAddressBalancesBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    address: str = Field(description="Address corresponding to a wallet account.")
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+
+
+class GetWalletAddressBalancesInput(TurnkeyBaseModel):
+    body: GetWalletAddressBalancesBody
 
 
 class GetActivitiesResponse(TurnkeyBaseModel):
@@ -5742,6 +6064,23 @@ class GetSubOrgIdsInput(TurnkeyBaseModel):
     body: GetSubOrgIdsBody
 
 
+class ListSupportedAssetsResponse(TurnkeyBaseModel):
+    assets: Optional[List[v1AssetMetadata]] = Field(
+        default=None, description="List of asset metadata"
+    )
+
+
+class ListSupportedAssetsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+
+
+class ListSupportedAssetsInput(TurnkeyBaseModel):
+    body: ListSupportedAssetsBody
+
+
 class ListUserTagsResponse(TurnkeyBaseModel):
     userTags: List[datav1Tag] = Field(description="A list of user tags.")
 
@@ -5877,23 +6216,6 @@ class CreateApiKeysBody(TurnkeyBaseModel):
 
 class CreateApiKeysInput(TurnkeyBaseModel):
     body: CreateApiKeysBody
-
-
-class CreateApiOnlyUsersResponse(TurnkeyBaseModel):
-    activity: v1Activity
-    userIds: List[str] = Field(description="A list of API-only User IDs.")
-
-
-class CreateApiOnlyUsersBody(TurnkeyBaseModel):
-    timestampMs: Optional[str] = None
-    organizationId: Optional[str] = None
-    apiOnlyUsers: List[v1ApiOnlyUserParams] = Field(
-        description="A list of API-only Users to create."
-    )
-
-
-class CreateApiOnlyUsersInput(TurnkeyBaseModel):
-    body: CreateApiOnlyUsersBody
 
 
 class CreateAuthenticatorsResponse(TurnkeyBaseModel):
@@ -6651,32 +6973,10 @@ class EmailAuthInput(TurnkeyBaseModel):
     body: EmailAuthBody
 
 
-class EthSendRawTransactionResponse(TurnkeyBaseModel):
-    activity: v1Activity
-    transactionHash: str = Field(
-        description="The transaction hash of the sent transaction"
-    )
-
-
-class EthSendRawTransactionBody(TurnkeyBaseModel):
-    timestampMs: Optional[str] = None
-    organizationId: Optional[str] = None
-    signedTransaction: str = Field(
-        description="The raw, signed transaction to be sent."
-    )
-    caip2: str = Field(
-        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
-    )
-
-
-class EthSendRawTransactionInput(TurnkeyBaseModel):
-    body: EthSendRawTransactionBody
-
-
 class EthSendTransactionResponse(TurnkeyBaseModel):
     activity: v1Activity
     sendTransactionStatusId: str = Field(
-        description="The send_transaction_status ID associated with the transaction submission for sponsored transactions"
+        description="The send_transaction_status ID associated with the transaction submission"
     )
 
 
@@ -6941,7 +7241,10 @@ class InitImportWalletInput(TurnkeyBaseModel):
 
 class InitOtpResponse(TurnkeyBaseModel):
     activity: v1Activity
-    otpId: str = Field(description="Unique identifier for an OTP authentication")
+    otpId: str = Field(description="Unique identifier for an OTP flow")
+    otpEncryptionTargetBundle: str = Field(
+        description="Signed bundle containing a target encryption key to use when submitting OTP codes."
+    )
 
 
 class InitOtpBody(TurnkeyBaseModel):
@@ -6951,11 +7254,9 @@ class InitOtpBody(TurnkeyBaseModel):
         description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
+    appName: str = Field(description="The name of the application.")
     otpLength: Optional[int] = Field(
         default=None, description="Optional length of the OTP code. Default = 9"
-    )
-    appName: str = Field(
-        description="The name of the application. This field is required and will be used in email notifications if an email template is not provided."
     )
     emailCustomization: Optional[v1EmailCustomizationParamsV2] = Field(
         default=None,
@@ -6963,7 +7264,7 @@ class InitOtpBody(TurnkeyBaseModel):
     )
     smsCustomization: Optional[v1SmsCustomizationParams] = Field(
         default=None,
-        description="Optional parameters for customizing SMS message. If not provided, the default SMS message will be used.",
+        description="Optional parameters for customizing SMS message. If not provided, the default sms message will be used.",
     )
     userIdentifier: Optional[str] = Field(
         default=None,
@@ -6975,7 +7276,7 @@ class InitOtpBody(TurnkeyBaseModel):
     )
     alphanumeric: Optional[bool] = Field(
         default=None,
-        description="Optional flag to specify if the OTP code should be alphanumeric (Crockford’s Base32). Default = true",
+        description="Optional flag to specify if the OTP code should be alphanumeric (Crockford’s Base32). If set to false, OTP code will only be numeric. Default = true",
     )
     sendFromEmailSenderName: Optional[str] = Field(
         default=None,
@@ -7231,10 +7532,13 @@ class OtpLoginBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     verificationToken: str = Field(
-        description="Signed JWT containing a unique id, expiry, verification type, contact"
+        description="Signed Verification Token containing a unique id, expiry, verification type, contact"
     )
     publicKey: str = Field(
-        description="Client-side public key generated by the user, which will be conditionally added to org data based on the validity of the verification token"
+        description="Client-side public key generated by the user, used as the session public key upon successful login"
+    )
+    clientSignature: v1ClientSignature = Field(
+        description="Required signature proving authorization for this login. The signature is over the verification token ID and the public key. Required for secure OTP login process."
     )
     expirationSeconds: Optional[str] = Field(
         default=None,
@@ -7242,11 +7546,7 @@ class OtpLoginBody(TurnkeyBaseModel):
     )
     invalidateExisting: Optional[bool] = Field(
         default=None,
-        description="Invalidate all other previously generated Login API keys",
-    )
-    clientSignature: Optional[v1ClientSignature] = Field(
-        default=None,
-        description="Optional signature proving authorization for this login. The signature is over the verification token ID and the public key. Only required if a public key was provided during the verification step.",
+        description="Invalidate all other previously generated Login sessions",
     )
 
 
@@ -7400,6 +7700,38 @@ class SignTransactionInput(TurnkeyBaseModel):
     body: SignTransactionBody
 
 
+class SolSendTransactionResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    sendTransactionStatusId: str = Field(
+        description="The send_transaction_status ID associated with the transaction submission"
+    )
+
+
+class SolSendTransactionBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    unsignedTransaction: str = Field(
+        description="Base64-encoded serialized unsigned Solana transaction"
+    )
+    signWith: str = Field(
+        description="A wallet or private key address to sign with. This does not support private key IDs."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet)."
+    )
+    recentBlockhash: Optional[str] = Field(
+        default=None,
+        description="user-provided blockhash for replay protection / deadline control. If omitted and sponsor=true, we fetch a fresh blockhash during execution",
+    )
+
+
+class SolSendTransactionInput(TurnkeyBaseModel):
+    body: SolSendTransactionBody
+
+
 class StampLoginResponse(TurnkeyBaseModel):
     activity: v1Activity
     session: str = Field(
@@ -7485,6 +7817,22 @@ class UpdateOauth2CredentialBody(TurnkeyBaseModel):
 
 class UpdateOauth2CredentialInput(TurnkeyBaseModel):
     body: UpdateOauth2CredentialBody
+
+
+class UpdateOrganizationNameResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    organizationId: str = Field(description="Unique identifier for the Organization.")
+    organizationName: str = Field(description="The updated organization name.")
+
+
+class UpdateOrganizationNameBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    organizationName: str = Field(description="New name for the Organization.")
+
+
+class UpdateOrganizationNameInput(TurnkeyBaseModel):
+    body: UpdateOrganizationNameBody
 
 
 class UpdatePolicyResponse(TurnkeyBaseModel):
@@ -7715,16 +8063,14 @@ class VerifyOtpBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpId: str = Field(
-        description="ID representing the result of an init OTP activity."
+        description="UUID representing an OTP flow. A new UUID is created for each init OTP activity."
     )
-    otpCode: str = Field(description="OTP sent out to a user's contact (email or SMS)")
+    encryptedOtpBundle: str = Field(
+        description="Encrypted bundle containing the OTP code and a client-generated public key. Turnkey's secure enclaves will decrypt this bundle, verify the OTP code, and issue a new Verification Token. Encrypted using the target encryption key provided in the INIT_OTP activity result."
+    )
     expirationSeconds: Optional[str] = Field(
         default=None,
         description="Expiration window (in seconds) indicating how long the verification token is valid for. If not provided, a default of 1 hour will be used. Maximum value is 86400 seconds (24 hours)",
-    )
-    publicKey: Optional[str] = Field(
-        default=None,
-        description="Client-side public key generated by the user, which will be added to the JWT response and verified in subsequent requests via a client proof signature",
     )
 
 
@@ -7735,21 +8081,3 @@ class VerifyOtpInput(TurnkeyBaseModel):
 class NOOPCodegenAnchorResponse(TurnkeyBaseModel):
     stamp: v1WebAuthnStamp
     tokenUsage: Optional[v1TokenUsage] = Field(default=None)
-
-
-class TestRateLimitsResponse(TurnkeyBaseModel):
-    pass
-
-
-class TestRateLimitsBody(TurnkeyBaseModel):
-    organizationId: Optional[str] = None
-    isSetLimit: bool = Field(
-        description="Whether or not to set a limit on this request."
-    )
-    limit: int = Field(
-        description="Rate limit to set for org, if is_set_limit is set to true."
-    )
-
-
-class TestRateLimitsInput(TurnkeyBaseModel):
-    body: TestRateLimitsBody

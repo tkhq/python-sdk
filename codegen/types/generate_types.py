@@ -63,6 +63,11 @@ def strip_version_suffix(activity_type: str) -> str:
     return re.sub(r"(_V\d+)$", "", activity_type)
 
 
+def escape_description(desc: str) -> str:
+    """Escape a description string for safe inclusion in generated code."""
+    return desc.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def is_valid_identifier(name: str) -> bool:
     """Check if a string is a valid Python identifier."""
     return name.isidentifier()
@@ -100,7 +105,7 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
                         field_params.append("default=None")
                     field_params.append(f'alias="{original_prop}"')
                     if desc:
-                        field_params.append(f'description="{desc}"')
+                        field_params.append(f'description="{escape_description(desc)}"')
                     field_def = f"Field({', '.join(field_params)})"
                     output += f"    {safe_prop}: {prop_type} = {field_def}\n"
                 elif desc or not is_required:
@@ -108,7 +113,7 @@ def generate_python_type(name: str, definition: Dict[str, Any]) -> str:
                     if not is_required:
                         field_params.append("default=None")
                     if desc:
-                        field_params.append(f'description="{desc}"')
+                        field_params.append(f'description="{escape_description(desc)}"')
                     field_def = f"Field({', '.join(field_params)})"
                     output += f"    {safe_prop}: {prop_type} = {field_def}\n"
                 else:
@@ -163,7 +168,7 @@ def generate_inline_properties(
                     field_params.append("default=None")
                 field_params.append(f'alias="{original_prop}"')
                 if desc:
-                    field_params.append(f'description="{desc}"')
+                    field_params.append(f'description="{escape_description(desc)}"')
                 field_def = f"Field({', '.join(field_params)})"
                 output += f"    {safe_prop}: {prop_type} = {field_def}\n"
             elif desc or not is_required:
@@ -171,7 +176,7 @@ def generate_inline_properties(
                 if not is_required:
                     field_params.append("default=None")
                 if desc:
-                    field_params.append(f'description="{desc}"')
+                    field_params.append(f'description="{escape_description(desc)}"')
                 field_def = f"Field({', '.join(field_params)})"
                 output += f"    {safe_prop}: {prop_type} = {field_def}\n"
             else:
@@ -382,7 +387,9 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                             field_params.append("default=None")
                         field_params.append(f'alias="{original_prop}"')
                         if desc:
-                            field_params.append(f'description="{desc}"')
+                            field_params.append(
+                                f'description="{escape_description(desc)}"'
+                            )
                         field_def = f"Field({', '.join(field_params)})"
                         output += f"    {safe_prop}: {prop_type} = {field_def}\n"
                     elif desc or not is_required:
@@ -390,7 +397,9 @@ def generate_api_types(swagger: Dict[str, Any], prefix: str = "") -> str:
                         if not is_required:
                             field_params.append("default=None")
                         if desc:
-                            field_params.append(f'description="{desc}"')
+                            field_params.append(
+                                f'description="{escape_description(desc)}"'
+                            )
                         field_def = f"Field({', '.join(field_params)})"
                         output += f"    {safe_prop}: {prop_type} = {field_def}\n"
                     else:
