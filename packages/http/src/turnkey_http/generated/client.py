@@ -3,6 +3,7 @@
 import json
 import time
 from typing import Any, Callable, Dict, Optional, TypeVar, overload
+from urllib.parse import urljoin, urlsplit
 import requests
 from turnkey_api_key_stamper import ApiKeyStamper
 from turnkey_sdk_types import *
@@ -16,6 +17,8 @@ TERMINAL_ACTIVITY_STATUSES = [
     "ACTIVITY_STATUS_CONSENSUS_NEEDED",
     "ACTIVITY_STATUS_REJECTED",
 ]
+
+MAX_REDIRECTS = 5
 
 
 class TurnkeyClient:
@@ -71,6 +74,46 @@ class TurnkeyClient:
         serialized = serialize_value(body)
         return json.dumps(serialized)
 
+    def _url_origin(self, url: str) -> str:
+        parts = urlsplit(url)
+        scheme = parts.scheme.lower()
+        port = (
+            parts.port
+            if parts.port is not None
+            else {"http": 80, "https": 443}.get(scheme)
+        )
+        host = (parts.hostname or "").lower()
+        return f"{scheme}://{host}:{port}"
+
+    def _post(self, url: str, headers: Dict[str, str], data: str) -> requests.Response:
+        origin = self._url_origin(url)
+        current_url = url
+        for _ in range(MAX_REDIRECTS):
+            response = requests.post(
+                current_url,
+                headers=headers,
+                data=data,
+                timeout=self.default_timeout,
+                allow_redirects=False,
+            )
+            if response.status_code not in (301, 302, 303, 307, 308):
+                return response
+
+            location = response.headers.get("Location")
+            if response.status_code in (307, 308) and location:
+                next_url = urljoin(current_url, location)
+                try:
+                    if self._url_origin(next_url) == origin:
+                        current_url = next_url
+                        continue
+                except ValueError:
+                    pass
+            raise requests.RequestException(
+                f"Not following redirect ({response.status_code}) to {location!r}"
+            )
+
+        raise requests.TooManyRedirects(f"Exceeded {MAX_REDIRECTS} redirects")
+
     def _request(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         """Make a request to the Turnkey API.
 
@@ -96,9 +139,7 @@ class TurnkeyClient:
         }
 
         try:
-            response = requests.post(
-                full_url, headers=headers, data=body_str, timeout=self.default_timeout
-            )
+            response = self._post(full_url, headers, body_str)
         except requests.RequestException as exc:
             raise TurnkeyNetworkError(
                 "Request failed", None, TurnkeyErrorCodes.NETWORK_ERROR, str(exc)
@@ -239,12 +280,7 @@ class TurnkeyClient:
         }
 
         try:
-            response = requests.post(
-                signed_request.url,
-                headers=headers,
-                data=signed_request.body,
-                timeout=self.default_timeout,
-            )
+            response = self._post(signed_request.url, headers, signed_request.body)
         except requests.RequestException as exc:
             raise TurnkeyNetworkError(
                 "Signed request failed", None, TurnkeyErrorCodes.NETWORK_ERROR, str(exc)
