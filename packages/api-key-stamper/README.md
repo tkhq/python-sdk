@@ -18,14 +18,12 @@ import json
 # Initialize the stamper with your API credentials
 config = ApiKeyStamperConfig(
     api_public_key="<Turnkey API Public Key (that starts with 02 or 03)>",
-    api_private_key="<Turnkey API Private Key>"
+    api_private_key="<Turnkey API Private Key>",
 )
 stamper = ApiKeyStamper(config)
 
 # Create your request payload
-payload = {
-    "organizationId": "<your org ID>"
-}
+payload = {"organizationId": "<your org ID>"}
 payload_str = json.dumps(payload)
 
 # Generate the authentication stamp
