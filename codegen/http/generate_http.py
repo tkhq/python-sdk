@@ -92,6 +92,49 @@ class TurnkeyClient:
         serialized = serialize_value(body)
         return json.dumps(serialized)
     
+    def _canonical_url(self, url: str) -> str:
+        prepared = requests.models.PreparedRequest()
+        prepared.prepare_url(url, None)
+        return str(prepared.url)
+    
+    def _url_origin(self, url: str) -> str:
+        parts = urlsplit(url)
+        scheme = parts.scheme.lower()
+        port = parts.port if parts.port is not None else {"http": 80, "https": 443}.get(scheme)
+        host = (parts.hostname or "").lower()
+        return f"{scheme}://{host}:{port}"
+    
+    def _post(self, url: str, headers: Dict[str, str], data: str) -> requests.Response:
+        current_url = self._canonical_url(url)
+        origin = self._url_origin(current_url)
+        redirects = 0
+        while True:
+            response = requests.post(
+                current_url,
+                headers=headers,
+                data=data,
+                timeout=self.default_timeout,
+                allow_redirects=False
+            )
+            if not 300 <= response.status_code < 400:
+                return response
+            
+            redirects += 1
+            if redirects > MAX_REDIRECTS:
+                raise requests.TooManyRedirects(f"Exceeded {MAX_REDIRECTS} redirects")
+            
+            location = response.headers.get("Location")
+            refusal = f"Not following redirect ({response.status_code}) to {location!r}"
+            if response.status_code not in (307, 308) or not location:
+                raise requests.RequestException(refusal)
+            try:
+                next_url = self._canonical_url(urljoin(current_url, location))
+            except (requests.RequestException, ValueError) as exc:
+                raise requests.RequestException(refusal) from exc
+            if self._url_origin(next_url) != origin:
+                raise requests.RequestException(refusal)
+            current_url = next_url
+    
     def _request(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         \"\"\"Make a request to the Turnkey API.
         
@@ -117,12 +160,7 @@ class TurnkeyClient:
         }
         
         try:
-            response = requests.post(
-                full_url,
-                headers=headers,
-                data=body_str,
-                timeout=self.default_timeout
-            )
+            response = self._post(full_url, headers, body_str)
         except requests.RequestException as exc:
             raise TurnkeyNetworkError(
                 "Request failed",
@@ -253,12 +291,7 @@ class TurnkeyClient:
         }
         
         try:
-            response = requests.post(
-                signed_request.url,
-                headers=headers,
-                data=signed_request.body,
-                timeout=self.default_timeout
-            )
+            response = self._post(signed_request.url, headers, signed_request.body)
         except requests.RequestException as exc:
             raise TurnkeyNetworkError(
                 "Signed request failed",
@@ -543,12 +576,13 @@ def main():
 
     # Build full output
     output = f"{COMMENT_HEADER}\n\n"
-    output += "import json\nimport time\nfrom typing import Any, Callable, Dict, Optional, TypeVar, overload\nimport requests\n"
+    output += "import json\nimport time\nfrom typing import Any, Callable, Dict, Optional, TypeVar, overload\nfrom urllib.parse import urljoin, urlsplit\nimport requests\n"
     output += "from turnkey_api_key_stamper import ApiKeyStamper\n"
     output += "from turnkey_sdk_types import *\n"
     output += "from ..version import VERSION\n\n"
     output += "T = TypeVar('T')\n\n"
     output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n\n"
+    output += "MAX_REDIRECTS = 10\n\n"
     output += client_code
 
     # Ensure output directory exists
