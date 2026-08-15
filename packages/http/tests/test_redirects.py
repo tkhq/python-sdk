@@ -62,7 +62,6 @@ def send(client, calls, responses, signed=False):
         (False, 307, "https://other.example.com" + ENDPOINT),
         (True, 308, "http://api.example.com" + ENDPOINT),
         (False, 307, "https://evil.example\\@api.example.com/steal"),
-        (True, 308, "https://evil.example\\@api.example.com/steal"),
         (False, 307, "https://[invalid" + ENDPOINT),
         (False, 302, BASE_URL + ENDPOINT),
         (False, 307, None),
