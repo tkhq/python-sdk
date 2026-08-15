@@ -96,11 +96,11 @@ class TurnkeyClient:
                 timeout=self.default_timeout,
                 allow_redirects=False,
             )
-            if response.status_code not in (301, 302, 303, 307, 308):
+            if response.status_code not in (307, 308):
                 return response
 
             location = response.headers.get("Location")
-            if response.status_code in (307, 308) and location:
+            if location:
                 next_url = urljoin(current_url, location)
                 try:
                     if self._url_origin(next_url) == origin:
