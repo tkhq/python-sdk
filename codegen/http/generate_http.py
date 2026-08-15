@@ -92,6 +92,11 @@ class TurnkeyClient:
         serialized = serialize_value(body)
         return json.dumps(serialized)
     
+    def _canonical_url(self, url: str) -> str:
+        prepared = requests.models.PreparedRequest()
+        prepared.prepare_url(url, None)
+        return str(prepared.url)
+    
     def _url_origin(self, url: str) -> str:
         parts = urlsplit(url)
         scheme = parts.scheme.lower()
@@ -100,9 +105,10 @@ class TurnkeyClient:
         return f"{scheme}://{host}:{port}"
     
     def _post(self, url: str, headers: Dict[str, str], data: str) -> requests.Response:
-        origin = self._url_origin(url)
-        current_url = url
-        for _ in range(MAX_REDIRECTS):
+        current_url = self._canonical_url(url)
+        origin = self._url_origin(current_url)
+        redirects = 0
+        while True:
             response = requests.post(
                 current_url,
                 headers=headers,
@@ -110,23 +116,24 @@ class TurnkeyClient:
                 timeout=self.default_timeout,
                 allow_redirects=False
             )
-            if response.status_code not in (307, 308):
+            if not 300 <= response.status_code < 400:
                 return response
             
+            redirects += 1
+            if redirects > MAX_REDIRECTS:
+                raise requests.TooManyRedirects(f"Exceeded {MAX_REDIRECTS} redirects")
+            
             location = response.headers.get("Location")
-            if location:
-                next_url = urljoin(current_url, location)
-                try:
-                    if self._url_origin(next_url) == origin:
-                        current_url = next_url
-                        continue
-                except ValueError:
-                    pass
-            raise requests.RequestException(
-                f"Not following redirect ({response.status_code}) to {location!r}"
-            )
-        
-        raise requests.TooManyRedirects(f"Exceeded {MAX_REDIRECTS} redirects")
+            refusal = f"Not following redirect ({response.status_code}) to {location!r}"
+            if response.status_code not in (307, 308) or not location:
+                raise requests.RequestException(refusal)
+            try:
+                next_url = self._canonical_url(urljoin(current_url, location))
+            except (requests.RequestException, ValueError) as exc:
+                raise requests.RequestException(refusal) from exc
+            if self._url_origin(next_url) != origin:
+                raise requests.RequestException(refusal)
+            current_url = next_url
     
     def _request(self, url: str, body: Dict[str, Any], response_type: type) -> Any:
         \"\"\"Make a request to the Turnkey API.
@@ -575,7 +582,7 @@ def main():
     output += "from ..version import VERSION\n\n"
     output += "T = TypeVar('T')\n\n"
     output += f"TERMINAL_ACTIVITY_STATUSES = {TERMINAL_ACTIVITY_STATUSES}\n\n"
-    output += "MAX_REDIRECTS = 5\n\n"
+    output += "MAX_REDIRECTS = 10\n\n"
     output += client_code
 
     # Ensure output directory exists
