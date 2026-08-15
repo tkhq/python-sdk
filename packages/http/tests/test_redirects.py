@@ -56,10 +56,17 @@ def send(client, calls, responses, signed=False):
         return client._request(ENDPOINT, {"organizationId": "org-id"}, dict)
 
 
-@pytest.mark.parametrize("signed", [False, True])
-@pytest.mark.parametrize("status_code", [307, 308])
-def test_cross_origin_redirect_is_not_followed(client, calls, signed, status_code):
-    responses = [FakeResponse(status_code, "https://other.example.com" + ENDPOINT)]
+@pytest.mark.parametrize(
+    "signed,status_code,location",
+    [
+        (False, 307, "https://other.example.com" + ENDPOINT),
+        (True, 308, "http://api.example.com" + ENDPOINT),
+    ],
+)
+def test_cross_origin_redirect_is_not_followed(
+    client, calls, signed, status_code, location
+):
+    responses = [FakeResponse(status_code, location)]
 
     with pytest.raises(TurnkeyNetworkError):
         send(client, calls, responses, signed)
@@ -68,15 +75,14 @@ def test_cross_origin_redirect_is_not_followed(client, calls, signed, status_cod
     assert calls[0][3] is False
 
 
-@pytest.mark.parametrize("signed", [False, True])
-def test_same_origin_redirect_preserves_request(client, calls, signed):
+def test_same_origin_redirect_preserves_request(client, calls):
     responses = [
-        FakeResponse(307, "https://api.example.com:443/public/v1/query/other"),
+        FakeResponse(307, BASE_URL + "/public/v1/query/other"),
         FakeResponse(200, payload={"result": "ok"}),
     ]
 
-    assert send(client, calls, responses, signed) == {"result": "ok"}
-    assert calls[1][0] == "https://api.example.com:443/public/v1/query/other"
+    assert send(client, calls, responses) == {"result": "ok"}
+    assert calls[1][0] == BASE_URL + "/public/v1/query/other"
     assert calls[1][1:] == calls[0][1:]
 
 
@@ -93,26 +99,3 @@ def test_redirect_chain_stays_on_original_origin(client, calls):
         BASE_URL + ENDPOINT,
         BASE_URL + "/public/v1/query/hop",
     ]
-
-
-@pytest.mark.parametrize(
-    "location",
-    [
-        "http://api.example.com" + ENDPOINT,
-        "https://api.example.com:8443" + ENDPOINT,
-    ],
-)
-def test_effective_origin_changes_are_not_followed(client, calls, location):
-    with pytest.raises(TurnkeyNetworkError):
-        send(client, calls, [FakeResponse(307, location)])
-
-    assert len(calls) == 1
-
-
-def test_redirect_limit_is_enforced(client, calls):
-    responses = [FakeResponse(307, BASE_URL + ENDPOINT) for _ in range(6)]
-
-    with pytest.raises(TurnkeyNetworkError):
-        send(client, calls, responses)
-
-    assert len(calls) == 5

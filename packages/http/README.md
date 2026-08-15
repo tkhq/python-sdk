@@ -22,13 +22,16 @@ from turnkey_api_key_stamper import ApiKeyStamper, ApiKeyStamperConfig
 
 # Initialize the stamper
 config = ApiKeyStamperConfig(
-    api_public_key="your-api-public-key", api_private_key="your-api-private-key"
+    api_public_key="your-api-public-key",
+    api_private_key="your-api-private-key"
 )
 stamper = ApiKeyStamper(config)
 
 # Create the HTTP client
 client = TurnkeyClient(
-    base_url="https://api.turnkey.com", stamper=stamper, organization_id="your-org-id"
+    base_url="https://api.turnkey.com",
+    stamper=stamper,
+    organization_id="your-org-id"
 )
 
 # Make API calls with typed methods

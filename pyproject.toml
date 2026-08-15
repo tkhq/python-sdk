@@ -16,6 +16,9 @@ dev = [
     "pytest>=7.0.0",
 ]
 
+[tool.ruff]
+extend-exclude = ["*.md"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = false
