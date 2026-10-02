@@ -10547,6 +10547,27 @@
       },
       "required": ["publicKey"]
     },
+    "v1LoginUsageV2": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "publicKey": {
+          "type": "string"
+        },
+        "invalidateExisting": {
+          "type": "boolean"
+        },
+        "expirationSeconds": {
+          "type": "string"
+        },
+        "sessionProfileId": {
+          "type": "string"
+        }
+      },
+      "required": ["organizationId", "publicKey"]
+    },
     "v1MnemonicLanguage": {
       "type": "string",
       "enum": [
@@ -10840,6 +10861,24 @@
       },
       "required": ["providerName", "oidcToken"]
     },
+    "v1OauthProviderParamsV2": {
+      "type": "object",
+      "properties": {
+        "providerName": {
+          "type": "string",
+          "description": "Human-readable name to identify a Provider."
+        },
+        "oidcToken": {
+          "type": "string",
+          "description": "Base64 encoded OIDC token"
+        },
+        "oidcClaims": {
+          "$ref": "#/definitions/v1OidcClaims",
+          "description": "OIDC claims (iss, sub, aud) to uniquely identify the user"
+        }
+      },
+      "required": ["providerName"]
+    },
     "v1OauthRequest": {
       "type": "object",
       "properties": {
@@ -10881,6 +10920,24 @@
         }
       },
       "required": ["userId", "apiKeyId", "credentialBundle"]
+    },
+    "v1OidcClaims": {
+      "type": "object",
+      "properties": {
+        "iss": {
+          "type": "string",
+          "description": "The issuer identifier from the OIDC token (iss claim)"
+        },
+        "sub": {
+          "type": "string",
+          "description": "The subject identifier from the OIDC token (sub claim)"
+        },
+        "aud": {
+          "type": "string",
+          "description": "The audience from the OIDC token (aud claim)"
+        }
+      },
+      "required": ["iss", "sub", "aud"]
     },
     "v1Operator": {
       "type": "string",
@@ -11894,6 +11951,48 @@
       },
       "required": ["userName", "apiKeys", "authenticators", "oauthProviders"]
     },
+    "v1RootUserParamsV5": {
+      "type": "object",
+      "properties": {
+        "userName": {
+          "type": "string",
+          "description": "Human-readable name for a User."
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "The user's email address."
+        },
+        "userPhoneNumber": {
+          "type": "string",
+          "description": "The user's phone number in E.164 format e.g. +13214567890"
+        },
+        "apiKeys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ApiKeyParamsV2"
+          },
+          "description": "A list of API Key parameters. This field, if not needed, should be an empty array in your request body."
+        },
+        "authenticators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AuthenticatorParamsV2"
+          },
+          "description": "A list of Authenticator parameters. This field, if not needed, should be an empty array in your request body."
+        },
+        "oauthProviders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OauthProviderParamsV2"
+          },
+          "description": "A list of Oauth providers. This field, if not needed, should be an empty array in your request body."
+        }
+      },
+      "required": ["userName", "apiKeys", "authenticators", "oauthProviders"]
+    },
     "v1Selector": {
       "type": "object",
       "properties": {
@@ -12223,6 +12322,81 @@
         }
       }
     },
+    "v1SignupUsageV2": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "phoneNumber": {
+          "type": "string"
+        },
+        "apiKeys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ApiKeyParamsV2"
+          }
+        },
+        "authenticators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AuthenticatorParamsV2"
+          }
+        },
+        "oauthProviders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OauthProviderParamsV2"
+          }
+        }
+      }
+    },
+    "v1SignupUsageV3": {
+      "type": "object",
+      "properties": {
+        "parentOrganizationId": {
+          "type": "string"
+        },
+        "subOrganizationName": {
+          "type": "string"
+        },
+        "rootUsers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RootUserParamsV5"
+          }
+        },
+        "rootQuorumThreshold": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "wallet": {
+          "$ref": "#/definitions/v1WalletParams"
+        },
+        "disableEmailRecovery": {
+          "type": "boolean"
+        },
+        "disableEmailAuth": {
+          "type": "boolean"
+        },
+        "disableSmsAuth": {
+          "type": "boolean"
+        },
+        "disableOtpEmailAuth": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "parentOrganizationId",
+        "subOrganizationName",
+        "rootUsers",
+        "rootQuorumThreshold"
+      ]
+    },
     "v1SimpleClientExtensionResults": {
       "type": "object",
       "properties": {
@@ -12390,6 +12564,15 @@
         },
         "login": {
           "$ref": "#/definitions/v1LoginUsage"
+        },
+        "signupV2": {
+          "$ref": "#/definitions/v1SignupUsageV2"
+        },
+        "loginV2": {
+          "$ref": "#/definitions/v1LoginUsageV2"
+        },
+        "signupV3": {
+          "$ref": "#/definitions/v1SignupUsageV3"
         }
       },
       "required": ["type", "tokenId"]

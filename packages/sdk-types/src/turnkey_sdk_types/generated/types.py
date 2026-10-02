@@ -3774,6 +3774,14 @@ class v1LoginUsage(TurnkeyBaseModel):
     publicKey: str = Field(description="Public key for authentication")
 
 
+class v1LoginUsageV2(TurnkeyBaseModel):
+    organizationId: str
+    publicKey: str
+    invalidateExisting: Optional[bool] = Field(default=None)
+    expirationSeconds: Optional[str] = Field(default=None)
+    sessionProfileId: Optional[str] = Field(default=None)
+
+
 class v1MnemonicLanguage(str, Enum):
     MNEMONIC_LANGUAGE_ENGLISH = "MNEMONIC_LANGUAGE_ENGLISH"
     MNEMONIC_LANGUAGE_SIMPLIFIED_CHINESE = "MNEMONIC_LANGUAGE_SIMPLIFIED_CHINESE"
@@ -3939,6 +3947,17 @@ class v1OauthProviderParams(TurnkeyBaseModel):
     oidcToken: str = Field(description="Base64 encoded OIDC token")
 
 
+class v1OauthProviderParamsV2(TurnkeyBaseModel):
+    providerName: str = Field(description="Human-readable name to identify a Provider.")
+    oidcToken: Optional[str] = Field(
+        default=None, description="Base64 encoded OIDC token"
+    )
+    oidcClaims: Optional[v1OidcClaims] = Field(
+        default=None,
+        description="OIDC claims (iss, sub, aud) to uniquely identify the user",
+    )
+
+
 class v1OauthRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -3955,6 +3974,16 @@ class v1OauthResult(TurnkeyBaseModel):
     userId: str = Field(description="Unique identifier for the authenticating User.")
     apiKeyId: str = Field(description="Unique identifier for the created API key.")
     credentialBundle: str = Field(description="HPKE encrypted credential bundle")
+
+
+class v1OidcClaims(TurnkeyBaseModel):
+    iss: str = Field(
+        description="The issuer identifier from the OIDC token (iss claim)"
+    )
+    sub: str = Field(
+        description="The subject identifier from the OIDC token (sub claim)"
+    )
+    aud: str = Field(description="The audience from the OIDC token (aud claim)")
 
 
 class v1Operator(str, Enum):
@@ -4519,6 +4548,26 @@ class v1RootUserParamsV4(TurnkeyBaseModel):
     )
 
 
+class v1RootUserParamsV5(TurnkeyBaseModel):
+    userName: str = Field(description="Human-readable name for a User.")
+    userEmail: Optional[str] = Field(
+        default=None, description="The user's email address."
+    )
+    userPhoneNumber: Optional[str] = Field(
+        default=None,
+        description="The user's phone number in E.164 format e.g. +13214567890",
+    )
+    apiKeys: List[v1ApiKeyParamsV2] = Field(
+        description="A list of API Key parameters. This field, if not needed, should be an empty array in your request body."
+    )
+    authenticators: List[v1AuthenticatorParamsV2] = Field(
+        description="A list of Authenticator parameters. This field, if not needed, should be an empty array in your request body."
+    )
+    oauthProviders: List[v1OauthProviderParamsV2] = Field(
+        description="A list of Oauth providers. This field, if not needed, should be an empty array in your request body."
+    )
+
+
 class v1Selector(TurnkeyBaseModel):
     subject: Optional[str] = Field(default=None)
     operator: Optional[v1Operator] = Field(default=None)
@@ -4671,6 +4720,26 @@ class v1SignupUsage(TurnkeyBaseModel):
     oauthProviders: Optional[List[v1OauthProviderParams]] = Field(default=None)
 
 
+class v1SignupUsageV2(TurnkeyBaseModel):
+    email: Optional[str] = Field(default=None)
+    phoneNumber: Optional[str] = Field(default=None)
+    apiKeys: Optional[List[v1ApiKeyParamsV2]] = Field(default=None)
+    authenticators: Optional[List[v1AuthenticatorParamsV2]] = Field(default=None)
+    oauthProviders: Optional[List[v1OauthProviderParamsV2]] = Field(default=None)
+
+
+class v1SignupUsageV3(TurnkeyBaseModel):
+    parentOrganizationId: str
+    subOrganizationName: str
+    rootUsers: List[v1RootUserParamsV5]
+    rootQuorumThreshold: int
+    wallet: Optional[v1WalletParams] = Field(default=None)
+    disableEmailRecovery: Optional[bool] = Field(default=None)
+    disableEmailAuth: Optional[bool] = Field(default=None)
+    disableSmsAuth: Optional[bool] = Field(default=None)
+    disableOtpEmailAuth: Optional[bool] = Field(default=None)
+
+
 class v1SimpleClientExtensionResults(TurnkeyBaseModel):
     appid: Optional[bool] = Field(default=None)
     appidExclude: Optional[bool] = Field(default=None)
@@ -4770,6 +4839,9 @@ class v1TokenUsage(TurnkeyBaseModel):
     tokenId: str = Field(description="Unique identifier for the verification token")
     signup: Optional[v1SignupUsage] = Field(default=None)
     login: Optional[v1LoginUsage] = Field(default=None)
+    signupV2: Optional[v1SignupUsageV2] = Field(default=None)
+    loginV2: Optional[v1LoginUsageV2] = Field(default=None)
+    signupV3: Optional[v1SignupUsageV3] = Field(default=None)
 
 
 class v1TransactionType(str, Enum):
