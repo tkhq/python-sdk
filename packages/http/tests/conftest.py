@@ -1,9 +1,8 @@
 """Shared test fixtures and configuration."""
 
 import os
-from pathlib import Path
-
 import pytest
+from pathlib import Path
 from dotenv import load_dotenv
 from turnkey_api_key_stamper import ApiKeyStamper, ApiKeyStamperConfig
 from turnkey_http.generated.client import TurnkeyClient
@@ -23,9 +22,6 @@ BASE_URL = os.getenv("TURNKEY_BASE_URL", "https://api.turnkey.com")
 @pytest.fixture
 def client():
     """Create a Turnkey client instance for testing."""
-    if not all([API_PUBLIC_KEY, API_PRIVATE_KEY, ORG_ID, USER_ID]):
-        pytest.skip("Turnkey integration test credentials are not configured")
-
     config = ApiKeyStamperConfig(
         api_public_key=API_PUBLIC_KEY, api_private_key=API_PRIVATE_KEY
     )

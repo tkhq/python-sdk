@@ -1,4 +1,6 @@
-type: patch
+type: minor
 packages: [ api-key-stamper, http, sdk-types ]
 changelog: |-
-  Add strict OTP login and signup request builders with raw P-256 client signatures, complete token-usage binding, and Create Sub Organization V8 support while preserving DER request stamps.
+  Add strict OTP login and signup request builders with raw P-256 client signatures. API request stamps continue to use DER signatures by default.
+
+  Promote the unversioned Create Sub Organization operation to V8. `CreateSubOrganizationBody.rootUsers` now requires `v1RootUserParamsV5`, and V4 model instances are no longer accepted. Callers that pass V4 instances must migrate to V5. This release also requires `turnkey-api-key-stamper>=0.2.0` and `turnkey-sdk-types>=0.2.0` when installing `turnkey-http`.

@@ -40,7 +40,9 @@ def _verification_token_claims(verification_token: str) -> Tuple[str, str]:
         ) from exc
 
     if not isinstance(token_id, str) or not isinstance(public_key, str):
-        raise TypeError("Invalid verification token: id and public_key must be strings")
+        raise ValueError(  # noqa: TRY004
+            "Invalid verification token: id and public_key must be strings"
+        )
 
     return token_id, public_key
 
