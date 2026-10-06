@@ -52,7 +52,8 @@ install:
 	@pip install -e .[dev]
 	@pip install -e ./packages/sdk-types[dev]
 	@pip install -e ./packages/api-key-stamper[dev]
-	@pip install -e ./packages/http[dev]
+	@pip install "requests>=2.31.0" "pytest>=7.0.0" "pytest-asyncio>=0.21.0" "python-dotenv>=1.0.0" "ruff>=0.1.0"
+	@pip install --no-deps -e ./packages/http
 	@echo "✅ All packages installed"
 
 build:
