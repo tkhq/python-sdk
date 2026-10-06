@@ -53,6 +53,8 @@ install:
 	@pip install -e ./packages/sdk-types[dev]
 	@pip install -e ./packages/api-key-stamper[dev]
 	@pip install "requests>=2.31.0" "pytest>=7.0.0" "pytest-asyncio>=0.21.0" "python-dotenv>=1.0.0" "ruff>=0.1.0"
+	@# Workspace sdk-types stays at 0.1.0 until release versioning, while HTTP requires its next published version.
+	@# Local siblings and HTTP dependencies are installed above, so skip resolution for this editable install.
 	@pip install --no-deps -e ./packages/http
 	@echo "✅ All packages installed"
 

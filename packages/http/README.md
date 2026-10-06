@@ -122,8 +122,6 @@ signup_body = build_strict_otp_signup_request(
 signup_response = client.create_sub_organization(signup_body)
 ```
 
-The Python utilities accept generated `v1LoginUsageV2` and `v1SignupUsageV3` models. This differs from the TypeScript object-parameter API so one validated model supplies both the signed message and request body.
-
 ## Code Generation
 
 This package uses code generation to create HTTP client methods from the OpenAPI specification located in `schema/public_api.swagger.json`.
