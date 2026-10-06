@@ -2262,13 +2262,13 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
+            "type": "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8",
         }
 
         return self._activity(
             "/public/v1/submit/create_sub_organization",
             body,
-            "createSubOrganizationResultV7",
+            "createSubOrganizationResultV8",
             CreateSubOrganizationResponse,
         )
 
@@ -2287,7 +2287,7 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
+            "type": "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8",
         }
 
         full_url = self.base_url + "/public/v1/submit/create_sub_organization"

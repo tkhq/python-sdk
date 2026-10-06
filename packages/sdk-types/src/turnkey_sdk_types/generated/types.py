@@ -349,6 +349,9 @@ class v1ActivityType(str, Enum):
     ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7 = (
         "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7"
     )
+    ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8 = (
+        "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8"
+    )
     ACTIVITY_TYPE_UPDATE_WALLET = "ACTIVITY_TYPE_UPDATE_WALLET"
     ACTIVITY_TYPE_UPDATE_POLICY_V2 = "ACTIVITY_TYPE_UPDATE_POLICY_V2"
     ACTIVITY_TYPE_CREATE_USERS_V3 = "ACTIVITY_TYPE_CREATE_USERS_V3"
@@ -1283,6 +1286,39 @@ class v1CreateSubOrganizationIntentV7(TurnkeyBaseModel):
     )
 
 
+class v1CreateSubOrganizationIntentV8(TurnkeyBaseModel):
+    subOrganizationName: str = Field(description="Name for this sub-organization")
+    rootUsers: List[v1RootUserParamsV5] = Field(
+        description="Root users to create within this sub-organization"
+    )
+    rootQuorumThreshold: int = Field(
+        description="The threshold of unique approvals to reach root quorum. This value must be less than or equal to the number of root users"
+    )
+    wallet: Optional[v1WalletParams] = Field(
+        default=None, description="The wallet to create for the sub-organization"
+    )
+    disableEmailRecovery: Optional[bool] = Field(
+        default=None, description="Disable email recovery for the sub-organization"
+    )
+    disableEmailAuth: Optional[bool] = Field(
+        default=None, description="Disable email auth for the sub-organization"
+    )
+    disableSmsAuth: Optional[bool] = Field(
+        default=None, description="Disable OTP SMS auth for the sub-organization"
+    )
+    disableOtpEmailAuth: Optional[bool] = Field(
+        default=None, description="Disable OTP email auth for the sub-organization"
+    )
+    verificationToken: Optional[str] = Field(
+        default=None,
+        description="Signed JWT containing a unique id, expiry, verification type, contact",
+    )
+    clientSignature: Optional[v1ClientSignature] = Field(
+        default=None,
+        description="Optional signature proving authorization for this sub-organization creation. The signature is over the verification token ID and the root user parameters for the root user associated with the verification token. Only required if a public key was provided during the verification step.",
+    )
+
+
 class v1CreateSubOrganizationRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -1291,7 +1327,7 @@ class v1CreateSubOrganizationRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1CreateSubOrganizationIntentV7
+    parameters: v1CreateSubOrganizationIntentV8
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
@@ -1327,6 +1363,12 @@ class v1CreateSubOrganizationResultV6(TurnkeyBaseModel):
 
 
 class v1CreateSubOrganizationResultV7(TurnkeyBaseModel):
+    subOrganizationId: str
+    wallet: Optional[v1WalletResult] = Field(default=None)
+    rootUserIds: Optional[List[str]] = Field(default=None)
+
+
+class v1CreateSubOrganizationResultV8(TurnkeyBaseModel):
     subOrganizationId: str
     wallet: Optional[v1WalletResult] = Field(default=None)
     rootUserIds: Optional[List[str]] = Field(default=None)
@@ -3619,6 +3661,9 @@ class v1Intent(TurnkeyBaseModel):
     createSubOrganizationIntentV7: Optional[v1CreateSubOrganizationIntentV7] = Field(
         default=None
     )
+    createSubOrganizationIntentV8: Optional[v1CreateSubOrganizationIntentV8] = Field(
+        default=None
+    )
     updateWalletIntent: Optional[v1UpdateWalletIntent] = Field(default=None)
     updatePolicyIntentV2: Optional[v1UpdatePolicyIntentV2] = Field(default=None)
     createUsersIntentV3: Optional[v1CreateUsersIntentV3] = Field(default=None)
@@ -4083,6 +4128,10 @@ class v1OtpLoginIntentV2(TurnkeyBaseModel):
         default=None,
         description="Invalidate all other previously generated Login sessions",
     )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
+    )
 
 
 class v1OtpLoginRequest(TurnkeyBaseModel):
@@ -4390,6 +4439,9 @@ class v1Result(TurnkeyBaseModel):
     initOtpAuthResult: Optional[v1InitOtpAuthResult] = Field(default=None)
     otpAuthResult: Optional[v1OtpAuthResult] = Field(default=None)
     createSubOrganizationResultV7: Optional[v1CreateSubOrganizationResultV7] = Field(
+        default=None
+    )
+    createSubOrganizationResultV8: Optional[v1CreateSubOrganizationResultV8] = Field(
         default=None
     )
     updateWalletResult: Optional[v1UpdateWalletResult] = Field(default=None)
@@ -6588,7 +6640,7 @@ class CreateSubOrganizationBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     subOrganizationName: str = Field(description="Name for this sub-organization")
-    rootUsers: List[v1RootUserParamsV4] = Field(
+    rootUsers: List[v1RootUserParamsV5] = Field(
         description="Root users to create within this sub-organization"
     )
     rootQuorumThreshold: int = Field(
@@ -7619,6 +7671,10 @@ class OtpLoginBody(TurnkeyBaseModel):
     invalidateExisting: Optional[bool] = Field(
         default=None,
         description="Invalidate all other previously generated Login sessions",
+    )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
     )
 
 

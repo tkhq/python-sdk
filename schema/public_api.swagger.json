@@ -4294,6 +4294,7 @@
         "ACTIVITY_TYPE_INIT_OTP_AUTH",
         "ACTIVITY_TYPE_OTP_AUTH",
         "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
+        "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8",
         "ACTIVITY_TYPE_UPDATE_WALLET",
         "ACTIVITY_TYPE_UPDATE_POLICY_V2",
         "ACTIVITY_TYPE_CREATE_USERS_V3",
@@ -6108,12 +6109,63 @@
       },
       "required": ["subOrganizationName", "rootUsers", "rootQuorumThreshold"]
     },
+    "v1CreateSubOrganizationIntentV8": {
+      "type": "object",
+      "properties": {
+        "subOrganizationName": {
+          "type": "string",
+          "description": "Name for this sub-organization"
+        },
+        "rootUsers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RootUserParamsV5"
+          },
+          "description": "Root users to create within this sub-organization"
+        },
+        "rootQuorumThreshold": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The threshold of unique approvals to reach root quorum. This value must be less than or equal to the number of root users"
+        },
+        "wallet": {
+          "$ref": "#/definitions/v1WalletParams",
+          "description": "The wallet to create for the sub-organization"
+        },
+        "disableEmailRecovery": {
+          "type": "boolean",
+          "description": "Disable email recovery for the sub-organization"
+        },
+        "disableEmailAuth": {
+          "type": "boolean",
+          "description": "Disable email auth for the sub-organization"
+        },
+        "disableSmsAuth": {
+          "type": "boolean",
+          "description": "Disable OTP SMS auth for the sub-organization"
+        },
+        "disableOtpEmailAuth": {
+          "type": "boolean",
+          "description": "Disable OTP email auth for the sub-organization"
+        },
+        "verificationToken": {
+          "type": "string",
+          "description": "Signed JWT containing a unique id, expiry, verification type, contact"
+        },
+        "clientSignature": {
+          "$ref": "#/definitions/v1ClientSignature",
+          "description": "Optional signature proving authorization for this sub-organization creation. The signature is over the verification token ID and the root user parameters for the root user associated with the verification token. Only required if a public key was provided during the verification step."
+        }
+      },
+      "required": ["subOrganizationName", "rootUsers", "rootQuorumThreshold"]
+    },
     "v1CreateSubOrganizationRequest": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7"]
+          "enum": ["ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8"]
         },
         "timestampMs": {
           "type": "string",
@@ -6124,7 +6176,7 @@
           "description": "Unique identifier for a given Organization."
         },
         "parameters": {
-          "$ref": "#/definitions/v1CreateSubOrganizationIntentV7"
+          "$ref": "#/definitions/v1CreateSubOrganizationIntentV8"
         },
         "generateAppProofs": {
           "type": "boolean"
@@ -6225,6 +6277,24 @@
       "required": ["subOrganizationId"]
     },
     "v1CreateSubOrganizationResultV7": {
+      "type": "object",
+      "properties": {
+        "subOrganizationId": {
+          "type": "string"
+        },
+        "wallet": {
+          "$ref": "#/definitions/v1WalletResult"
+        },
+        "rootUserIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["subOrganizationId"]
+    },
+    "v1CreateSubOrganizationResultV8": {
       "type": "object",
       "properties": {
         "subOrganizationId": {
@@ -10243,6 +10313,9 @@
         "createSubOrganizationIntentV7": {
           "$ref": "#/definitions/v1CreateSubOrganizationIntentV7"
         },
+        "createSubOrganizationIntentV8": {
+          "$ref": "#/definitions/v1CreateSubOrganizationIntentV8"
+        },
         "updateWalletIntent": {
           "$ref": "#/definitions/v1UpdateWalletIntent"
         },
@@ -11075,6 +11148,10 @@
         "invalidateExisting": {
           "type": "boolean",
           "description": "Invalidate all other previously generated Login sessions"
+        },
+        "sessionProfileId": {
+          "type": "string",
+          "description": "Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used."
         }
       },
       "required": ["verificationToken", "publicKey", "clientSignature"]
@@ -11666,6 +11743,9 @@
         },
         "createSubOrganizationResultV7": {
           "$ref": "#/definitions/v1CreateSubOrganizationResultV7"
+        },
+        "createSubOrganizationResultV8": {
+          "$ref": "#/definitions/v1CreateSubOrganizationResultV8"
         },
         "updateWalletResult": {
           "$ref": "#/definitions/v1UpdateWalletResult"

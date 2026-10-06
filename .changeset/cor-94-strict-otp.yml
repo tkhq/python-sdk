@@ -1,0 +1,4 @@
+type: patch
+packages: [ api-key-stamper, http, sdk-types ]
+changelog: |-
+  Add strict OTP login and signup request builders with raw P-256 client signatures, complete token-usage binding, and Create Sub Organization V8 support while preserving DER request stamps.
