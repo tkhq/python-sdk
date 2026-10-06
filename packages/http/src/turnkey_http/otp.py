@@ -1,29 +1,39 @@
-"""Strict OTP login and signup request builders."""
+"""Pure utilities for strict OTP client-signature messages and requests."""
 
 from __future__ import annotations
 
 import json
 from base64 import urlsafe_b64decode
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple
 
-from turnkey_api_key_stamper import ApiKeyStamper, SignatureFormat
 from turnkey_sdk_types import (
     CreateSubOrganizationBody,
     OtpLoginBody,
     v1ClientSignature,
     v1ClientSignatureScheme,
     v1LoginUsageV2,
-    v1RootUserParamsV5,
     v1SignupUsageV3,
     v1TokenUsage,
     v1UsageType,
-    v1WalletParams,
 )
 
 __all__ = [
+    "ClientSignaturePayload",
     "build_strict_otp_login_request",
     "build_strict_otp_signup_request",
+    "get_client_signature_message_for_login_v2",
+    "get_client_signature_message_for_signup_v3",
 ]
+
+
+@dataclass(frozen=True)
+class ClientSignaturePayload:
+    """Message and verification-token claims needed by an external signer."""
+
+    message: str
+    token_id: str
+    public_key: str
 
 
 def _verification_token_claims(verification_token: str) -> Tuple[str, str]:
@@ -43,62 +53,90 @@ def _verification_token_claims(verification_token: str) -> Tuple[str, str]:
         raise ValueError(  # noqa: TRY004
             "Invalid verification token: id and public_key must be strings"
         )
+    if not token_id or not public_key:
+        raise ValueError(
+            "Invalid verification token: id and public_key must not be empty"
+        )
 
     return token_id, public_key
 
 
-def _client_signature(
-    client_stamper: ApiKeyStamper,
-    verification_token: str,
-    usage: v1TokenUsage,
-) -> v1ClientSignature:
-    token_id, verification_public_key = _verification_token_claims(verification_token)
-    if usage.tokenId != token_id:
-        raise ValueError("Token usage does not match the verification token")
-    if client_stamper.api_public_key != verification_public_key:
-        raise ValueError(
-            "Client stamper public key does not match the verification token"
-        )
-
-    message = usage.model_dump_json(by_alias=True, exclude_none=True)
-    return v1ClientSignature(
-        publicKey=verification_public_key,
-        scheme=v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256,
-        message=message,
-        signature=client_stamper.sign(message, SignatureFormat.RAW),
-    )
-
-
-def build_strict_otp_login_request(
-    client_stamper: ApiKeyStamper,
-    verification_token: str,
-    organization_id: str,
+def _client_signature_payload(
+    token_id: str,
     public_key: str,
-    *,
-    invalidate_existing: Optional[bool] = None,
-    expiration_seconds: Optional[str] = None,
-    session_profile_id: Optional[str] = None,
-    timestamp_ms: Optional[str] = None,
-) -> OtpLoginBody:
-    """Build an OTP Login V2 body and bind its complete semantics to a signature.
-
-    ``client_stamper`` must contain the key pair bound into ``verification_token``.
-    ``public_key`` is the session public key submitted by the login request.
-    """
-    token_id, _ = _verification_token_claims(verification_token)
-    login_usage = v1LoginUsageV2(
-        organizationId=organization_id,
-        publicKey=public_key,
-        invalidateExisting=invalidate_existing,
-        expirationSeconds=expiration_seconds,
-        sessionProfileId=session_profile_id,
+    usage: v1TokenUsage,
+) -> ClientSignaturePayload:
+    return ClientSignaturePayload(
+        message=usage.model_dump_json(by_alias=True, exclude_none=True),
+        token_id=token_id,
+        public_key=public_key,
     )
+
+
+def get_client_signature_message_for_login_v2(
+    verification_token: str,
+    login_usage: v1LoginUsageV2,
+) -> ClientSignaturePayload:
+    """Build the strict Login V2 message for a caller-controlled signer."""
+    token_id, public_key = _verification_token_claims(verification_token)
     usage = v1TokenUsage(
         type=v1UsageType.USAGE_TYPE_LOGIN,
         tokenId=token_id,
         loginV2=login_usage,
     )
-    client_signature = _client_signature(client_stamper, verification_token, usage)
+    return _client_signature_payload(token_id, public_key, usage)
+
+
+def get_client_signature_message_for_signup_v3(
+    verification_token: str,
+    signup_usage: v1SignupUsageV3,
+) -> ClientSignaturePayload:
+    """Build the strict Signup V3 message for a caller-controlled signer."""
+    token_id, public_key = _verification_token_claims(verification_token)
+    usage = v1TokenUsage(
+        type=v1UsageType.USAGE_TYPE_SIGNUP,
+        tokenId=token_id,
+        signupV3=signup_usage,
+    )
+    return _client_signature_payload(token_id, public_key, usage)
+
+
+def _validate_client_signature(
+    payload: ClientSignaturePayload,
+    client_signature: v1ClientSignature,
+) -> None:
+    if (
+        client_signature.scheme
+        != v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256
+    ):
+        raise ValueError("Client signature must use the P-256 client-signature scheme")
+    if client_signature.publicKey != payload.public_key:
+        raise ValueError(
+            "Client signature public key does not match the verification token"
+        )
+    if client_signature.message != payload.message:
+        raise ValueError("Client signature message does not match the request usage")
+    try:
+        signature = bytes.fromhex(client_signature.signature)
+    except ValueError as exc:
+        raise ValueError("Client signature must be raw P-256 hexadecimal") from exc
+    if len(client_signature.signature) != 128 or len(signature) != 64:
+        raise ValueError("Client signature must be a 64-byte raw P-256 signature")
+
+
+def build_strict_otp_login_request(
+    verification_token: str,
+    login_usage: v1LoginUsageV2,
+    client_signature: v1ClientSignature,
+    *,
+    timestamp_ms: Optional[str] = None,
+) -> OtpLoginBody:
+    """Build an OTP Login V2 request from a caller-supplied client signature."""
+    payload = get_client_signature_message_for_login_v2(
+        verification_token,
+        login_usage,
+    )
+    _validate_client_signature(payload, client_signature)
 
     return OtpLoginBody(
         timestampMs=timestamp_ms,
@@ -113,39 +151,18 @@ def build_strict_otp_login_request(
 
 
 def build_strict_otp_signup_request(
-    client_stamper: ApiKeyStamper,
     verification_token: str,
-    parent_organization_id: str,
-    sub_organization_name: str,
-    root_users: List[v1RootUserParamsV5],
-    root_quorum_threshold: int,
+    signup_usage: v1SignupUsageV3,
+    client_signature: v1ClientSignature,
     *,
-    wallet: Optional[v1WalletParams] = None,
-    disable_email_recovery: Optional[bool] = None,
-    disable_email_auth: Optional[bool] = None,
-    disable_sms_auth: Optional[bool] = None,
-    disable_otp_email_auth: Optional[bool] = None,
     timestamp_ms: Optional[str] = None,
 ) -> CreateSubOrganizationBody:
-    """Build a Create Sub Organization V8 body with strict Signup V3 binding."""
-    token_id, _ = _verification_token_claims(verification_token)
-    signup_usage = v1SignupUsageV3(
-        parentOrganizationId=parent_organization_id,
-        subOrganizationName=sub_organization_name,
-        rootUsers=root_users,
-        rootQuorumThreshold=root_quorum_threshold,
-        wallet=wallet,
-        disableEmailRecovery=disable_email_recovery,
-        disableEmailAuth=disable_email_auth,
-        disableSmsAuth=disable_sms_auth,
-        disableOtpEmailAuth=disable_otp_email_auth,
+    """Build a Create Sub Organization V8 request from a client signature."""
+    payload = get_client_signature_message_for_signup_v3(
+        verification_token,
+        signup_usage,
     )
-    usage = v1TokenUsage(
-        type=v1UsageType.USAGE_TYPE_SIGNUP,
-        tokenId=token_id,
-        signupV3=signup_usage,
-    )
-    client_signature = _client_signature(client_stamper, verification_token, usage)
+    _validate_client_signature(payload, client_signature)
 
     return CreateSubOrganizationBody(
         timestampMs=timestamp_ms,

@@ -38,55 +38,91 @@ print(response)
 
 ## Strict OTP login and signup
 
-The client key pair supplied during OTP verification must sign the strict token usage. The normal `TurnkeyClient` request stamper remains separate and continues to use DER signatures.
+The key bound into the verification token must sign the strict token usage. Keep this client-message signer separate from the `ApiKeyStamper` used for normal HTTP request stamps.
+
+The SDK constructs the message but does not sign it. Your application can keep the client key in an HSM, KMS, secure enclave, or other non-extractable store. The signer must return a SHA-256/P-256 signature as fixed-width `r[32] || s[32]`, hex encoded.
 
 ```python
-from turnkey_api_key_stamper import ApiKeyStamper, ApiKeyStamperConfig
 from turnkey_http import (
     build_strict_otp_login_request,
     build_strict_otp_signup_request,
+    get_client_signature_message_for_login_v2,
+    get_client_signature_message_for_signup_v3,
 )
-from turnkey_sdk_types import v1RootUserParamsV5
-
-# This key pair must match the public_key claim in the verification token.
-client_stamper = ApiKeyStamper(
-    ApiKeyStamperConfig(
-        api_public_key="<verification-token-client-public-key>",
-        api_private_key="<verification-token-client-private-key>",
-    )
+from turnkey_sdk_types import (
+    v1ClientSignature,
+    v1ClientSignatureScheme,
+    v1LoginUsageV2,
+    v1RootUserParamsV5,
+    v1SignupUsageV3,
 )
 
+
+def sign_with_external_p256_key(public_key: str, message: str) -> str:
+    # Application-owned HSM/KMS callback. Resolve the non-extractable key by its
+    # public key and return a 64-byte raw r || s signature as 128 hex characters.
+    raise NotImplementedError
+
+
+# `client` is a TurnkeyClient configured with its normal HTTP request stamper.
+# That request stamper does not sign either client-signature message below.
+verification_token = "<verified-otp-jwt>"
+login_usage = v1LoginUsageV2(
+    organizationId="<sub-organization-id>",
+    publicKey="<new-session-public-key>",
+    invalidateExisting=False,
+    expirationSeconds="3600",
+    sessionProfileId="<optional-session-profile-id>",
+)
+login_payload = get_client_signature_message_for_login_v2(
+    verification_token, login_usage
+)
+login_client_signature = v1ClientSignature(
+    publicKey=login_payload.public_key,
+    scheme=v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256,
+    message=login_payload.message,
+    signature=sign_with_external_p256_key(
+        login_payload.public_key, login_payload.message
+    ),
+)
 login_body = build_strict_otp_login_request(
-    client_stamper,
-    verification_token="<verified-otp-jwt>",
-    organization_id="<sub-organization-id>",
-    public_key="<new-session-public-key>",
-    invalidate_existing=False,
-    expiration_seconds="3600",
-    session_profile_id="<optional-session-profile-id>",
+    verification_token, login_usage, login_client_signature
 )
 login_response = client.otp_login(login_body)
 
-root_user = v1RootUserParamsV5(
-    userName="Alice",
-    userEmail="alice@example.com",
-    apiKeys=[],
-    authenticators=[],
-    oauthProviders=[],
+signup_usage = v1SignupUsageV3(
+    parentOrganizationId="<parent-organization-id>",
+    subOrganizationName="Alice's organization",
+    rootUsers=[
+        v1RootUserParamsV5(
+            userName="Alice",
+            userEmail="alice@example.com",
+            apiKeys=[],
+            authenticators=[],
+            oauthProviders=[],
+        )
+    ],
+    rootQuorumThreshold=1,
+    disableEmailRecovery=False,
+)
+signup_payload = get_client_signature_message_for_signup_v3(
+    verification_token, signup_usage
+)
+signup_client_signature = v1ClientSignature(
+    publicKey=signup_payload.public_key,
+    scheme=v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256,
+    message=signup_payload.message,
+    signature=sign_with_external_p256_key(
+        signup_payload.public_key, signup_payload.message
+    ),
 )
 signup_body = build_strict_otp_signup_request(
-    client_stamper,
-    verification_token="<verified-otp-jwt>",
-    parent_organization_id="<parent-organization-id>",
-    sub_organization_name="Alice's organization",
-    root_users=[root_user],
-    root_quorum_threshold=1,
-    disable_email_recovery=False,
+    verification_token, signup_usage, signup_client_signature
 )
 signup_response = client.create_sub_organization(signup_body)
 ```
 
-The builders create the matching `loginV2` or `signupV3` token usage, compact camelCase message, raw P-256 client signature, and request body from the same typed values.
+The Python utilities accept generated `v1LoginUsageV2` and `v1SignupUsageV3` models. This differs from the TypeScript object-parameter API so one validated model supplies both the signed message and request body.
 
 ## Code Generation
 

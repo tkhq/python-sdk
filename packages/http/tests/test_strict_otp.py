@@ -1,49 +1,42 @@
 import json
 from base64 import urlsafe_b64encode
+from dataclasses import FrozenInstanceError
 from unittest.mock import Mock
 
 import pytest
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from pydantic import ValidationError
-from turnkey_api_key_stamper import ApiKeyStamper, ApiKeyStamperConfig
+from turnkey_api_key_stamper import TStamp
 from turnkey_http import (
+    ClientSignaturePayload,
     TurnkeyClient,
     build_strict_otp_login_request,
     build_strict_otp_signup_request,
+    get_client_signature_message_for_login_v2,
+    get_client_signature_message_for_signup_v3,
 )
 from turnkey_sdk_types import (
     CreateSubOrganizationBody,
     v1AddressFormat,
     v1ApiKeyCurve,
     v1ApiKeyParamsV2,
+    v1ClientSignature,
+    v1ClientSignatureScheme,
     v1Curve,
     v1LoginUsage,
+    v1LoginUsageV2,
     v1OauthProviderParamsV2,
     v1OidcClaims,
     v1PathFormat,
     v1RootUserParamsV4,
     v1RootUserParamsV5,
+    v1SignupUsageV3,
     v1TokenUsage,
     v1UsageType,
     v1WalletAccountParams,
     v1WalletParams,
 )
 
-
-def _client_stamper(private_value=1):
-    private_key = ec.derive_private_key(private_value, ec.SECP256R1())
-    public_key = private_key.public_key().public_bytes(
-        serialization.Encoding.X962,
-        serialization.PublicFormat.CompressedPoint,
-    )
-    return ApiKeyStamper(
-        ApiKeyStamperConfig(
-            api_public_key=public_key.hex(),
-            api_private_key=f"{private_value:02x}",
-        )
-    )
+VERIFICATION_PUBLIC_KEY = "verification-public-key"
 
 
 def _token_with_claims(claims):
@@ -55,91 +48,80 @@ def _token_with_claims(claims):
     return f"header.{payload}.signature"
 
 
-def _verification_token(public_key, token_id="token-id"):
+def _verification_token(public_key=VERIFICATION_PUBLIC_KEY, token_id="token-id"):
     return _token_with_claims({"id": token_id, "public_key": public_key})
 
 
-def _assert_client_signature_verifies(client_signature):
-    signature = bytes.fromhex(client_signature.signature)
-    assert len(signature) == 64
-    r = int.from_bytes(signature[:32], "big")
-    s = int.from_bytes(signature[32:], "big")
-    public_key = ec.EllipticCurvePublicKey.from_encoded_point(
-        ec.SECP256R1(), bytes.fromhex(client_signature.publicKey)
-    )
-    public_key.verify(
-        encode_dss_signature(r, s),
-        client_signature.message.encode(),
-        ec.ECDSA(hashes.SHA256()),
-    )
+class FakeExternalSigner:
+    def __init__(self):
+        self.messages = []
+
+    def sign(self, message):
+        self.messages.append(message)
+        return "ab" * 64
 
 
-def test_strict_login_uses_exact_compact_message_and_shared_values():
-    stamper = _client_stamper()
-    verification_token = _verification_token(stamper.api_public_key)
-
-    body = build_strict_otp_login_request(
-        stamper,
-        verification_token,
-        "organization-id",
-        "session-public-key",
-        invalidate_existing=False,
-        expiration_seconds="3600",
-        session_profile_id="session-profile-id",
+def _client_signature(payload, signer):
+    return v1ClientSignature(
+        publicKey=payload.public_key,
+        scheme=v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256,
+        message=payload.message,
+        signature=signer.sign(payload.message),
     )
 
-    expected_usage = {
-        "type": "USAGE_TYPE_LOGIN",
-        "tokenId": "token-id",
-        "loginV2": {
-            "organizationId": "organization-id",
-            "publicKey": "session-public-key",
-            "invalidateExisting": False,
-            "expirationSeconds": "3600",
-            "sessionProfileId": "session-profile-id",
-        },
-    }
-    assert body.clientSignature.message == json.dumps(
-        expected_usage, separators=(",", ":")
+
+def _request_stamper():
+    stamper = Mock()
+    stamper.stamp.return_value = TStamp(
+        stamp_header_name="X-Stamp",
+        stamp_header_value="request-stamp",
     )
-    signed = json.loads(body.clientSignature.message)["loginV2"]
-    assert body.organizationId == signed["organizationId"]
-    assert body.publicKey == signed["publicKey"]
-    assert body.invalidateExisting is signed["invalidateExisting"]
-    assert body.expirationSeconds == signed["expirationSeconds"]
-    assert body.sessionProfileId == signed["sessionProfileId"]
-    assert body.clientSignature.publicKey == stamper.api_public_key
-    _assert_client_signature_verifies(body.clientSignature)
+    return stamper
 
 
-def test_strict_login_omits_none_but_retains_false():
-    stamper = _client_stamper()
-    body = build_strict_otp_login_request(
-        stamper,
-        _verification_token(stamper.api_public_key),
-        "organization-id",
-        "session-public-key",
-        invalidate_existing=False,
+def test_login_message_is_exact_compact_camel_case_and_immutable():
+    login_usage = v1LoginUsageV2(
+        organizationId="organization-id",
+        publicKey="session-public-key",
+        invalidateExisting=False,
+        expirationSeconds="3600",
+        sessionProfileId="session-profile-id",
     )
 
-    assert json.loads(body.clientSignature.message)["loginV2"] == {
+    payload = get_client_signature_message_for_login_v2(
+        _verification_token(),
+        login_usage,
+    )
+
+    assert payload == ClientSignaturePayload(
+        message=(
+            '{"type":"USAGE_TYPE_LOGIN","tokenId":"token-id","loginV2":'
+            '{"organizationId":"organization-id","publicKey":"session-public-key",'
+            '"invalidateExisting":false,"expirationSeconds":"3600",'
+            '"sessionProfileId":"session-profile-id"}}'
+        ),
+        token_id="token-id",
+        public_key=VERIFICATION_PUBLIC_KEY,
+    )
+    with pytest.raises(FrozenInstanceError):
+        payload.message = "different"  # type: ignore[misc]
+
+
+def test_login_message_omits_none_but_retains_false():
+    payload = get_client_signature_message_for_login_v2(
+        _verification_token(),
+        v1LoginUsageV2(
+            organizationId="organization-id",
+            publicKey="session-public-key",
+            invalidateExisting=False,
+        ),
+    )
+
+    assert json.loads(payload.message)["loginV2"] == {
         "organizationId": "organization-id",
         "publicKey": "session-public-key",
         "invalidateExisting": False,
     }
-
-
-def test_strict_login_rejects_stamper_not_bound_to_verification_token():
-    token_stamper = _client_stamper(1)
-    signing_stamper = _client_stamper(2)
-
-    with pytest.raises(ValueError, match="does not match"):
-        build_strict_otp_login_request(
-            signing_stamper,
-            _verification_token(token_stamper.api_public_key),
-            "organization-id",
-            "session-public-key",
-        )
 
 
 @pytest.mark.parametrize(
@@ -149,21 +131,133 @@ def test_strict_login_rejects_stamper_not_bound_to_verification_token():
         _token_with_claims({}),
         _token_with_claims({"id": 123, "public_key": "public-key"}),
         _token_with_claims({"id": "token-id", "public_key": 123}),
+        _token_with_claims({"id": "", "public_key": "public-key"}),
+        _token_with_claims({"id": "token-id", "public_key": ""}),
     ],
 )
-def test_strict_login_rejects_malformed_verification_token(verification_token):
+def test_message_utilities_reject_malformed_verification_tokens(verification_token):
     with pytest.raises(ValueError, match="Invalid verification token"):
-        build_strict_otp_login_request(
-            _client_stamper(),
+        get_client_signature_message_for_login_v2(
             verification_token,
-            "organization-id",
-            "session-public-key",
+            v1LoginUsageV2(
+                organizationId="organization-id",
+                publicKey="session-public-key",
+            ),
         )
 
 
-def test_strict_signup_uses_v5_root_users_and_binds_submission_payload():
-    stamper = _client_stamper()
-    verification_token = _verification_token(stamper.api_public_key)
+@pytest.mark.parametrize("mismatch", ["public_key", "message"])
+def test_login_request_rejects_client_signature_binding_mismatch(mismatch):
+    verification_token = _verification_token()
+    login_usage = v1LoginUsageV2(
+        organizationId="organization-id",
+        publicKey="session-public-key",
+    )
+    payload = get_client_signature_message_for_login_v2(
+        verification_token,
+        login_usage,
+    )
+    public_key = payload.public_key
+    message = payload.message
+    if mismatch == "public_key":
+        public_key = "different-token-public-key"
+    else:
+        message = message.replace("session-public-key", "different-session-key")
+    client_signature = v1ClientSignature(
+        publicKey=public_key,
+        scheme=v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256,
+        message=message,
+        signature="ab" * 64,
+    )
+
+    with pytest.raises(ValueError, match="does not match"):
+        build_strict_otp_login_request(
+            verification_token,
+            login_usage,
+            client_signature,
+        )
+
+
+def test_login_request_rejects_signature_from_different_verification_token_key():
+    login_usage = v1LoginUsageV2(
+        organizationId="organization-id",
+        publicKey="session-public-key",
+    )
+    first_token = _verification_token("first-token-public-key")
+    first_payload = get_client_signature_message_for_login_v2(
+        first_token,
+        login_usage,
+    )
+    client_signature = _client_signature(first_payload, FakeExternalSigner())
+
+    with pytest.raises(ValueError, match="public key does not match"):
+        build_strict_otp_login_request(
+            _verification_token("second-token-public-key"),
+            login_usage,
+            client_signature,
+        )
+
+
+def test_login_request_rejects_non_raw_client_signature():
+    verification_token = _verification_token()
+    login_usage = v1LoginUsageV2(
+        organizationId="organization-id",
+        publicKey="session-public-key",
+    )
+    payload = get_client_signature_message_for_login_v2(
+        verification_token,
+        login_usage,
+    )
+    client_signature = v1ClientSignature(
+        publicKey=payload.public_key,
+        scheme=v1ClientSignatureScheme.CLIENT_SIGNATURE_SCHEME_API_P256,
+        message=payload.message,
+        signature="not-a-raw-signature",
+    )
+
+    with pytest.raises(ValueError, match="raw P-256"):
+        build_strict_otp_login_request(
+            verification_token,
+            login_usage,
+            client_signature,
+        )
+
+
+def test_login_request_uses_fake_external_signer_and_matches_signed_usage():
+    verification_token = _verification_token()
+    login_usage = v1LoginUsageV2(
+        organizationId="organization-id",
+        publicKey="session-public-key",
+        invalidateExisting=False,
+        expirationSeconds="3600",
+        sessionProfileId="session-profile-id",
+    )
+    payload = get_client_signature_message_for_login_v2(
+        verification_token,
+        login_usage,
+    )
+    signer = FakeExternalSigner()
+    client_signature = _client_signature(payload, signer)
+
+    body = build_strict_otp_login_request(
+        verification_token,
+        login_usage,
+        client_signature,
+        timestamp_ms="1234",
+    )
+
+    assert signer.messages == [payload.message]
+    assert body.clientSignature.signature == "ab" * 64
+    signed = json.loads(payload.message)["loginV2"]
+    assert body.organizationId == signed["organizationId"]
+    assert body.publicKey == signed["publicKey"]
+    assert body.invalidateExisting is signed["invalidateExisting"]
+    assert body.expirationSeconds == signed["expirationSeconds"]
+    assert body.sessionProfileId == signed["sessionProfileId"]
+
+
+def test_signup_message_and_generated_submission_match_typed_usage():
+    verification_token = _verification_token()
     root_users = [
         v1RootUserParamsV5(
             userName="Alice",
@@ -171,7 +265,7 @@ def test_strict_signup_uses_v5_root_users_and_binds_submission_payload():
             apiKeys=[
                 v1ApiKeyParamsV2(
                     apiKeyName="Alice client key",
-                    publicKey=stamper.api_public_key,
+                    publicKey="api-public-key",
                     curveType=v1ApiKeyCurve.API_KEY_CURVE_P256,
                     expirationSeconds="86400",
                 )
@@ -208,31 +302,49 @@ def test_strict_signup_uses_v5_root_users_and_binds_submission_payload():
         ],
         mnemonicLength=24,
     )
+    signup_usage = v1SignupUsageV3(
+        parentOrganizationId="parent-organization-id",
+        subOrganizationName="Strict sub-organization",
+        rootUsers=root_users,
+        rootQuorumThreshold=2,
+        wallet=wallet,
+        disableEmailRecovery=False,
+        disableEmailAuth=True,
+        disableSmsAuth=False,
+        disableOtpEmailAuth=True,
+    )
+    payload = get_client_signature_message_for_signup_v3(
+        verification_token,
+        signup_usage,
+    )
+    assert payload.message == json.dumps(
+        {
+            "type": "USAGE_TYPE_SIGNUP",
+            "tokenId": "token-id",
+            "signupV3": signup_usage.model_dump(by_alias=True, exclude_none=True),
+        },
+        separators=(",", ":"),
+    )
+    signer = FakeExternalSigner()
+    client_signature = _client_signature(payload, signer)
 
     body = build_strict_otp_signup_request(
-        stamper,
         verification_token,
-        "parent-organization-id",
-        "Strict sub-organization",
-        root_users,
-        2,
-        wallet=wallet,
-        disable_email_recovery=False,
-        disable_email_auth=True,
-        disable_sms_auth=False,
-        disable_otp_email_auth=True,
+        signup_usage,
+        client_signature,
         timestamp_ms="1234",
     )
     client = TurnkeyClient(
         base_url="https://api.turnkey.com",
-        stamper=stamper,
+        stamper=_request_stamper(),
         organization_id="default-organization-id",
     )
     submission = json.loads(client.stamp_create_sub_organization(body).body)
 
-    assert ": " not in body.clientSignature.message
-    assert ", " not in body.clientSignature.message
-    signed = json.loads(body.clientSignature.message)
+    assert signer.messages == [payload.message]
+    assert ": " not in payload.message
+    assert ", " not in payload.message
+    signed = json.loads(payload.message)
     assert signed["type"] == "USAGE_TYPE_SIGNUP"
     assert signed["tokenId"] == "token-id"
     signed_signup = signed["signupV3"]
@@ -240,7 +352,7 @@ def test_strict_signup_uses_v5_root_users_and_binds_submission_payload():
     assert submission["timestampMs"] == "1234"
     assert submission["organizationId"] == signed_signup["parentOrganizationId"]
     assert submitted["verificationToken"] == verification_token
-    assert submitted["clientSignature"] == body.clientSignature.model_dump(
+    assert submitted["clientSignature"] == client_signature.model_dump(
         by_alias=True, exclude_none=True
     )
     assert submitted["subOrganizationName"] == signed_signup["subOrganizationName"]
@@ -255,7 +367,7 @@ def test_strict_signup_uses_v5_root_users_and_binds_submission_payload():
     assert "userEmail" not in signed_signup["rootUsers"][1]
     assert submitted["rootUsers"][0]["apiKeys"][0] == {
         "apiKeyName": "Alice client key",
-        "publicKey": stamper.api_public_key,
+        "publicKey": "api-public-key",
         "curveType": "API_KEY_CURVE_P256",
         "expirationSeconds": "86400",
     }
@@ -270,7 +382,6 @@ def test_strict_signup_uses_v5_root_users_and_binds_submission_payload():
         "path": "m/44'/60'/0'/0/0",
         "addressFormat": "ADDRESS_FORMAT_ETHEREUM",
     }
-    _assert_client_signature_verifies(body.clientSignature)
 
 
 def test_create_sub_organization_body_rejects_v4_root_user_models():
@@ -289,14 +400,12 @@ def test_create_sub_organization_body_rejects_v4_root_user_models():
         )
 
 
-def test_unversioned_create_sub_organization_stamps_v8():
-    stamper = _client_stamper()
-    body = build_strict_otp_signup_request(
-        stamper,
-        _verification_token(stamper.api_public_key),
-        "parent-organization-id",
-        "Strict sub-organization",
-        [
+def test_unversioned_create_sub_organization_uses_v8_activity_and_result():
+    verification_token = _verification_token()
+    signup_usage = v1SignupUsageV3(
+        parentOrganizationId="parent-organization-id",
+        subOrganizationName="Strict sub-organization",
+        rootUsers=[
             v1RootUserParamsV5(
                 userName="Alice",
                 apiKeys=[],
@@ -304,12 +413,21 @@ def test_unversioned_create_sub_organization_stamps_v8():
                 oauthProviders=[],
             )
         ],
-        1,
+        rootQuorumThreshold=1,
+    )
+    payload = get_client_signature_message_for_signup_v3(
+        verification_token,
+        signup_usage,
+    )
+    body = build_strict_otp_signup_request(
+        verification_token,
+        signup_usage,
+        _client_signature(payload, FakeExternalSigner()),
         timestamp_ms="1234",
     )
     client = TurnkeyClient(
         base_url="https://api.turnkey.com",
-        stamper=stamper,
+        stamper=_request_stamper(),
         organization_id="default-organization-id",
     )
 
@@ -320,12 +438,6 @@ def test_unversioned_create_sub_organization_stamps_v8():
 
     assert activity_body["type"] == "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8"
     assert result_key == "createSubOrganizationResultV8"
-
-    signed_request = client.stamp_create_sub_organization(body)
-    submitted = json.loads(signed_request.body)
-    assert submitted["type"] == "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8"
-    assert submitted["organizationId"] == "parent-organization-id"
-    assert submitted["parameters"]["rootUsers"][0]["userName"] == "Alice"
 
 
 def test_legacy_token_usage_variants_remain_usable():
