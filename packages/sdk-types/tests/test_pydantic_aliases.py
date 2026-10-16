@@ -28,7 +28,7 @@ def test_pydantic_aliases():
         organizationId="test-org",
         from_="0x1234567890123456789012345678901234567890",  # Python name with underscore
         caip2="eip155:1",
-        to="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        calls=[{"to": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"}],
     )
 
     json_dict = eth_tx.model_dump(by_alias=True, exclude_none=True)
@@ -48,14 +48,14 @@ def test_pydantic_aliases():
         "organizationId": "test-org",
         "from": "0x9999999999999999999999999999999999999999",
         "caip2": "eip155:137",
-        "to": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "calls": [{"to": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}],
     }
     parsed = EthSendTransactionBody.model_validate(json_input)
     print(f"  JSON:   {json.dumps(json_input, indent=2)}")
-    print(f"  Python: from_='{parsed.from_}', to='{parsed.to}'")
+    print(f"  Python: from_='{parsed.from_}', to='{parsed.calls[0].to}'")
 
     assert parsed.from_ == "0x9999999999999999999999999999999999999999"
-    assert parsed.to == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    assert parsed.calls[0].to == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     print("  ✅ JSON 'from' correctly parsed to Python 'from_' field")
 
     # Test 3: populate_by_name allows both names
@@ -65,7 +65,7 @@ def test_pydantic_aliases():
         "organizationId": "test-org",
         "from_": "0x7777777777777777777777777777777777777777",  # Using Python name in JSON
         "caip2": "eip155:1",
-        "to": "0x8888888888888888888888888888888888888888",
+        "calls": [{"to": "0x8888888888888888888888888888888888888888"}],
     }
     parsed2 = EthSendTransactionBody.model_validate(json_with_python_name)
     print(f"  JSON (Python name): {json.dumps(json_with_python_name, indent=2)}")
