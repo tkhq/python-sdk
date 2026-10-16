@@ -39,6 +39,23 @@ response = client.get_whoami()
 print(response)
 ```
 
+## Handling activity outcomes
+
+Activity methods such as `create_wallet` wait for the activity to finish. If it does not complete, they raise an error. `TurnkeyActivityConsensusNeededError` means the activity needs more approvals. `TurnkeyActivityError` means it failed, was rejected, or was still pending when polling stopped. Both errors carry `activity_id`, `activity_status`, `activity_type`, and `failure`.
+
+```python
+from turnkey_sdk_types import TurnkeyActivityConsensusNeededError, TurnkeyActivityError
+
+try:
+    wallet = client.create_wallet(body)
+except TurnkeyActivityConsensusNeededError as err:
+    save_for_later(err.activity_id)  # fetch it again with get_activity after approval
+except TurnkeyActivityError as err:
+    print(err.activity_status, err.failure)
+```
+
+Catch `TurnkeyActivityConsensusNeededError` first, because it is a subclass of `TurnkeyActivityError`.
+
 ## Code Generation
 
 This package uses code generation to create HTTP client methods from the OpenAPI specification located in `schema/public_api.swagger.json`.
