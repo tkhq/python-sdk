@@ -1,0 +1,4 @@
+type: minor
+packages: [ http, sdk-types ]
+changelog: |-
+  Regenerate the SDK from the current public API schema. Main additions: send transaction V2 (eth_send_transaction and sol_send_transaction now use the V2 intents), swaps, earn, secrets, and transaction history.
