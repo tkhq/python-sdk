@@ -268,7 +268,9 @@ class TurnkeyClient:
         stamping methods (stamp_create_api_keys, stamp_get_policies, etc.).
 
         For activities, this will poll until the activity reaches a terminal status.
-        If the activity does not complete, this raises TurnkeyActivityError.
+        If response_type is given and the activity does not complete, this raises
+        TurnkeyActivityError. Without response_type, it returns the raw payload
+        for every status so the caller can inspect the activity.
 
         Args:
             signed_request: A SignedRequest object returned by a stamping method.
@@ -280,7 +282,7 @@ class TurnkeyClient:
 
         Raises:
             TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
-            TurnkeyActivityError: If the activity did not complete.
+            TurnkeyActivityError: If response_type is given and the activity did not complete.
             TurnkeyNetworkError: If the request fails.
         """
         headers = {
@@ -332,11 +334,14 @@ class TurnkeyClient:
             )
             payload["activity"] = activity_dict
 
-            self._raise_for_activity_status(activity)
+            # Typed callers get an error if the activity did not complete.
+            # Without a response_type, return the raw payload for every status.
+            if response_type is not None:
+                self._raise_for_activity_status(activity)
 
             # Flatten the result that is set (e.g., createPolicyResult, createSubOrganizationResultV7)
             result = activity.result
-            if result is not None:
+            if activity.status == "ACTIVITY_STATUS_COMPLETED" and result is not None:
                 for field_name in type(result).model_fields:
                     result_data = getattr(result, field_name, None)
                     if result_data is not None:

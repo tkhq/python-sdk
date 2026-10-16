@@ -233,7 +233,7 @@ def test_generic_path_unpacks_versioned_result_key(client, mock_post):
     assert response.rootUserIds == ["u-1"]
 
 
-def test_generic_path_raises_on_failed_activity(client, mock_post):
+def test_generic_path_with_type_raises_on_failed_activity(client, mock_post):
     mock_post(
         activity_payload(
             "ACTIVITY_STATUS_FAILED",
@@ -243,7 +243,56 @@ def test_generic_path_raises_on_failed_activity(client, mock_post):
     )
 
     with pytest.raises(TurnkeyActivityError) as exc_info:
-        client.send_signed_request(signed_activity_request())
+        client.send_signed_request(
+            signed_activity_request(), CreateSubOrganizationResponse
+        )
 
     assert exc_info.value.failure == "quota exceeded"
     assert exc_info.value.activity_id == ACTIVITY_ID
+
+
+def test_raw_path_returns_failed_activity(client, mock_post):
+    mock_post(
+        activity_payload(
+            "ACTIVITY_STATUS_FAILED",
+            activity_type="ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
+            failure={"code": 7, "message": "policy denied"},
+        )
+    )
+
+    payload = client.send_signed_request(signed_activity_request())
+
+    assert isinstance(payload, dict)
+    assert payload["activity"]["id"] == ACTIVITY_ID
+    assert payload["activity"]["status"] == "ACTIVITY_STATUS_FAILED"
+    assert payload["activity"]["failure"]["message"] == "policy denied"
+
+
+def test_raw_path_returns_consensus_needed_activity(client, mock_post):
+    mock_post(
+        activity_payload(
+            "ACTIVITY_STATUS_CONSENSUS_NEEDED",
+            activity_type="ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
+        )
+    )
+
+    payload = client.send_signed_request(signed_activity_request())
+
+    assert isinstance(payload, dict)
+    assert payload["activity"]["id"] == ACTIVITY_ID
+    assert payload["activity"]["status"] == "ACTIVITY_STATUS_CONSENSUS_NEEDED"
+
+
+def test_raw_path_unpacks_versioned_result_key(client, mock_post):
+    mock_post(
+        activity_payload(
+            "ACTIVITY_STATUS_COMPLETED",
+            activity_type="ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V7",
+            result={"createSubOrganizationResultV7": {"subOrganizationId": "sub-1"}},
+        )
+    )
+
+    payload = client.send_signed_request(signed_activity_request())
+
+    assert payload["subOrganizationId"] == "sub-1"
+    assert payload["activity"]["status"] == "ACTIVITY_STATUS_COMPLETED"
