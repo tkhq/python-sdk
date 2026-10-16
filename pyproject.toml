@@ -16,6 +16,11 @@ dev = [
     "pytest>=7.0.0",
 ]
 
+[tool.ruff]
+# Markdown formatting arrived in a later ruff than this repo was written for.
+# Python in the READMEs is prose, not code, so leave it alone.
+extend-exclude = ["*.md"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = false
