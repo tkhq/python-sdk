@@ -146,6 +146,53 @@ class TurnkeyClient:
 
         return activity
 
+    def _raise_for_activity_status(self, activity: Any) -> None:
+        """Raise a typed error if an activity did not complete.
+
+        Args:
+            activity: Activity object after polling.
+
+        Raises:
+            TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
+            TurnkeyActivityError: If the activity failed, was rejected, or polling
+                stopped before it reached a terminal status.
+        """
+        status = getattr(activity.status, "value", activity.status)
+        if status == "ACTIVITY_STATUS_COMPLETED":
+            return
+
+        activity_type = getattr(activity.type, "value", activity.type)
+        failure = getattr(activity, "failure", None)
+        failure_message = getattr(failure, "message", None) if failure else None
+
+        if status == "ACTIVITY_STATUS_CONSENSUS_NEEDED":
+            raise TurnkeyActivityConsensusNeededError(
+                f"Consensus needed for activity {activity.id}",
+                activity_id=activity.id,
+                activity_status=status,
+                activity_type=activity_type,
+                failure=failure_message,
+            )
+
+        if status == "ACTIVITY_STATUS_FAILED":
+            message = f"Activity {activity.id} failed"
+        elif status == "ACTIVITY_STATUS_REJECTED":
+            message = f"Activity {activity.id} was rejected"
+        elif status in TERMINAL_ACTIVITY_STATUSES:
+            message = f"Activity {activity.id} ended with status {status}"
+        else:
+            message = (
+                f"Activity {activity.id} did not reach a terminal status after polling"
+            )
+
+        raise TurnkeyActivityError(
+            message,
+            activity_id=activity.id,
+            activity_status=status,
+            activity_type=activity_type,
+            failure=failure_message,
+        )
+
     def _activity(
         self, url: str, body: Dict[str, Any], result_key: str, response_type: type
     ) -> Any:
@@ -159,34 +206,35 @@ class TurnkeyClient:
 
         Returns:
             Parsed response as Pydantic model with flattened result fields
+
+        Raises:
+            TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
+            TurnkeyActivityError: If the activity did not complete, or completed
+                without the expected result.
+            TurnkeyNetworkError: If a request fails.
         """
         # Make initial request, we parse as activity response without result fields
         initial_response = self._request(url, body, GetActivityResponse)
 
         # Poll for completion
         activity = self._poll_for_completion(initial_response.activity)
+        self._raise_for_activity_status(activity)
 
-        # If activity completed successfully, flatten result fields into response
-        if (
-            activity.status == "ACTIVITY_STATUS_COMPLETED"
-            and hasattr(activity, "result")
-            and activity.result
-        ):
-            result = activity.result
-            # Get the versioned result key (e.g., 'createApiKeysResultV2')
-            if hasattr(result, result_key):
-                result_data = getattr(result, result_key)
-                if result_data and hasattr(result_data, "model_dump"):
-                    # Flatten result fields into response
-                    result_dict = result_data.model_dump(
-                        by_alias=True, exclude_none=True
-                    )
-                    # Construct final response with activity and result fields
-                    response = response_type(activity=activity, **result_dict)
-                    return response
+        # Get the versioned result (e.g., 'createApiKeysResultV2') and flatten its fields into the response
+        result_data = (
+            getattr(activity.result, result_key, None) if activity.result else None
+        )
+        if result_data is None:
+            raise TurnkeyActivityError(
+                f"Activity {activity.id} completed without a {result_key} result",
+                activity_id=activity.id,
+                activity_status=getattr(activity.status, "value", activity.status),
+                activity_type=getattr(activity.type, "value", activity.type),
+                code=TurnkeyErrorCodes.ACTIVITY_RESULT_MISSING,
+            )
 
-        # Return response with just the activity (no result fields)
-        return response_type(activity=activity)
+        result_dict = result_data.model_dump(by_alias=True, exclude_none=True)
+        return response_type(activity=activity, **result_dict)
 
     def _activity_decision(
         self, url: str, body: Dict[str, Any], response_type: type
@@ -220,6 +268,7 @@ class TurnkeyClient:
         stamping methods (stamp_create_api_keys, stamp_get_policies, etc.).
 
         For activities, this will poll until the activity reaches a terminal status.
+        If the activity does not complete, this raises TurnkeyActivityError.
 
         Args:
             signed_request: A SignedRequest object returned by a stamping method.
@@ -230,6 +279,8 @@ class TurnkeyClient:
             The parsed response via response_type, or raw JSON dict if no type provided.
 
         Raises:
+            TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
+            TurnkeyActivityError: If the activity did not complete.
             TurnkeyNetworkError: If the request fails.
         """
         headers = {
@@ -281,10 +332,11 @@ class TurnkeyClient:
             )
             payload["activity"] = activity_dict
 
-            # Flatten the result that is set, whatever its version suffix
-            # (e.g., createPolicyResult, ethSendTransactionResultV2, createSubOrganizationResultV7)
+            self._raise_for_activity_status(activity)
+
+            # Flatten the result that is set (e.g., createPolicyResult, createSubOrganizationResultV7)
             result = activity.result
-            if activity.status == "ACTIVITY_STATUS_COMPLETED" and result is not None:
+            if result is not None:
                 for field_name in type(result).model_fields:
                     result_data = getattr(result, field_name, None)
                     if result_data is not None:
