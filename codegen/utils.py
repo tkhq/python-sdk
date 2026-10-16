@@ -72,9 +72,11 @@ def method_type_from_method_name(method_name: str) -> str:
         method_name_lower.startswith("get")
         or method_name_lower.startswith("list")
         or method_name_lower.startswith("test")
+        or method_name_lower.startswith("validate")
         or method_name_lower.startswith("tget")
         or method_name_lower.startswith("tlist")
         or method_name_lower.startswith("ttest")
+        or method_name_lower.startswith("tvalidate")
     ):
         return "query"
     return "activity"

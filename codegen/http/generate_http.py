@@ -2,6 +2,7 @@
 """Generate HTTP client from OpenAPI specification."""
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from utils import (
     extract_latest_versions,
     method_type_from_method_name,
     resolve_versioned_activity_type,
+    get_versioned_result_type,
 )
 
 # Get the project root directory
@@ -28,6 +30,20 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 SCHEMA_PATH = PROJECT_ROOT / "schema" / "public_api.swagger.json"
 OUTPUT_DIR = PROJECT_ROOT / "packages" / "http" / "src" / "turnkey_http" / "generated"
 OUTPUT_FILE = OUTPUT_DIR / "client.py"
+
+
+def get_request_activity_type(
+    definitions: Dict[str, Any], operation: Dict[str, Any]
+) -> str | None:
+    """Return the activity type from the request definition's "type" enum, if any."""
+    for param in operation.get("parameters", []):
+        if param.get("in") == "body" and "$ref" in param.get("schema", {}):
+            request_type_name = param["schema"]["$ref"].replace("#/definitions/", "")
+            request_def = definitions.get(request_type_name, {})
+            enum = request_def.get("properties", {}).get("type", {}).get("enum")
+            if enum:
+                return enum[0]
+    return None
 
 
 def generate_sdk_client(swagger: Dict[str, Any]) -> str:
@@ -425,8 +441,34 @@ class TurnkeyClient:
 """)
 
         elif method_type == "activity":
-            result_key = operation_name_without_namespace + "Result"
-            versioned_method_name = latest_versions[result_key]["formatted_key_name"]
+            # Use the activity type from the request definition. A pinned
+            # version in VERSIONED_ACTIVITY_TYPES takes precedence.
+            schema_activity_type = get_request_activity_type(
+                swagger["definitions"], operation
+            )
+            if schema_activity_type:
+                unversioned_activity_type = re.sub(r"_V\d+$", "", schema_activity_type)
+                pinned_activity_type = resolve_versioned_activity_type(
+                    unversioned_activity_type
+                )
+                versioned_activity_type = (
+                    pinned_activity_type
+                    if pinned_activity_type != unversioned_activity_type
+                    else schema_activity_type
+                )
+
+            # Use the pinned result type if there is one, else the latest version
+            pinned_result_type = get_versioned_result_type(unversioned_activity_type)
+            if pinned_result_type and pinned_result_type in swagger["definitions"]:
+                pinned_result_key = re.sub(r"^v\d+", "", pinned_result_type)
+                versioned_method_name = (
+                    pinned_result_key[0].lower() + pinned_result_key[1:]
+                )
+            else:
+                result_key = operation_name_without_namespace + "Result"
+                versioned_method_name = latest_versions[result_key][
+                    "formatted_key_name"
+                ]
 
             code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
