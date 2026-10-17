@@ -46,6 +46,51 @@ def get_request_activity_type(
     return None
 
 
+VERSIONS_FILE = PROJECT_ROOT / "codegen" / "activity_versions.json"
+
+# Filled while generating: snake_case method name -> activity type the client sends.
+SENT_ACTIVITY_TYPES: Dict[str, str] = {}
+
+
+def check_activity_versions(sent: Dict[str, str]) -> None:
+    """Fail when a method's sent activity type differs from codegen/activity_versions.json.
+
+    A regen takes unpinned activity versions from the schema, so a new schema can move a
+    method to a new version with only a one-line change buried in client.py. This makes
+    every such move a visible diff in the snapshot. Set CODEGEN_ACCEPT_VERSION_CHANGES=1
+    to rewrite the snapshot after reviewing the moves.
+    """
+    import os
+
+    previous: Dict[str, str] = {}
+    if VERSIONS_FILE.exists():
+        previous = json.loads(VERSIONS_FILE.read_text())
+    moved = {
+        name: (previous.get(name), sent[name])
+        for name in sorted(sent)
+        if previous.get(name) != sent[name]
+    }
+    if not moved and VERSIONS_FILE.exists():
+        return
+    if (
+        moved
+        and VERSIONS_FILE.exists()
+        and not os.environ.get("CODEGEN_ACCEPT_VERSION_CHANGES")
+    ):
+        lines = [
+            f"  {name}: {old or '(new)'} -> {new}" for name, (old, new) in moved.items()
+        ]
+        raise SystemExit(
+            "Activity versions changed for these methods:\n"
+            + "\n".join(lines)
+            + "\nPin them in codegen/constants.py to keep the old version, or list the moves "
+            "in the PR and rerun with CODEGEN_ACCEPT_VERSION_CHANGES=1 to update "
+            f"{VERSIONS_FILE.name}."
+        )
+    VERSIONS_FILE.write_text(json.dumps(dict(sorted(sent.items())), indent=2) + "\n")
+    print(f"📝 Updated {VERSIONS_FILE} ({len(moved)} change(s))")
+
+
 def generate_sdk_client(swagger: Dict[str, Any]) -> str:
     """Generate the SDK client from Swagger spec."""
     namespace = next(
@@ -454,6 +499,8 @@ class TurnkeyClient:
                     else schema_activity_type
                 )
 
+            SENT_ACTIVITY_TYPES[snake_method_name] = versioned_activity_type
+
             # Use the pinned result type if there is one, else the latest version
             pinned_result_type = get_versioned_result_type(unversioned_activity_type)
             if pinned_result_type and pinned_result_type in swagger["definitions"]:
@@ -594,6 +641,8 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Write output
+    check_activity_versions(SENT_ACTIVITY_TYPES)
+
     with open(OUTPUT_FILE, "w") as f:
         f.write(output)
 
