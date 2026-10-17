@@ -1,4 +1,13 @@
 type: minor
 packages: [ http, sdk-types ]
 changelog: |-
-  Regenerate the SDK from the current public API schema. Main additions: send transaction V2 (eth_send_transaction and sol_send_transaction now use the V2 intents), swaps, earn, secrets, and transaction history.
+  Regenerate the SDK from the current public API schema. Main additions: send transaction V2 (eth_send_transaction and sol_send_transaction now use the V2 intents), swaps, earn, secrets, and transaction history. The default polling budget is now 10 retries at 1 second (was 3), and send_signed_request flattens versioned result keys such as ethSendTransactionResultV2.
+
+  Breaking changes:
+  - EthSendTransactionBody uses the V2 intent: `to`, `value`, and `data` are gone; `calls: List[v1EthCallParams]` is required.
+  - SolSendTransactionBody uses the V2 intent: `signWith` is gone; `signWiths: List[str]` is required.
+  - CreateOauthProvidersBody.oauthProviders is `List[v1OauthProviderParamsV2]`, and the method sends V2.
+  - Oauth2AuthenticateBody.nonce is required.
+  - v1User.mfaPolicies is a required response field.
+  - v1FiatOnRampBlockchainNetwork no longer has FIAT_ON_RAMP_BLOCKCHAIN_NETWORK_BITCOIN.
+  - v1CreateTvcDeploymentIntent drops pivotBindAddresses and requires healthCheckType, healthCheckPort, and publicIngressPort.
