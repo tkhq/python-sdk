@@ -28,7 +28,7 @@ class TurnkeyClient:
         organization_id: str,
         default_timeout: int = 30,
         polling_interval_ms: int = 1000,
-        max_polling_retries: int = 3,
+        max_polling_retries: int = 10,
     ):
         """Initialize the Turnkey client.
 
@@ -281,24 +281,17 @@ class TurnkeyClient:
             )
             payload["activity"] = activity_dict
 
-            # Extract result fields if activity completed successfully
-            if (
-                activity.status == "ACTIVITY_STATUS_COMPLETED"
-                and hasattr(activity, "result")
-                and activity.result
-            ):
-                result = activity.result
-                # Find the first result field (e.g., createApiKeysResult, createPolicyResult, etc.)
-                for attr_name in dir(result):
-                    if not attr_name.startswith("_") and attr_name.endswith("Result"):
-                        result_data = getattr(result, attr_name, None)
-                        if result_data and hasattr(result_data, "model_dump"):
-                            # Flatten result fields into payload
-                            result_dict = result_data.model_dump(
-                                by_alias=True, exclude_none=True
-                            )
-                            payload.update(result_dict)
-                            break
+            # Flatten the result that is set, whatever its version suffix
+            # (e.g., createPolicyResult, ethSendTransactionResultV2, createSubOrganizationResultV7)
+            result = activity.result
+            if activity.status == "ACTIVITY_STATUS_COMPLETED" and result is not None:
+                for field_name in type(result).model_fields:
+                    result_data = getattr(result, field_name, None)
+                    if result_data is not None:
+                        payload.update(
+                            result_data.model_dump(by_alias=True, exclude_none=True)
+                        )
+                        break
 
         return response_type(**payload) if response_type is not None else payload
 
