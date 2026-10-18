@@ -28,7 +28,7 @@ class TurnkeyClient:
         organization_id: str,
         default_timeout: int = 30,
         polling_interval_ms: int = 1000,
-        max_polling_retries: int = 3,
+        max_polling_retries: int = 10,
     ):
         """Initialize the Turnkey client.
 
@@ -281,26 +281,51 @@ class TurnkeyClient:
             )
             payload["activity"] = activity_dict
 
-            # Extract result fields if activity completed successfully
-            if (
-                activity.status == "ACTIVITY_STATUS_COMPLETED"
-                and hasattr(activity, "result")
-                and activity.result
-            ):
-                result = activity.result
-                # Find the first result field (e.g., createApiKeysResult, createPolicyResult, etc.)
-                for attr_name in dir(result):
-                    if not attr_name.startswith("_") and attr_name.endswith("Result"):
-                        result_data = getattr(result, attr_name, None)
-                        if result_data and hasattr(result_data, "model_dump"):
-                            # Flatten result fields into payload
-                            result_dict = result_data.model_dump(
-                                by_alias=True, exclude_none=True
-                            )
-                            payload.update(result_dict)
-                            break
+            # Flatten the result that is set, whatever its version suffix
+            # (e.g., createPolicyResult, ethSendTransactionResultV2, createSubOrganizationResultV7)
+            result = activity.result
+            if activity.status == "ACTIVITY_STATUS_COMPLETED" and result is not None:
+                for field_name in type(result).model_fields:
+                    result_data = getattr(result, field_name, None)
+                    if result_data is not None:
+                        payload.update(
+                            result_data.model_dump(by_alias=True, exclude_none=True)
+                        )
+                        break
 
         return response_type(**payload) if response_type is not None else payload
+
+    def get_active_policies(
+        self, input: GetActivePoliciesBody
+    ) -> GetActivePoliciesResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_active_policies", body, GetActivePoliciesResponse
+        )
+
+    def stamp_get_active_policies(self, input: GetActivePoliciesBody) -> SignedRequest:
+        """Stamp a getActivePolicies request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_active_policies"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
 
     def get_activity(self, input: GetActivityBody) -> GetActivityResponse:
         # Convert Pydantic model to dict
@@ -389,6 +414,36 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         full_url = self.base_url + "/public/v1/query/get_api_keys"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_app_status(self, input: GetAppStatusBody) -> GetAppStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_app_status", body, GetAppStatusResponse
+        )
+
+    def stamp_get_app_status(self, input: GetAppStatusBody) -> SignedRequest:
+        """Stamp a getAppStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_app_status"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -490,6 +545,184 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
         )
 
+    def get_claim_earn_fees_status(
+        self, input: GetClaimEarnFeesStatusBody
+    ) -> GetClaimEarnFeesStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_claim_earn_fees_status",
+            body,
+            GetClaimEarnFeesStatusResponse,
+        )
+
+    def stamp_get_claim_earn_fees_status(
+        self, input: GetClaimEarnFeesStatusBody
+    ) -> SignedRequest:
+        """Stamp a getClaimEarnFeesStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_claim_earn_fees_status"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_earn_claim_rewards_status(
+        self, input: GetEarnClaimRewardsStatusBody
+    ) -> GetEarnClaimRewardsStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_earn_claim_rewards_status",
+            body,
+            GetEarnClaimRewardsStatusResponse,
+        )
+
+    def stamp_get_earn_claim_rewards_status(
+        self, input: GetEarnClaimRewardsStatusBody
+    ) -> SignedRequest:
+        """Stamp a getEarnClaimRewardsStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_earn_claim_rewards_status"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_earn_deploy_status(
+        self, input: GetEarnDeployStatusBody
+    ) -> GetEarnDeployStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_earn_deploy_status", body, GetEarnDeployStatusResponse
+        )
+
+    def stamp_get_earn_deploy_status(
+        self, input: GetEarnDeployStatusBody
+    ) -> SignedRequest:
+        """Stamp a getEarnDeployStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_earn_deploy_status"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_earn_deposit_status(
+        self, input: GetEarnDepositStatusBody
+    ) -> GetEarnDepositStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_earn_deposit_status",
+            body,
+            GetEarnDepositStatusResponse,
+        )
+
+    def stamp_get_earn_deposit_status(
+        self, input: GetEarnDepositStatusBody
+    ) -> SignedRequest:
+        """Stamp a getEarnDepositStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_earn_deposit_status"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_earn_withdraw_status(
+        self, input: GetEarnWithdrawStatusBody
+    ) -> GetEarnWithdrawStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_earn_withdraw_status",
+            body,
+            GetEarnWithdrawStatusResponse,
+        )
+
+    def stamp_get_earn_withdraw_status(
+        self, input: GetEarnWithdrawStatusBody
+    ) -> SignedRequest:
+        """Stamp a getEarnWithdrawStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_earn_withdraw_status"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
     def get_gas_usage(self, input: GetGasUsageBody) -> GetGasUsageResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
@@ -513,6 +746,36 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         full_url = self.base_url + "/public/v1/query/get_gas_usage"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_ip_allowlist(self, input: GetIpAllowlistBody) -> GetIpAllowlistResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_ip_allowlist", body, GetIpAllowlistResponse
+        )
+
+    def stamp_get_ip_allowlist(self, input: GetIpAllowlistBody) -> SignedRequest:
+        """Stamp a getIpAllowlist request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_ip_allowlist"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -547,6 +810,96 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         full_url = self.base_url + "/public/v1/query/get_latest_boot_proof"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_mfa_policies(self, input: GetMfaPoliciesBody) -> GetMfaPoliciesResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_mfa_policies", body, GetMfaPoliciesResponse
+        )
+
+    def stamp_get_mfa_policies(self, input: GetMfaPoliciesBody) -> SignedRequest:
+        """Stamp a getMfaPolicies request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_mfa_policies"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_mfa_policy(self, input: GetMfaPolicyBody) -> GetMfaPolicyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_mfa_policy", body, GetMfaPolicyResponse
+        )
+
+    def stamp_get_mfa_policy(self, input: GetMfaPolicyBody) -> SignedRequest:
+        """Stamp a getMfaPolicy request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_mfa_policy"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_mfa_status(self, input: GetMfaStatusBody) -> GetMfaStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_mfa_status", body, GetMfaStatusResponse
+        )
+
+    def stamp_get_mfa_status(self, input: GetMfaStatusBody) -> SignedRequest:
+        """Stamp a getMfaStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_mfa_status"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -850,6 +1203,72 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
         )
 
+    def get_session_profile(
+        self, input: GetSessionProfileBody
+    ) -> GetSessionProfileResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_session_profile", body, GetSessionProfileResponse
+        )
+
+    def stamp_get_session_profile(self, input: GetSessionProfileBody) -> SignedRequest:
+        """Stamp a getSessionProfile request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_session_profile"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_session_profiles(
+        self, input: GetSessionProfilesBody
+    ) -> GetSessionProfilesResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_session_profiles", body, GetSessionProfilesResponse
+        )
+
+    def stamp_get_session_profiles(
+        self, input: GetSessionProfilesBody
+    ) -> SignedRequest:
+        """Stamp a getSessionProfiles request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_session_profiles"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
     def get_smart_contract_interface(
         self, input: GetSmartContractInterfaceBody
     ) -> GetSmartContractInterfaceResponse:
@@ -879,6 +1298,238 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         full_url = self.base_url + "/public/v1/query/get_smart_contract_interface"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_swap_sponsorship_usage(
+        self, input: GetSwapSponsorshipUsageBody
+    ) -> GetSwapSponsorshipUsageResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_swap_sponsorship_usage",
+            body,
+            GetSwapSponsorshipUsageResponse,
+        )
+
+    def stamp_get_swap_sponsorship_usage(
+        self, input: GetSwapSponsorshipUsageBody
+    ) -> SignedRequest:
+        """Stamp a getSwapSponsorshipUsage request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_swap_sponsorship_usage"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_swap_status(self, input: GetSwapStatusBody) -> GetSwapStatusResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_swap_status", body, GetSwapStatusResponse
+        )
+
+    def stamp_get_swap_status(self, input: GetSwapStatusBody) -> SignedRequest:
+        """Stamp a getSwapStatus request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_swap_status"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_app(self, input: GetTvcAppBody) -> GetTvcAppResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/get_tvc_app", body, GetTvcAppResponse)
+
+    def stamp_get_tvc_app(self, input: GetTvcAppBody) -> SignedRequest:
+        """Stamp a getTvcApp request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_tvc_app"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_deployment(
+        self, input: GetTvcDeploymentBody
+    ) -> GetTvcDeploymentResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_tvc_deployment", body, GetTvcDeploymentResponse
+        )
+
+    def stamp_get_tvc_deployment(self, input: GetTvcDeploymentBody) -> SignedRequest:
+        """Stamp a getTvcDeployment request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_tvc_deployment"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_deployment_debug_logs(
+        self, input: GetTvcDeploymentDebugLogsBody
+    ) -> GetTvcDeploymentDebugLogsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_tvc_deployment_debug_logs",
+            body,
+            GetTvcDeploymentDebugLogsResponse,
+        )
+
+    def stamp_get_tvc_deployment_debug_logs(
+        self, input: GetTvcDeploymentDebugLogsBody
+    ) -> SignedRequest:
+        """Stamp a getTvcDeploymentDebugLogs request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_tvc_deployment_debug_logs"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_deployment_provisioning_details(
+        self, input: GetTvcDeploymentProvisioningDetailsBody
+    ) -> GetTvcDeploymentProvisioningDetailsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_tvc_deployment_provisioning_details",
+            body,
+            GetTvcDeploymentProvisioningDetailsResponse,
+        )
+
+    def stamp_get_tvc_deployment_provisioning_details(
+        self, input: GetTvcDeploymentProvisioningDetailsBody
+    ) -> SignedRequest:
+        """Stamp a getTvcDeploymentProvisioningDetails request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = (
+            self.base_url + "/public/v1/query/get_tvc_deployment_provisioning_details"
+        )
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_qos_versions(
+        self, input: GetTvcQosVersionsBody
+    ) -> GetTvcQosVersionsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/get_tvc_qos_versions", body, GetTvcQosVersionsResponse
+        )
+
+    def stamp_get_tvc_qos_versions(self, input: GetTvcQosVersionsBody) -> SignedRequest:
+        """Stamp a getTvcQosVersions request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/get_tvc_qos_versions"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -1080,6 +1731,200 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
         )
 
+    def list_earn_enabled_vaults(
+        self, input: ListEarnEnabledVaultsBody
+    ) -> ListEarnEnabledVaultsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_earn_enabled_vaults",
+            body,
+            ListEarnEnabledVaultsResponse,
+        )
+
+    def stamp_list_earn_enabled_vaults(
+        self, input: ListEarnEnabledVaultsBody
+    ) -> SignedRequest:
+        """Stamp a listEarnEnabledVaults request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_earn_enabled_vaults"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def list_earn_positions(
+        self, input: ListEarnPositionsBody
+    ) -> ListEarnPositionsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_earn_positions", body, ListEarnPositionsResponse
+        )
+
+    def stamp_list_earn_positions(self, input: ListEarnPositionsBody) -> SignedRequest:
+        """Stamp a listEarnPositions request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_earn_positions"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def list_earn_rewards(self, input: ListEarnRewardsBody) -> ListEarnRewardsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_earn_rewards", body, ListEarnRewardsResponse
+        )
+
+    def stamp_list_earn_rewards(self, input: ListEarnRewardsBody) -> SignedRequest:
+        """Stamp a listEarnRewards request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_earn_rewards"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def list_earn_vaults(self, input: ListEarnVaultsBody) -> ListEarnVaultsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_earn_vaults", body, ListEarnVaultsResponse
+        )
+
+    def stamp_list_earn_vaults(self, input: ListEarnVaultsBody) -> SignedRequest:
+        """Stamp a listEarnVaults request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_earn_vaults"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def list_email_events(self, input: ListEmailEventsBody) -> ListEmailEventsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_email_events", body, ListEmailEventsResponse
+        )
+
+    def stamp_list_email_events(self, input: ListEmailEventsBody) -> SignedRequest:
+        """Stamp a listEmailEvents request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_email_events"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def list_eth_transaction_history(
+        self, input: ListEthTransactionHistoryBody
+    ) -> ListEthTransactionHistoryResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_eth_transaction_history",
+            body,
+            ListEthTransactionHistoryResponse,
+        )
+
+    def stamp_list_eth_transaction_history(
+        self, input: ListEthTransactionHistoryBody
+    ) -> SignedRequest:
+        """Stamp a listEthTransactionHistory request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_eth_transaction_history"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
     def list_fiat_on_ramp_credentials(
         self, input: ListFiatOnRampCredentialsBody
     ) -> ListFiatOnRampCredentialsResponse:
@@ -1266,6 +2111,34 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
         )
 
+    def list_secrets(self, input: ListSecretsBody) -> ListSecretsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/list_secrets", body, ListSecretsResponse)
+
+    def stamp_list_secrets(self, input: ListSecretsBody) -> SignedRequest:
+        """Stamp a listSecrets request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_secrets"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
     def get_smart_contract_interfaces(
         self, input: GetSmartContractInterfacesBody
     ) -> GetSmartContractInterfacesResponse:
@@ -1295,6 +2168,42 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         full_url = self.base_url + "/public/v1/query/list_smart_contract_interfaces"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def list_sol_transaction_history(
+        self, input: ListSolTransactionHistoryBody
+    ) -> ListSolTransactionHistoryResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_sol_transaction_history",
+            body,
+            ListSolTransactionHistoryResponse,
+        )
+
+    def stamp_list_sol_transaction_history(
+        self, input: ListSolTransactionHistoryBody
+    ) -> SignedRequest:
+        """Stamp a listSolTransactionHistory request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_sol_transaction_history"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -1369,6 +2278,132 @@ class TurnkeyClient:
         body = {"organizationId": organization_id, **input_dict}
 
         full_url = self.base_url + "/public/v1/query/list_supported_assets"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_app_deployments(
+        self, input: GetTvcAppDeploymentsBody
+    ) -> GetTvcAppDeploymentsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_tvc_app_deployments",
+            body,
+            GetTvcAppDeploymentsResponse,
+        )
+
+    def stamp_get_tvc_app_deployments(
+        self, input: GetTvcAppDeploymentsBody
+    ) -> SignedRequest:
+        """Stamp a getTvcAppDeployments request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_tvc_app_deployments"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_apps(self, input: GetTvcAppsBody) -> GetTvcAppsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request("/public/v1/query/list_tvc_apps", body, GetTvcAppsResponse)
+
+    def stamp_get_tvc_apps(self, input: GetTvcAppsBody) -> SignedRequest:
+        """Stamp a getTvcApps request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_tvc_apps"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_operators(self, input: GetTvcOperatorsBody) -> GetTvcOperatorsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_tvc_operators", body, GetTvcOperatorsResponse
+        )
+
+    def stamp_get_tvc_operators(self, input: GetTvcOperatorsBody) -> SignedRequest:
+        """Stamp a getTvcOperators request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_tvc_operators"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def get_tvc_quorum_keys(
+        self, input: GetTvcQuorumKeysBody
+    ) -> GetTvcQuorumKeysResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_tvc_quorum_keys", body, GetTvcQuorumKeysResponse
+        )
+
+    def stamp_get_tvc_quorum_keys(self, input: GetTvcQuorumKeysBody) -> SignedRequest:
+        """Stamp a getTvcQuorumKeys request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_tvc_quorum_keys"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -1552,6 +2587,74 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
         )
 
+    def list_webhook_endpoints(
+        self, input: ListWebhookEndpointsBody
+    ) -> ListWebhookEndpointsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/list_webhook_endpoints",
+            body,
+            ListWebhookEndpointsResponse,
+        )
+
+    def stamp_list_webhook_endpoints(
+        self, input: ListWebhookEndpointsBody
+    ) -> SignedRequest:
+        """Stamp a listWebhookEndpoints request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/list_webhook_endpoints"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
+    def validate_tvc_image(
+        self, input: ValidateTvcImageBody
+    ) -> ValidateTvcImageResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        return self._request(
+            "/public/v1/query/validate_tvc_image", body, ValidateTvcImageResponse
+        )
+
+    def stamp_validate_tvc_image(self, input: ValidateTvcImageBody) -> SignedRequest:
+        """Stamp a validateTvcImage request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+
+        body = {"organizationId": organization_id, **input_dict}
+
+        full_url = self.base_url + "/public/v1/query/validate_tvc_image"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.QUERY
+        )
+
     def get_whoami(self, input: Optional[GetWhoamiBody] = None) -> GetWhoamiResponse:
         if input is None:
             input_dict = {}
@@ -1626,6 +2729,96 @@ class TurnkeyClient:
 
         return SignedRequest(
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY_DECISION
+        )
+
+    def claim_earn_fees(self, input: ClaimEarnFeesBody) -> ClaimEarnFeesResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CLAIM_EARN_FEES",
+        }
+
+        return self._activity(
+            "/public/v1/submit/claim_earn_fees",
+            body,
+            "claimEarnFeesResult",
+            ClaimEarnFeesResponse,
+        )
+
+    def stamp_claim_earn_fees(self, input: ClaimEarnFeesBody) -> SignedRequest:
+        """Stamp a claimEarnFees request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CLAIM_EARN_FEES",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/claim_earn_fees"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def claim_swap_fees(self, input: ClaimSwapFeesBody) -> ClaimSwapFeesResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CLAIM_SWAP_FEES",
+        }
+
+        return self._activity(
+            "/public/v1/submit/claim_swap_fees",
+            body,
+            "claimSwapFeesResult",
+            ClaimSwapFeesResponse,
+        )
+
+    def stamp_claim_swap_fees(self, input: ClaimSwapFeesBody) -> SignedRequest:
+        """Stamp a claimSwapFees request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CLAIM_SWAP_FEES",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/claim_swap_fees"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
     def create_api_keys(self, input: CreateApiKeysBody) -> CreateApiKeysResponse:
@@ -1818,6 +3011,51 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def create_mfa_policy(self, input: CreateMfaPolicyBody) -> CreateMfaPolicyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_MFA_POLICY",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_mfa_policy",
+            body,
+            "createMfaPolicyResult",
+            CreateMfaPolicyResponse,
+        )
+
+    def stamp_create_mfa_policy(self, input: CreateMfaPolicyBody) -> SignedRequest:
+        """Stamp a createMfaPolicy request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_MFA_POLICY",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_mfa_policy"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def create_oauth2_credential(
         self, input: CreateOauth2CredentialBody
     ) -> CreateOauth2CredentialResponse:
@@ -1880,13 +3118,13 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS",
+            "type": "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS_V2",
         }
 
         return self._activity(
             "/public/v1/submit/create_oauth_providers",
             body,
-            "createOauthProvidersResult",
+            "createOauthProvidersResultV2",
             CreateOauthProvidersResponse,
         )
 
@@ -1905,7 +3143,7 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS",
+            "type": "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS_V2",
         }
 
         full_url = self.base_url + "/public/v1/submit/create_oauth_providers"
@@ -2200,6 +3438,55 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def create_session_profile(
+        self, input: CreateSessionProfileBody
+    ) -> CreateSessionProfileResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_SESSION_PROFILE",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_session_profile",
+            body,
+            "createSessionProfileResult",
+            CreateSessionProfileResponse,
+        )
+
+    def stamp_create_session_profile(
+        self, input: CreateSessionProfileBody
+    ) -> SignedRequest:
+        """Stamp a createSessionProfile request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_SESSION_PROFILE",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_session_profile"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def create_smart_contract_interface(
         self, input: CreateSmartContractInterfaceBody
     ) -> CreateSmartContractInterfaceResponse:
@@ -2291,6 +3578,290 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/create_sub_organization"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def create_swap_quote(self, input: CreateSwapQuoteBody) -> CreateSwapQuoteResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_SWAP_QUOTE_V3",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_swap_quote",
+            body,
+            "createSwapQuoteResultV2",
+            CreateSwapQuoteResponse,
+        )
+
+    def stamp_create_swap_quote(self, input: CreateSwapQuoteBody) -> SignedRequest:
+        """Stamp a createSwapQuote request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_SWAP_QUOTE_V3",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_swap_quote"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def create_tvc_app(self, input: CreateTvcAppBody) -> CreateTvcAppResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_APP",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_tvc_app",
+            body,
+            "createTvcAppResult",
+            CreateTvcAppResponse,
+        )
+
+    def stamp_create_tvc_app(self, input: CreateTvcAppBody) -> SignedRequest:
+        """Stamp a createTvcApp request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_APP",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_tvc_app"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def create_tvc_deployment(
+        self, input: CreateTvcDeploymentBody
+    ) -> CreateTvcDeploymentResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_DEPLOYMENT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_tvc_deployment",
+            body,
+            "createTvcDeploymentResult",
+            CreateTvcDeploymentResponse,
+        )
+
+    def stamp_create_tvc_deployment(
+        self, input: CreateTvcDeploymentBody
+    ) -> SignedRequest:
+        """Stamp a createTvcDeployment request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_DEPLOYMENT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_tvc_deployment"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def create_tvc_manifest_approvals(
+        self, input: CreateTvcManifestApprovalsBody
+    ) -> CreateTvcManifestApprovalsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_MANIFEST_APPROVALS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_tvc_manifest_approvals",
+            body,
+            "createTvcManifestApprovalsResult",
+            CreateTvcManifestApprovalsResponse,
+        )
+
+    def stamp_create_tvc_manifest_approvals(
+        self, input: CreateTvcManifestApprovalsBody
+    ) -> SignedRequest:
+        """Stamp a createTvcManifestApprovals request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_MANIFEST_APPROVALS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_tvc_manifest_approvals"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def create_tvc_operator(
+        self, input: CreateTvcOperatorBody
+    ) -> CreateTvcOperatorResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_OPERATOR",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_tvc_operator",
+            body,
+            "createTvcOperatorResult",
+            CreateTvcOperatorResponse,
+        )
+
+    def stamp_create_tvc_operator(self, input: CreateTvcOperatorBody) -> SignedRequest:
+        """Stamp a createTvcOperator request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_OPERATOR",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_tvc_operator"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def create_tvc_quorum_key(
+        self, input: CreateTvcQuorumKeyBody
+    ) -> CreateTvcQuorumKeyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_QUORUM_KEY",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_tvc_quorum_key",
+            body,
+            "createTvcQuorumKeyResult",
+            CreateTvcQuorumKeyResponse,
+        )
+
+    def stamp_create_tvc_quorum_key(
+        self, input: CreateTvcQuorumKeyBody
+    ) -> SignedRequest:
+        """Stamp a createTvcQuorumKey request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_TVC_QUORUM_KEY",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_tvc_quorum_key"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -2482,6 +4053,55 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def create_webhook_endpoint(
+        self, input: CreateWebhookEndpointBody
+    ) -> CreateWebhookEndpointResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_WEBHOOK_ENDPOINT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/create_webhook_endpoint",
+            body,
+            "createWebhookEndpointResult",
+            CreateWebhookEndpointResponse,
+        )
+
+    def stamp_create_webhook_endpoint(
+        self, input: CreateWebhookEndpointBody
+    ) -> SignedRequest:
+        """Stamp a createWebhookEndpoint request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_CREATE_WEBHOOK_ENDPOINT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/create_webhook_endpoint"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def delete_api_keys(self, input: DeleteApiKeysBody) -> DeleteApiKeysResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
@@ -2665,6 +4285,51 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/delete_invitation"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def delete_mfa_policy(self, input: DeleteMfaPolicyBody) -> DeleteMfaPolicyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_MFA_POLICY",
+        }
+
+        return self._activity(
+            "/public/v1/submit/delete_mfa_policy",
+            body,
+            "deleteMfaPolicyResult",
+            DeleteMfaPolicyResponse,
+        )
+
+    def stamp_delete_mfa_policy(self, input: DeleteMfaPolicyBody) -> SignedRequest:
+        """Stamp a deleteMfaPolicy request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_MFA_POLICY",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/delete_mfa_policy"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -2956,6 +4621,51 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def delete_secrets(self, input: DeleteSecretsBody) -> DeleteSecretsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_SECRETS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/delete_secrets",
+            body,
+            "deleteSecretsResult",
+            DeleteSecretsResponse,
+        )
+
+    def stamp_delete_secrets(self, input: DeleteSecretsBody) -> SignedRequest:
+        """Stamp a deleteSecrets request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_SECRETS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/delete_secrets"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def delete_smart_contract_interface(
         self, input: DeleteSmartContractInterfaceBody
     ) -> DeleteSmartContractInterfaceResponse:
@@ -3047,6 +4757,104 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/delete_sub_organization"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def delete_tvc_app_and_deployments(
+        self, input: DeleteTvcAppAndDeploymentsBody
+    ) -> DeleteTvcAppAndDeploymentsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_TVC_APP_AND_DEPLOYMENTS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/delete_tvc_app_and_deployments",
+            body,
+            "deleteTvcAppAndDeploymentsResult",
+            DeleteTvcAppAndDeploymentsResponse,
+        )
+
+    def stamp_delete_tvc_app_and_deployments(
+        self, input: DeleteTvcAppAndDeploymentsBody
+    ) -> SignedRequest:
+        """Stamp a deleteTvcAppAndDeployments request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_TVC_APP_AND_DEPLOYMENTS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/delete_tvc_app_and_deployments"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def delete_tvc_deployment(
+        self, input: DeleteTvcDeploymentBody
+    ) -> DeleteTvcDeploymentResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_TVC_DEPLOYMENT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/delete_tvc_deployment",
+            body,
+            "deleteTvcDeploymentResult",
+            DeleteTvcDeploymentResponse,
+        )
+
+    def stamp_delete_tvc_deployment(
+        self, input: DeleteTvcDeploymentBody
+    ) -> SignedRequest:
+        """Stamp a deleteTvcDeployment request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_TVC_DEPLOYMENT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/delete_tvc_deployment"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -3238,6 +5046,288 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def delete_webhook_endpoint(
+        self, input: DeleteWebhookEndpointBody
+    ) -> DeleteWebhookEndpointResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_WEBHOOK_ENDPOINT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/delete_webhook_endpoint",
+            body,
+            "deleteWebhookEndpointResult",
+            DeleteWebhookEndpointResponse,
+        )
+
+    def stamp_delete_webhook_endpoint(
+        self, input: DeleteWebhookEndpointBody
+    ) -> SignedRequest:
+        """Stamp a deleteWebhookEndpoint request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_DELETE_WEBHOOK_ENDPOINT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/delete_webhook_endpoint"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def earn_claim_rewards(
+        self, input: EarnClaimRewardsBody
+    ) -> EarnClaimRewardsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_CLAIM_REWARDS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/earn_claim_rewards",
+            body,
+            "earnClaimRewardsResult",
+            EarnClaimRewardsResponse,
+        )
+
+    def stamp_earn_claim_rewards(self, input: EarnClaimRewardsBody) -> SignedRequest:
+        """Stamp a earnClaimRewards request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_CLAIM_REWARDS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/earn_claim_rewards"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def earn_deploy_wrapper(
+        self, input: EarnDeployWrapperBody
+    ) -> EarnDeployWrapperResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_DEPLOY_WRAPPER",
+        }
+
+        return self._activity(
+            "/public/v1/submit/earn_deploy_wrapper",
+            body,
+            "earnDeployWrapperResult",
+            EarnDeployWrapperResponse,
+        )
+
+    def stamp_earn_deploy_wrapper(self, input: EarnDeployWrapperBody) -> SignedRequest:
+        """Stamp a earnDeployWrapper request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_DEPLOY_WRAPPER",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/earn_deploy_wrapper"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def earn_deposit(self, input: EarnDepositBody) -> EarnDepositResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_DEPOSIT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/earn_deposit",
+            body,
+            "earnDepositResult",
+            EarnDepositResponse,
+        )
+
+    def stamp_earn_deposit(self, input: EarnDepositBody) -> SignedRequest:
+        """Stamp a earnDeposit request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_DEPOSIT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/earn_deposit"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def earn_set_wrapper_state(
+        self, input: EarnSetWrapperStateBody
+    ) -> EarnSetWrapperStateResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_SET_WRAPPER_STATE",
+        }
+
+        return self._activity(
+            "/public/v1/submit/earn_set_wrapper_state",
+            body,
+            "earnSetWrapperStateResult",
+            EarnSetWrapperStateResponse,
+        )
+
+    def stamp_earn_set_wrapper_state(
+        self, input: EarnSetWrapperStateBody
+    ) -> SignedRequest:
+        """Stamp a earnSetWrapperState request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_SET_WRAPPER_STATE",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/earn_set_wrapper_state"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def earn_withdraw(self, input: EarnWithdrawBody) -> EarnWithdrawResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_WITHDRAW",
+        }
+
+        return self._activity(
+            "/public/v1/submit/earn_withdraw",
+            body,
+            "earnWithdrawResult",
+            EarnWithdrawResponse,
+        )
+
+    def stamp_earn_withdraw(self, input: EarnWithdrawBody) -> SignedRequest:
+        """Stamp a earnWithdraw request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EARN_WITHDRAW",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/earn_withdraw"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def email_auth(self, input: EmailAuthBody) -> EmailAuthResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
@@ -3293,13 +5383,13 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_ETH_SEND_TRANSACTION",
+            "type": "ACTIVITY_TYPE_ETH_SEND_TRANSACTION_V2",
         }
 
         return self._activity(
             "/public/v1/submit/eth_send_transaction",
             body,
-            "ethSendTransactionResult",
+            "ethSendTransactionResultV2",
             EthSendTransactionResponse,
         )
 
@@ -3318,10 +5408,102 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_ETH_SEND_TRANSACTION",
+            "type": "ACTIVITY_TYPE_ETH_SEND_TRANSACTION_V2",
         }
 
         full_url = self.base_url + "/public/v1/submit/eth_send_transaction"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def eth_undelegate7702(
+        self, input: EthUndelegate7702Body
+    ) -> EthUndelegate7702Response:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_ETH_UNDELEGATE_7702",
+        }
+
+        return self._activity(
+            "/public/v1/submit/eth_undelegate_7702",
+            body,
+            "ethUndelegate7702Result",
+            EthUndelegate7702Response,
+        )
+
+    def stamp_eth_undelegate7702(self, input: EthUndelegate7702Body) -> SignedRequest:
+        """Stamp a ethUndelegate7702 request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_ETH_UNDELEGATE_7702",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/eth_undelegate_7702"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def execute_swap(self, input: ExecuteSwapBody) -> ExecuteSwapResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EXECUTE_SWAP_V3",
+        }
+
+        return self._activity(
+            "/public/v1/submit/execute_swap",
+            body,
+            "executeSwapResult",
+            ExecuteSwapResponse,
+        )
+
+    def stamp_execute_swap(self, input: ExecuteSwapBody) -> SignedRequest:
+        """Stamp a executeSwap request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EXECUTE_SWAP_V3",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/execute_swap"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -3369,6 +5551,51 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/export_private_key"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def export_secrets(self, input: ExportSecretsBody) -> ExportSecretsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EXPORT_SECRETS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/export_secrets",
+            body,
+            "exportSecretsResult",
+            ExportSecretsResponse,
+        )
+
+    def stamp_export_secrets(self, input: ExportSecretsBody) -> SignedRequest:
+        """Stamp a exportSecrets request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_EXPORT_SECRETS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/export_secrets"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -3517,6 +5744,51 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def import_secrets(self, input: ImportSecretsBody) -> ImportSecretsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_IMPORT_SECRETS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/import_secrets",
+            body,
+            "importSecretsResult",
+            ImportSecretsResponse,
+        )
+
+    def stamp_import_secrets(self, input: ImportSecretsBody) -> SignedRequest:
+        """Stamp a importSecrets request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_IMPORT_SECRETS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/import_secrets"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def import_wallet(self, input: ImportWalletBody) -> ImportWalletResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
@@ -3649,6 +5921,53 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/init_import_private_key"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def init_import_secrets(
+        self, input: InitImportSecretsBody
+    ) -> InitImportSecretsResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_INIT_IMPORT_SECRETS",
+        }
+
+        return self._activity(
+            "/public/v1/submit/init_import_secrets",
+            body,
+            "initImportSecretsResult",
+            InitImportSecretsResponse,
+        )
+
+    def stamp_init_import_secrets(self, input: InitImportSecretsBody) -> SignedRequest:
+        """Stamp a initImportSecrets request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_INIT_IMPORT_SECRETS",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/init_import_secrets"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -4057,6 +6376,104 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def post_tvc_quorum_key_share(
+        self, input: PostTvcQuorumKeyShareBody
+    ) -> PostTvcQuorumKeyShareResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_POST_TVC_QUORUM_KEY_SHARE",
+        }
+
+        return self._activity(
+            "/public/v1/submit/post_tvc_quorum_key_share",
+            body,
+            "postTvcQuorumKeyShareResult",
+            PostTvcQuorumKeyShareResponse,
+        )
+
+    def stamp_post_tvc_quorum_key_share(
+        self, input: PostTvcQuorumKeyShareBody
+    ) -> SignedRequest:
+        """Stamp a postTvcQuorumKeyShare request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_POST_TVC_QUORUM_KEY_SHARE",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/post_tvc_quorum_key_share"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def re_encrypt_tvc_quorum_key_share(
+        self, input: ReEncryptTvcQuorumKeyShareBody
+    ) -> ReEncryptTvcQuorumKeyShareResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_RE_ENCRYPT_TVC_QUORUM_KEY_SHARE",
+        }
+
+        return self._activity(
+            "/public/v1/submit/re_encrypt_tvc_quorum_key_share",
+            body,
+            "reEncryptTvcQuorumKeyShareResult",
+            ReEncryptTvcQuorumKeyShareResponse,
+        )
+
+    def stamp_re_encrypt_tvc_quorum_key_share(
+        self, input: ReEncryptTvcQuorumKeyShareBody
+    ) -> SignedRequest:
+        """Stamp a reEncryptTvcQuorumKeyShare request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_RE_ENCRYPT_TVC_QUORUM_KEY_SHARE",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/re_encrypt_tvc_quorum_key_share"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def recover_user(self, input: RecoverUserBody) -> RecoverUserResponse:
         # Convert Pydantic model to dict
         input_dict = input.model_dump(by_alias=True, exclude_none=True)
@@ -4144,6 +6561,53 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY_DECISION
         )
 
+    def remove_ip_allowlist(
+        self, input: RemoveIpAllowlistBody
+    ) -> RemoveIpAllowlistResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_REMOVE_IP_ALLOWLIST",
+        }
+
+        return self._activity(
+            "/public/v1/submit/remove_ip_allowlist",
+            body,
+            "removeIpAllowlistResult",
+            RemoveIpAllowlistResponse,
+        )
+
+    def stamp_remove_ip_allowlist(self, input: RemoveIpAllowlistBody) -> SignedRequest:
+        """Stamp a removeIpAllowlist request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_REMOVE_IP_ALLOWLIST",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/remove_ip_allowlist"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def remove_organization_feature(
         self, input: RemoveOrganizationFeatureBody
     ) -> RemoveOrganizationFeatureResponse:
@@ -4193,6 +6657,100 @@ class TurnkeyClient:
             url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
         )
 
+    def restore_tvc_deployment(
+        self, input: RestoreTvcDeploymentBody
+    ) -> RestoreTvcDeploymentResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_RESTORE_TVC_DEPLOYMENT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/restore_tvc_deployment",
+            body,
+            "restoreTvcDeploymentResult",
+            RestoreTvcDeploymentResponse,
+        )
+
+    def stamp_restore_tvc_deployment(
+        self, input: RestoreTvcDeploymentBody
+    ) -> SignedRequest:
+        """Stamp a restoreTvcDeployment request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_RESTORE_TVC_DEPLOYMENT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/restore_tvc_deployment"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def set_ip_allowlist(self, input: SetIpAllowlistBody) -> SetIpAllowlistResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SET_IP_ALLOWLIST",
+        }
+
+        return self._activity(
+            "/public/v1/submit/set_ip_allowlist",
+            body,
+            "setIpAllowlistResult",
+            SetIpAllowlistResponse,
+        )
+
+    def stamp_set_ip_allowlist(self, input: SetIpAllowlistBody) -> SignedRequest:
+        """Stamp a setIpAllowlist request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SET_IP_ALLOWLIST",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/set_ip_allowlist"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
     def set_organization_feature(
         self, input: SetOrganizationFeatureBody
     ) -> SetOrganizationFeatureResponse:
@@ -4235,6 +6793,55 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/set_organization_feature"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def update_tvc_app_live_deployment(
+        self, input: UpdateTvcAppLiveDeploymentBody
+    ) -> UpdateTvcAppLiveDeploymentResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPDATE_TVC_APP_LIVE_DEPLOYMENT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/set_tvc_app_live_deployment",
+            body,
+            "updateTvcAppLiveDeploymentResult",
+            UpdateTvcAppLiveDeploymentResponse,
+        )
+
+    def stamp_update_tvc_app_live_deployment(
+        self, input: UpdateTvcAppLiveDeploymentBody
+    ) -> SignedRequest:
+        """Stamp a updateTvcAppLiveDeployment request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPDATE_TVC_APP_LIVE_DEPLOYMENT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/set_tvc_app_live_deployment"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -4390,13 +6997,13 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_SOL_SEND_TRANSACTION",
+            "type": "ACTIVITY_TYPE_SOL_SEND_TRANSACTION_V2",
         }
 
         return self._activity(
             "/public/v1/submit/sol_send_transaction",
             body,
-            "solSendTransactionResult",
+            "solSendTransactionResultV2",
             SolSendTransactionResponse,
         )
 
@@ -4415,10 +7022,202 @@ class TurnkeyClient:
             "parameters": input_dict,
             "organizationId": organization_id,
             "timestampMs": timestamp_ms,
-            "type": "ACTIVITY_TYPE_SOL_SEND_TRANSACTION",
+            "type": "ACTIVITY_TYPE_SOL_SEND_TRANSACTION_V2",
         }
 
         full_url = self.base_url + "/public/v1/submit/sol_send_transaction"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def spark_claim_transfer(
+        self, input: SparkClaimTransferBody
+    ) -> SparkClaimTransferResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_CLAIM_TRANSFER",
+        }
+
+        return self._activity(
+            "/public/v1/submit/spark_claim_transfer",
+            body,
+            "sparkClaimTransferResult",
+            SparkClaimTransferResponse,
+        )
+
+    def stamp_spark_claim_transfer(
+        self, input: SparkClaimTransferBody
+    ) -> SignedRequest:
+        """Stamp a sparkClaimTransfer request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_CLAIM_TRANSFER",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/spark_claim_transfer"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def spark_prepare_lightning_receive(
+        self, input: SparkPrepareLightningReceiveBody
+    ) -> SparkPrepareLightningReceiveResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_PREPARE_LIGHTNING_RECEIVE",
+        }
+
+        return self._activity(
+            "/public/v1/submit/spark_prepare_lightning_receive",
+            body,
+            "sparkPrepareLightningReceiveResult",
+            SparkPrepareLightningReceiveResponse,
+        )
+
+    def stamp_spark_prepare_lightning_receive(
+        self, input: SparkPrepareLightningReceiveBody
+    ) -> SignedRequest:
+        """Stamp a sparkPrepareLightningReceive request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_PREPARE_LIGHTNING_RECEIVE",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/spark_prepare_lightning_receive"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def spark_prepare_transfer(
+        self, input: SparkPrepareTransferBody
+    ) -> SparkPrepareTransferResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_PREPARE_TRANSFER",
+        }
+
+        return self._activity(
+            "/public/v1/submit/spark_prepare_transfer",
+            body,
+            "sparkPrepareTransferResult",
+            SparkPrepareTransferResponse,
+        )
+
+    def stamp_spark_prepare_transfer(
+        self, input: SparkPrepareTransferBody
+    ) -> SignedRequest:
+        """Stamp a sparkPrepareTransfer request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_PREPARE_TRANSFER",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/spark_prepare_transfer"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def spark_sign_frost(self, input: SparkSignFrostBody) -> SparkSignFrostResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_SIGN_FROST",
+        }
+
+        return self._activity(
+            "/public/v1/submit/spark_sign_frost",
+            body,
+            "sparkSignFrostResult",
+            SparkSignFrostResponse,
+        )
+
+    def stamp_spark_sign_frost(self, input: SparkSignFrostBody) -> SignedRequest:
+        """Stamp a sparkSignFrost request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_SPARK_SIGN_FROST",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/spark_sign_frost"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -4513,6 +7312,51 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/update_fiat_on_ramp_credential"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def update_mfa_policy(self, input: UpdateMfaPolicyBody) -> UpdateMfaPolicyResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPDATE_MFA_POLICY",
+        }
+
+        return self._activity(
+            "/public/v1/submit/update_mfa_policy",
+            body,
+            "updateMfaPolicyResult",
+            UpdateMfaPolicyResponse,
+        )
+
+    def stamp_update_mfa_policy(self, input: UpdateMfaPolicyBody) -> SignedRequest:
+        """Stamp a updateMfaPolicy request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPDATE_MFA_POLICY",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/update_mfa_policy"
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 
@@ -5026,6 +7870,204 @@ class TurnkeyClient:
         }
 
         full_url = self.base_url + "/public/v1/submit/update_wallet"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def update_webhook_endpoint(
+        self, input: UpdateWebhookEndpointBody
+    ) -> UpdateWebhookEndpointResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPDATE_WEBHOOK_ENDPOINT",
+        }
+
+        return self._activity(
+            "/public/v1/submit/update_webhook_endpoint",
+            body,
+            "updateWebhookEndpointResult",
+            UpdateWebhookEndpointResponse,
+        )
+
+    def stamp_update_webhook_endpoint(
+        self, input: UpdateWebhookEndpointBody
+    ) -> SignedRequest:
+        """Stamp a updateWebhookEndpoint request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPDATE_WEBHOOK_ENDPOINT",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/update_webhook_endpoint"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def upsert_swap_config(
+        self, input: UpsertSwapConfigBody
+    ) -> UpsertSwapConfigResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPSERT_SWAP_CONFIG",
+        }
+
+        return self._activity(
+            "/public/v1/submit/upsert_swap_config",
+            body,
+            "upsertSwapConfigResult",
+            UpsertSwapConfigResponse,
+        )
+
+    def stamp_upsert_swap_config(self, input: UpsertSwapConfigBody) -> SignedRequest:
+        """Stamp a upsertSwapConfig request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPSERT_SWAP_CONFIG",
+        }
+
+        full_url = self.base_url + "/public/v1/submit/upsert_swap_config"
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def upsert_swap_fee_sponsorship_limit_config(
+        self, input: UpsertSwapFeeSponsorshipLimitConfigBody
+    ) -> UpsertSwapFeeSponsorshipLimitConfigResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPSERT_SWAP_FEE_SPONSORSHIP_LIMIT_CONFIG",
+        }
+
+        return self._activity(
+            "/public/v1/submit/upsert_swap_fee_sponsorship_limit_config",
+            body,
+            "upsertSwapFeeSponsorshipLimitConfigResult",
+            UpsertSwapFeeSponsorshipLimitConfigResponse,
+        )
+
+    def stamp_upsert_swap_fee_sponsorship_limit_config(
+        self, input: UpsertSwapFeeSponsorshipLimitConfigBody
+    ) -> SignedRequest:
+        """Stamp a upsertSwapFeeSponsorshipLimitConfig request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPSERT_SWAP_FEE_SPONSORSHIP_LIMIT_CONFIG",
+        }
+
+        full_url = (
+            self.base_url + "/public/v1/submit/upsert_swap_fee_sponsorship_limit_config"
+        )
+        body_str = self._serialize_body(body)
+        stamp = self.stamper.stamp(body_str)
+
+        return SignedRequest(
+            url=full_url, body=body_str, stamp=stamp, type=RequestType.ACTIVITY
+        )
+
+    def upsert_swap_fixed_rate_limit_config(
+        self, input: UpsertSwapFixedRateLimitConfigBody
+    ) -> UpsertSwapFixedRateLimitConfigResponse:
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPSERT_SWAP_FIXED_RATE_LIMIT_CONFIG",
+        }
+
+        return self._activity(
+            "/public/v1/submit/upsert_swap_fixed_rate_limit_config",
+            body,
+            "upsertSwapFixedRateLimitConfigResult",
+            UpsertSwapFixedRateLimitConfigResponse,
+        )
+
+    def stamp_upsert_swap_fixed_rate_limit_config(
+        self, input: UpsertSwapFixedRateLimitConfigBody
+    ) -> SignedRequest:
+        """Stamp a upsertSwapFixedRateLimitConfig request without sending it."""
+
+        # Convert Pydantic model to dict
+        input_dict = input.model_dump(by_alias=True, exclude_none=True)
+
+        organization_id = input_dict.pop("organizationId", self.organization_id)
+        timestamp_ms = input_dict.pop("timestampMs", str(int(time.time() * 1000)))
+
+        body = {
+            "parameters": input_dict,
+            "organizationId": organization_id,
+            "timestampMs": timestamp_ms,
+            "type": "ACTIVITY_TYPE_UPSERT_SWAP_FIXED_RATE_LIMIT_CONFIG",
+        }
+
+        full_url = (
+            self.base_url + "/public/v1/submit/upsert_swap_fixed_rate_limit_config"
+        )
         body_str = self._serialize_body(body)
         stamp = self.stamper.stamp(body_str)
 

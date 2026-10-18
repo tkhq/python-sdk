@@ -86,6 +86,23 @@ VERSIONED_ACTIVITY_TYPES = {
         "v1OtpLoginIntentV2",
         "v1OtpLoginResult",
     ),
+    # Moved to V2 in the October 2026 regen, in step with the TypeScript SDK. Pinned so a
+    # later schema cannot move them again without a visible diff here.
+    "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS": (
+        "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS_V2",
+        "v1CreateOauthProvidersIntentV2",
+        "v1CreateOauthProvidersResultV2",
+    ),
+    "ACTIVITY_TYPE_ETH_SEND_TRANSACTION": (
+        "ACTIVITY_TYPE_ETH_SEND_TRANSACTION_V2",
+        "v1EthSendTransactionIntentV2",
+        "v1EthSendTransactionResultV2",
+    ),
+    "ACTIVITY_TYPE_SOL_SEND_TRANSACTION": (
+        "ACTIVITY_TYPE_SOL_SEND_TRANSACTION_V2",
+        "v1SolSendTransactionIntentV2",
+        "v1SolSendTransactionResultV2",
+    ),
 }
 
 # Methods that have only optional parameters

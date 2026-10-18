@@ -29,6 +29,7 @@ class billingActivateBillingTierIntent(TurnkeyBaseModel):
     productId: str = Field(
         description="The product that the customer wants to subscribe to."
     )
+    orbPlanId: Optional[str] = Field(default=None)
 
 
 class billingActivateBillingTierResult(TurnkeyBaseModel):
@@ -78,6 +79,18 @@ class billingSetPaymentMethodResult(TurnkeyBaseModel):
     )
 
 
+class billingUpdatePaymentMethodIntent(TurnkeyBaseModel):
+    paymentEmail: str = Field(
+        description="The email that will receive invoices for the payment method."
+    )
+
+
+class billingUpdatePaymentMethodResult(TurnkeyBaseModel):
+    paymentEmail: str = Field(
+        description="The email address associated with the payment method."
+    )
+
+
 class datav1Tag(TurnkeyBaseModel):
     tagId: str = Field(description="Unique identifier for a given Tag.")
     tagName: str = Field(description="Human-readable name for a Tag.")
@@ -111,6 +124,10 @@ class externaldatav1Credential(TurnkeyBaseModel):
         description="The public component of a cryptographic key pair used to sign messages and transactions."
     )
     type: v1CredentialType
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="The session profile associated with this credential, if any. This field is only applicable for credentials of type CREDENTIAL_TYPE_LOGIN.",
+    )
 
 
 class externaldatav1Quorum(TurnkeyBaseModel):
@@ -206,6 +223,24 @@ class v1AccessType(str, Enum):
     ACCESS_TYPE_ALL = "ACCESS_TYPE_ALL"
 
 
+class v1ActivePolicyStatus(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for the organization the policy belongs to."
+    )
+    policyId: str = Field(description="Unique identifier for a given policy.")
+    active: bool = Field(
+        description="Whether the policy is currently active. A policy without a time window is always active."
+    )
+    timeExpr: Optional[str] = Field(
+        default=None,
+        description="The policy's time expression, absent when the policy has no time window.",
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Set when the policy's time expression could not be evaluated; the policy is reported inactive.",
+    )
+
+
 class v1Activity(TurnkeyBaseModel):
     id: str = Field(description="Unique identifier for a given Activity object.")
     organizationId: str = Field(
@@ -251,6 +286,7 @@ class v1ActivityStatus(str, Enum):
     ACTIVITY_STATUS_FAILED = "ACTIVITY_STATUS_FAILED"
     ACTIVITY_STATUS_CONSENSUS_NEEDED = "ACTIVITY_STATUS_CONSENSUS_NEEDED"
     ACTIVITY_STATUS_REJECTED = "ACTIVITY_STATUS_REJECTED"
+    ACTIVITY_STATUS_AUTHENTICATORS_NEEDED = "ACTIVITY_STATUS_AUTHENTICATORS_NEEDED"
 
 
 class v1ActivityType(str, Enum):
@@ -405,6 +441,76 @@ class v1ActivityType(str, Enum):
     ACTIVITY_TYPE_VERIFY_OTP_V2 = "ACTIVITY_TYPE_VERIFY_OTP_V2"
     ACTIVITY_TYPE_OTP_LOGIN_V2 = "ACTIVITY_TYPE_OTP_LOGIN_V2"
     ACTIVITY_TYPE_UPDATE_ORGANIZATION_NAME = "ACTIVITY_TYPE_UPDATE_ORGANIZATION_NAME"
+    ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8 = (
+        "ACTIVITY_TYPE_CREATE_SUB_ORGANIZATION_V8"
+    )
+    ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS_V2 = "ACTIVITY_TYPE_CREATE_OAUTH_PROVIDERS_V2"
+    ACTIVITY_TYPE_CREATE_USERS_V4 = "ACTIVITY_TYPE_CREATE_USERS_V4"
+    ACTIVITY_TYPE_CREATE_WEBHOOK_ENDPOINT = "ACTIVITY_TYPE_CREATE_WEBHOOK_ENDPOINT"
+    ACTIVITY_TYPE_UPDATE_WEBHOOK_ENDPOINT = "ACTIVITY_TYPE_UPDATE_WEBHOOK_ENDPOINT"
+    ACTIVITY_TYPE_DELETE_WEBHOOK_ENDPOINT = "ACTIVITY_TYPE_DELETE_WEBHOOK_ENDPOINT"
+    ACTIVITY_TYPE_SET_IP_ALLOWLIST = "ACTIVITY_TYPE_SET_IP_ALLOWLIST"
+    ACTIVITY_TYPE_REMOVE_IP_ALLOWLIST = "ACTIVITY_TYPE_REMOVE_IP_ALLOWLIST"
+    ACTIVITY_TYPE_UPDATE_TVC_APP_LIVE_DEPLOYMENT = (
+        "ACTIVITY_TYPE_UPDATE_TVC_APP_LIVE_DEPLOYMENT"
+    )
+    ACTIVITY_TYPE_DELETE_TVC_DEPLOYMENT = "ACTIVITY_TYPE_DELETE_TVC_DEPLOYMENT"
+    ACTIVITY_TYPE_DELETE_TVC_APP_AND_DEPLOYMENTS = (
+        "ACTIVITY_TYPE_DELETE_TVC_APP_AND_DEPLOYMENTS"
+    )
+    ACTIVITY_TYPE_RESTORE_TVC_DEPLOYMENT = "ACTIVITY_TYPE_RESTORE_TVC_DEPLOYMENT"
+    ACTIVITY_TYPE_SPARK_SIGN_FROST = "ACTIVITY_TYPE_SPARK_SIGN_FROST"
+    ACTIVITY_TYPE_SPARK_PREPARE_TRANSFER = "ACTIVITY_TYPE_SPARK_PREPARE_TRANSFER"
+    ACTIVITY_TYPE_SPARK_CLAIM_TRANSFER = "ACTIVITY_TYPE_SPARK_CLAIM_TRANSFER"
+    ACTIVITY_TYPE_SPARK_PREPARE_LIGHTNING_RECEIVE = (
+        "ACTIVITY_TYPE_SPARK_PREPARE_LIGHTNING_RECEIVE"
+    )
+    ACTIVITY_TYPE_POST_TVC_QUORUM_KEY_SHARE = "ACTIVITY_TYPE_POST_TVC_QUORUM_KEY_SHARE"
+    ACTIVITY_TYPE_ETH_SEND_TRANSACTION_V2 = "ACTIVITY_TYPE_ETH_SEND_TRANSACTION_V2"
+    ACTIVITY_TYPE_CREATE_MFA_POLICY = "ACTIVITY_TYPE_CREATE_MFA_POLICY"
+    ACTIVITY_TYPE_UPDATE_MFA_POLICY = "ACTIVITY_TYPE_UPDATE_MFA_POLICY"
+    ACTIVITY_TYPE_DELETE_MFA_POLICY = "ACTIVITY_TYPE_DELETE_MFA_POLICY"
+    ACTIVITY_TYPE_CREATE_SESSION_PROFILE = "ACTIVITY_TYPE_CREATE_SESSION_PROFILE"
+    ACTIVITY_TYPE_EARN_DEPLOY_WRAPPER = "ACTIVITY_TYPE_EARN_DEPLOY_WRAPPER"
+    ACTIVITY_TYPE_EARN_DEPOSIT = "ACTIVITY_TYPE_EARN_DEPOSIT"
+    ACTIVITY_TYPE_EARN_WITHDRAW = "ACTIVITY_TYPE_EARN_WITHDRAW"
+    ACTIVITY_TYPE_EXECUTE_SWAP = "ACTIVITY_TYPE_EXECUTE_SWAP"
+    ACTIVITY_TYPE_UPSERT_SWAP_CONFIG = "ACTIVITY_TYPE_UPSERT_SWAP_CONFIG"
+    ACTIVITY_TYPE_CREATE_TVC_OPERATOR = "ACTIVITY_TYPE_CREATE_TVC_OPERATOR"
+    ACTIVITY_TYPE_CREATE_TVC_QUORUM_KEY = "ACTIVITY_TYPE_CREATE_TVC_QUORUM_KEY"
+    ACTIVITY_TYPE_RE_ENCRYPT_TVC_QUORUM_KEY_SHARE = (
+        "ACTIVITY_TYPE_RE_ENCRYPT_TVC_QUORUM_KEY_SHARE"
+    )
+    ACTIVITY_TYPE_INIT_IMPORT_SECRETS = "ACTIVITY_TYPE_INIT_IMPORT_SECRETS"
+    ACTIVITY_TYPE_SOL_SEND_TRANSACTION_V2 = "ACTIVITY_TYPE_SOL_SEND_TRANSACTION_V2"
+    ACTIVITY_TYPE_CLAIM_SWAP_FEES = "ACTIVITY_TYPE_CLAIM_SWAP_FEES"
+    ACTIVITY_TYPE_EARN_SET_WRAPPER_STATE = "ACTIVITY_TYPE_EARN_SET_WRAPPER_STATE"
+    ACTIVITY_TYPE_CLAIM_EARN_FEES = "ACTIVITY_TYPE_CLAIM_EARN_FEES"
+    ACTIVITY_TYPE_UPDATE_WALLET_ACCOUNT_NAME = (
+        "ACTIVITY_TYPE_UPDATE_WALLET_ACCOUNT_NAME"
+    )
+    ACTIVITY_TYPE_ETH_UNDELEGATE_7702 = "ACTIVITY_TYPE_ETH_UNDELEGATE_7702"
+    ACTIVITY_TYPE_EXECUTE_SWAP_V2 = "ACTIVITY_TYPE_EXECUTE_SWAP_V2"
+    ACTIVITY_TYPE_CREATE_SWAP_QUOTE = "ACTIVITY_TYPE_CREATE_SWAP_QUOTE"
+    ACTIVITY_TYPE_IMPORT_SECRETS = "ACTIVITY_TYPE_IMPORT_SECRETS"
+    ACTIVITY_TYPE_EXPORT_SECRETS = "ACTIVITY_TYPE_EXPORT_SECRETS"
+    ACTIVITY_TYPE_CREATE_VELOCITY_CONTROL = "ACTIVITY_TYPE_CREATE_VELOCITY_CONTROL"
+    ACTIVITY_TYPE_DELETE_VELOCITY_CONTROLS = "ACTIVITY_TYPE_DELETE_VELOCITY_CONTROLS"
+    ACTIVITY_TYPE_UPDATE_PAYMENT_METHOD = "ACTIVITY_TYPE_UPDATE_PAYMENT_METHOD"
+    ACTIVITY_TYPE_CREATE_SWAP_QUOTE_V2 = "ACTIVITY_TYPE_CREATE_SWAP_QUOTE_V2"
+    ACTIVITY_TYPE_EXECUTE_SWAP_V3 = "ACTIVITY_TYPE_EXECUTE_SWAP_V3"
+    ACTIVITY_TYPE_DELETE_SECRETS = "ACTIVITY_TYPE_DELETE_SECRETS"
+    ACTIVITY_TYPE_EARN_CLAIM_REWARDS = "ACTIVITY_TYPE_EARN_CLAIM_REWARDS"
+    ACTIVITY_TYPE_CREATE_SWAP_QUOTE_V3 = "ACTIVITY_TYPE_CREATE_SWAP_QUOTE_V3"
+    ACTIVITY_TYPE_UPSERT_SWAP_FEE_SPONSORSHIP_LIMIT_CONFIG = (
+        "ACTIVITY_TYPE_UPSERT_SWAP_FEE_SPONSORSHIP_LIMIT_CONFIG"
+    )
+    ACTIVITY_TYPE_UPSERT_SWAP_FIXED_RATE_LIMIT_CONFIG = (
+        "ACTIVITY_TYPE_UPSERT_SWAP_FIXED_RATE_LIMIT_CONFIG"
+    )
+    ACTIVITY_TYPE_CREATE_FIAT_ON_RAMP_SESSION = (
+        "ACTIVITY_TYPE_CREATE_FIAT_ON_RAMP_SESSION"
+    )
 
 
 class v1AddressFormat(str, Enum):
@@ -444,6 +550,8 @@ class v1AddressFormat(str, Enum):
     ADDRESS_FORMAT_TON_V4R2 = "ADDRESS_FORMAT_TON_V4R2"
     ADDRESS_FORMAT_TON_V5R1 = "ADDRESS_FORMAT_TON_V5R1"
     ADDRESS_FORMAT_XRP = "ADDRESS_FORMAT_XRP"
+    ADDRESS_FORMAT_SPARK_MAINNET = "ADDRESS_FORMAT_SPARK_MAINNET"
+    ADDRESS_FORMAT_SPARK_REGTEST = "ADDRESS_FORMAT_SPARK_REGTEST"
 
 
 class v1ApiKey(TurnkeyBaseModel):
@@ -500,6 +608,16 @@ class v1AppProof(TurnkeyBaseModel):
     signature: str = Field(description="Signature over hashed proof_payload.")
 
 
+class v1AppStatus(TurnkeyBaseModel):
+    appId: str = Field(description="Unique identifier for this TVC App")
+    deployments: List[v1DeploymentStatus] = Field(
+        description="List of deployment statuses for this app"
+    )
+    targetedDeploymentId: str = Field(
+        description="The deployment ID currently serving traffic for this app"
+    )
+
+
 class v1ApproveActivityIntent(TurnkeyBaseModel):
     fingerprint: str = Field(description="An artifact verifying a User's action.")
 
@@ -532,6 +650,10 @@ class v1AssetBalance(TurnkeyBaseModel):
         description="Normalized balance values for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise. Use the balance field instead.",
     )
     name: Optional[str] = Field(default=None, description="The asset name")
+    tokenProgram: Optional[str] = Field(
+        default=None,
+        description="Solana token program address that owns this mint, inferred from getTokenAccountsByOwner. TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA for classic SPL Token, TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb for Token-2022. Empty for native SOL and non-Solana assets.",
+    )
 
 
 class v1AssetBalanceDisplay(TurnkeyBaseModel):
@@ -557,6 +679,14 @@ class v1AssetMetadata(TurnkeyBaseModel):
         default=None, description="The url of the asset logo"
     )
     name: Optional[str] = Field(default=None, description="The asset name")
+    stable: Optional[bool] = Field(
+        default=None,
+        description="Whether this asset is on Turnkey's stablecoin list (used for stablepair swap fee pricing).",
+    )
+    earnProviders: Optional[List[v1EarnProvider]] = Field(
+        default=None,
+        description="Earn yield providers with vaults denominated in this asset. Empty when the asset is not supported by Earn.",
+    )
 
 
 class v1Attestation(TurnkeyBaseModel):
@@ -572,6 +702,35 @@ class v1Attestation(TurnkeyBaseModel):
     transports: List[v1AuthenticatorTransport] = Field(
         description="The type of authenticator transports."
     )
+
+
+class v1AuthenticationMethod(TurnkeyBaseModel):
+    type: v1AuthenticationType = Field(
+        description="The type of authenticator (e.g., AUTHENTICATION_TYPE_EMAIL, AUTHENTICATION_TYPE_SESSION) required for this MFA step."
+    )
+    id: Optional[str] = Field(
+        default=None,
+        description="Optional specific authenticator ID required (e.g., for requiring a specific session profile id)",
+    )
+
+
+class v1AuthenticationMethodParams(TurnkeyBaseModel):
+    type: v1AuthenticationType = Field(
+        description="The type of authenticator (e.g., AUTHENTICATION_TYPE_PASSKEY for passkey authentication)."
+    )
+    id: Optional[str] = Field(
+        default=None,
+        description="Optional specific authenticator ID required (e.g., UUID of a passkey authenticator). If not provided, any authenticator of the specified type can be used.",
+    )
+
+
+class v1AuthenticationType(str, Enum):
+    AUTHENTICATION_TYPE_EMAIL_OTP = "AUTHENTICATION_TYPE_EMAIL_OTP"
+    AUTHENTICATION_TYPE_SMS_OTP = "AUTHENTICATION_TYPE_SMS_OTP"
+    AUTHENTICATION_TYPE_PASSKEY = "AUTHENTICATION_TYPE_PASSKEY"
+    AUTHENTICATION_TYPE_API_KEY = "AUTHENTICATION_TYPE_API_KEY"
+    AUTHENTICATION_TYPE_OAUTH = "AUTHENTICATION_TYPE_OAUTH"
+    AUTHENTICATION_TYPE_SESSION = "AUTHENTICATION_TYPE_SESSION"
 
 
 class v1Authenticator(TurnkeyBaseModel):
@@ -645,10 +804,10 @@ class v1BootProof(TurnkeyBaseModel):
         description="The DER encoded COSE Sign1 struct Attestation doc."
     )
     qosManifestB64: str = Field(
-        description="The borsch serialized base64 encoded Manifest."
+        description="The base64 encoded QOS manifest. Encoding depends on qos_manifest_version."
     )
     qosManifestEnvelopeB64: str = Field(
-        description="The borsch serialized base64 encoded Manifest Envelope."
+        description="The base64 encoded QOS manifest envelope. Encoding depends on qos_manifest_version."
     )
     deploymentLabel: str = Field(
         description="The label under which the enclave app was deployed."
@@ -656,10 +815,59 @@ class v1BootProof(TurnkeyBaseModel):
     enclaveApp: str = Field(description="Name of the enclave app")
     owner: str = Field(description="Owner of the app i.e. 'tkhq'")
     createdAt: externaldatav1Timestamp
+    qosManifestVersion: Optional[str] = Field(
+        default=None, description="QOS manifest schema version."
+    )
 
 
 class v1BootProofResponse(TurnkeyBaseModel):
     bootProof: v1BootProof
+
+
+class v1ClaimEarnFeesIntent(TurnkeyBaseModel):
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper to claim fees for. Must be one of the org's deployed wrappers."
+    )
+
+
+class v1ClaimEarnFeesRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1ClaimEarnFeesIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1ClaimEarnFeesResult(TurnkeyBaseModel):
+    claimRequestId: str = Field(
+        description="Identifier to poll claim status and tx hash via GetClaimEarnFeesStatus."
+    )
+
+
+class v1ClaimSwapFeesIntent(TurnkeyBaseModel):
+    pass
+
+
+class v1ClaimSwapFeesRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1ClaimSwapFeesIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1ClaimSwapFeesResult(TurnkeyBaseModel):
+    requestId: str = Field(
+        description="Relay claim request ID submitted through the permit endpoint."
+    )
 
 
 class v1ClientSignature(TurnkeyBaseModel):
@@ -789,6 +997,24 @@ class v1CreateFiatOnRampCredentialResult(TurnkeyBaseModel):
     )
 
 
+class v1CreateFiatOnRampSessionIntent(TurnkeyBaseModel):
+    quoteId: str = Field(
+        description="Identifier of a saved fiat on-ramp quote. Returned by GetFiatOnRampQuote."
+    )
+    walletAddress: str = Field(
+        description="Destination wallet address for the buy transaction."
+    )
+
+
+class v1CreateFiatOnRampSessionResult(TurnkeyBaseModel):
+    onRampUrl: str = Field(
+        description="URL of the fiat on-ramp session for the saved quote."
+    )
+    onRampTransactionId: str = Field(
+        description="Unique identifier used to retrieve transaction statuses for a given fiat on-ramp flow."
+    )
+
+
 class v1CreateInvitationsIntent(TurnkeyBaseModel):
     invitations: List[v1InvitationParams] = Field(description="A list of Invitations.")
 
@@ -807,6 +1033,36 @@ class v1CreateInvitationsRequest(TurnkeyBaseModel):
 
 class v1CreateInvitationsResult(TurnkeyBaseModel):
     invitationIds: List[str] = Field(description="A list of Invitation IDs")
+
+
+class v1CreateMfaPolicyIntent(TurnkeyBaseModel):
+    userId: str = Field(description="The ID of the User to add the MFA Policy to.")
+    mfaPolicyName: str = Field(description="Human-readable name for a Policy.")
+    condition: str = Field(
+        description="A condition expression that evaluates to true or false, determining when this MFA policy applies."
+    )
+    requiredAuthenticationMethods: List[v1RequiredAuthenticationMethodParams] = Field(
+        description="An ordered list of authentication requirements. Each requirement must be satisfied sequentially to complete MFA."
+    )
+    order: int = Field(
+        description="The order in which this MFA policy is evaluated, starting from 0, relative to other MFA policies. Lower order values are evaluated first."
+    )
+    notes: Optional[str] = Field(default=None, description="Notes for an MFA Policy.")
+
+
+class v1CreateMfaPolicyRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateMfaPolicyIntent
+
+
+class v1CreateMfaPolicyResult(TurnkeyBaseModel):
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
 
 
 class v1CreateOauth2CredentialIntent(TurnkeyBaseModel):
@@ -842,6 +1098,13 @@ class v1CreateOauthProvidersIntent(TurnkeyBaseModel):
     )
 
 
+class v1CreateOauthProvidersIntentV2(TurnkeyBaseModel):
+    userId: str = Field(description="The ID of the User to add an Oauth provider to")
+    oauthProviders: List[v1OauthProviderParamsV2] = Field(
+        description="A list of Oauth providers."
+    )
+
+
 class v1CreateOauthProvidersRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -850,11 +1113,17 @@ class v1CreateOauthProvidersRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1CreateOauthProvidersIntent
+    parameters: v1CreateOauthProvidersIntentV2
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
 class v1CreateOauthProvidersResult(TurnkeyBaseModel):
+    providerIds: List[str] = Field(
+        description="A list of unique identifiers for Oauth Providers"
+    )
+
+
+class v1CreateOauthProvidersResultV2(TurnkeyBaseModel):
     providerIds: List[str] = Field(
         description="A list of unique identifiers for Oauth Providers"
     )
@@ -950,6 +1219,9 @@ class v1CreatePolicyIntentV3(TurnkeyBaseModel):
         default=None, description="The consensus expression that triggers the Effect"
     )
     notes: str = Field(description="Notes for a Policy.")
+    time: Optional[str] = Field(
+        default=None, description="The time expression that triggers the Effect"
+    )
 
 
 class v1CreatePolicyRequest(TurnkeyBaseModel):
@@ -1000,6 +1272,10 @@ class v1CreatePrivateKeysIntent(TurnkeyBaseModel):
 
 class v1CreatePrivateKeysIntentV2(TurnkeyBaseModel):
     privateKeys: List[v1PrivateKeyParams] = Field(description="A list of Private Keys.")
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for creating the private keys.",
+    )
 
 
 class v1CreatePrivateKeysRequest(TurnkeyBaseModel):
@@ -1077,7 +1353,8 @@ class v1CreateReadWriteSessionIntentV2(TurnkeyBaseModel):
         description="Client-side public key generated by the user, to which the read write session bundle (credentials) will be encrypted."
     )
     userId: Optional[str] = Field(
-        default=None, description="Unique identifier for a given User."
+        default=None,
+        description="Optional unique identifier for a given User. If none provided, the read write session will be created for the user who is making the request.",
     )
     apiKeyName: Optional[str] = Field(
         default=None,
@@ -1129,6 +1406,39 @@ class v1CreateReadWriteSessionResultV2(TurnkeyBaseModel):
     username: str = Field(description="Human-readable name for a User.")
     apiKeyId: str = Field(description="Unique identifier for the created API key.")
     credentialBundle: str = Field(description="HPKE encrypted credential bundle")
+
+
+class v1CreateSessionProfileIntent(TurnkeyBaseModel):
+    sessionProfileName: str = Field(
+        description="Human-readable name for a Session Profile."
+    )
+    scope: str = Field(
+        description="The scope string that defines the permissions for this Session Profile."
+    )
+    expirationSeconds: Optional[str] = Field(
+        default=None,
+        description="The duration in seconds for which sessions created with this Session Profile are valid. If not set, expiration will be determined by the value passed in to the intent of login activities.",
+    )
+    notes: Optional[str] = Field(
+        default=None, description="Notes for a Session Profile."
+    )
+
+
+class v1CreateSessionProfileRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateSessionProfileIntent
+
+
+class v1CreateSessionProfileResult(TurnkeyBaseModel):
+    sessionProfileId: str = Field(
+        description="Unique identifier for a given Session Profile."
+    )
 
 
 class v1CreateSmartContractInterfaceIntent(TurnkeyBaseModel):
@@ -1283,6 +1593,39 @@ class v1CreateSubOrganizationIntentV7(TurnkeyBaseModel):
     )
 
 
+class v1CreateSubOrganizationIntentV8(TurnkeyBaseModel):
+    subOrganizationName: str = Field(description="Name for this sub-organization")
+    rootUsers: List[v1RootUserParamsV5] = Field(
+        description="Root users to create within this sub-organization"
+    )
+    rootQuorumThreshold: int = Field(
+        description="The threshold of unique approvals to reach root quorum. This value must be less than or equal to the number of root users"
+    )
+    wallet: Optional[v1WalletParams] = Field(
+        default=None, description="The wallet to create for the sub-organization"
+    )
+    disableEmailRecovery: Optional[bool] = Field(
+        default=None, description="Disable email recovery for the sub-organization"
+    )
+    disableEmailAuth: Optional[bool] = Field(
+        default=None, description="Disable email auth for the sub-organization"
+    )
+    disableSmsAuth: Optional[bool] = Field(
+        default=None, description="Disable OTP SMS auth for the sub-organization"
+    )
+    disableOtpEmailAuth: Optional[bool] = Field(
+        default=None, description="Disable OTP email auth for the sub-organization"
+    )
+    verificationToken: Optional[str] = Field(
+        default=None,
+        description="Signed JWT containing a unique id, expiry, verification type, contact",
+    )
+    clientSignature: Optional[v1ClientSignature] = Field(
+        default=None,
+        description="Optional signature proving authorization for this sub-organization creation. The signature is over the verification token ID and the root user parameters for the root user associated with the verification token. Only required if a public key was provided during the verification step.",
+    )
+
+
 class v1CreateSubOrganizationRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -1291,7 +1634,7 @@ class v1CreateSubOrganizationRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1CreateSubOrganizationIntentV7
+    parameters: v1CreateSubOrganizationIntentV8
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
@@ -1332,6 +1675,97 @@ class v1CreateSubOrganizationResultV7(TurnkeyBaseModel):
     rootUserIds: Optional[List[str]] = Field(default=None)
 
 
+class v1CreateSubOrganizationResultV8(TurnkeyBaseModel):
+    subOrganizationId: str
+    wallet: Optional[v1WalletResult] = Field(default=None)
+    rootUserIds: Optional[List[str]] = Field(default=None)
+
+
+class v1CreateSwapQuoteIntent(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="Wallet account or Private Key address used to price the executable provider quote. Private Key identifiers are not supported."
+    )
+    inputToken: str = Field(
+        description="CAIP-19 asset ID for the input asset. The chain is derived from this value."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    slippageBps: Optional[str] = Field(
+        default=None,
+        description="Provider-neutral maximum allowed slippage in basis points. Turnkey converts this value to each provider's request format. When omitted, each provider applies its default slippage behavior.",
+    )
+
+
+class v1CreateSwapQuoteIntentV2(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="Wallet account address used to price the executable provider quote. Private Key identifiers are not supported."
+    )
+    inputToken: str = Field(
+        description="CAIP-19 asset ID for the input asset. The chain is derived from this value."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    slippageBps: Optional[str] = Field(
+        default=None,
+        description="Provider-neutral maximum allowed slippage in basis points. Turnkey converts this value to each provider's request format. When omitted, each provider applies its default slippage behavior.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None,
+        description="Raw public address that receives the output asset. Required for cross-protocol swaps. The address must match the output token protocol. Wallet account IDs, private key IDs, and CAIP account or asset identifiers are not supported.",
+    )
+
+
+class v1CreateSwapQuoteIntentV3(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="Wallet account address used to price the executable provider quote. Private Key identifiers are not supported."
+    )
+    inputToken: str = Field(
+        description="CAIP-19 asset ID for the input asset. The chain is derived from this value."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    slippageBps: Optional[str] = Field(
+        default=None,
+        description="Provider-neutral maximum allowed slippage in basis points. Turnkey converts this value to each provider's request format. When omitted, each provider applies its default slippage behavior.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None,
+        description="Raw public address that receives the output asset. Required for cross-protocol swaps. The address must match the output token protocol. Wallet account IDs, private key IDs, and CAIP account or asset identifiers are not supported.",
+    )
+    feeSponsorship: Optional[bool] = Field(
+        default=None,
+        description="When true, Turnkey pays the provider fees for this swap and invoices them to the billing parent organization. Requires the FEATURE_NAME_SWAP_FEE_SPONSORSHIP organization feature. Defaults to false.",
+    )
+    fixedRate: Optional[bool] = Field(
+        default=None,
+        description="When true, requests a 1:1 conversion before fees between supported stablecoins. Requires the FEATURE_NAME_SWAP_FIXED_RATE organization feature. Defaults to false.",
+    )
+
+
+class v1CreateSwapQuoteRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateSwapQuoteIntentV3
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1CreateSwapQuoteResult(TurnkeyBaseModel):
+    quotes: List[v1SwapQuote] = Field(
+        description="One or more provider quotes for this request. Today this contains a single Relay quote; pass quotes[i].quoteId to execute_swap_v2 to bind execution."
+    )
+
+
+class v1CreateSwapQuoteResultV2(TurnkeyBaseModel):
+    quotes: List[v1SwapQuoteV2] = Field(
+        description="One or more provider quotes for this request. Today this contains a single Relay quote; pass quotes[i].quoteId to execute_swap to bind execution."
+    )
+
+
 class v1CreateTvcAppIntent(TurnkeyBaseModel):
     name: str = Field(description="The name of the new TVC application")
     quorumPublicKey: str = Field(
@@ -1357,6 +1791,21 @@ class v1CreateTvcAppIntent(TurnkeyBaseModel):
         default=None,
         description="Enables network egress for this TVC app. Default if not provided: false.",
     )
+    enableDebugModeDeployments: Optional[bool] = Field(
+        default=None,
+        description="When true, this app may create deployments in debug-mode. Debug-mode deployments expose logs and emit zero'd attestation PCRs, so remote attestation cannot succeed. Cannot be changed after app creation. Setting this true means the app's quorum key is considered permanently insecure, and a new app with a fresh quorum key must be created. Default if not provided: false.",
+    )
+
+
+class v1CreateTvcAppRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateTvcAppIntent
 
 
 class v1CreateTvcAppResult(TurnkeyBaseModel):
@@ -1369,6 +1818,13 @@ class v1CreateTvcAppResult(TurnkeyBaseModel):
     )
     manifestSetThreshold: int = Field(
         description="The required number of approvals for the manifest set"
+    )
+    shareSetId: str = Field(description="The unique identifier for the TVC share set")
+    shareSetOperatorIds: List[str] = Field(
+        description="The unique identifiers of the share set operators"
+    )
+    shareSetThreshold: int = Field(
+        description="The required number of approvals for the share set"
     )
 
 
@@ -1397,14 +1853,35 @@ class v1CreateTvcDeploymentIntent(TurnkeyBaseModel):
         default=None,
         description="Optional encrypted pull secret to authorize Turnkey to pull the pivot container image. If your image is public, leave this empty.",
     )
-    pivotBindAddresses: Optional[List[str]] = Field(
-        default=None,
-        description='Address(es) on which the pivot binary listens. A bind address can be a port alone (e.g. "3000") or an ip:port (e.g. "127.0.0.1:3000"). If provided as a port alone, the IP is assumed to be 0.0.0.0',
-    )
     debugMode: Optional[bool] = Field(
         default=None,
         description="Optional flag to indicate whether to deploy the TVC app in debug mode, which includes additional logging and debugging tools. Default is false.",
     )
+    healthCheckType: v1TvcHealthCheckType = Field(
+        description="Health check type (TVC_HEALTH_CHECK_TYPE_HTTP or TVC_HEALTH_CHECK_TYPE_GRPC). HTTP health checks are made with a GET request on /health, and gRPC health checks follow the standard gRPC health checking protocol."
+    )
+    healthCheckPort: int = Field(description="Port to use for health checks.")
+    publicIngressPort: int = Field(description="Port to use for public ingress.")
+    replicas: Optional[int] = Field(
+        default=None, description="Optional desired replica count for this deployment."
+    )
+    instanceSizeCpus: Optional[int] = Field(
+        default=None, description="Optional desired instance cpu count."
+    )
+    instanceSizeRam: Optional[int] = Field(
+        default=None, description="Optional desired instance memory size in GiB."
+    )
+
+
+class v1CreateTvcDeploymentRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateTvcDeploymentIntent
 
 
 class v1CreateTvcDeploymentResult(TurnkeyBaseModel):
@@ -1423,9 +1900,91 @@ class v1CreateTvcManifestApprovalsIntent(TurnkeyBaseModel):
     )
 
 
+class v1CreateTvcManifestApprovalsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateTvcManifestApprovalsIntent
+
+
 class v1CreateTvcManifestApprovalsResult(TurnkeyBaseModel):
     approvalIds: List[str] = Field(
         description="The unique identifier(s) for the manifest approvals"
+    )
+
+
+class v1CreateTvcOperatorIntent(TurnkeyBaseModel):
+    walletName: Optional[str] = Field(
+        default=None,
+        description="Human-readable name for a new wallet created for this TVC operator",
+    )
+    walletId: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for an existing wallet to reuse for this TVC operator",
+    )
+    path: str = Field(
+        description="Base derivation path for creating TVC operator wallet accounts"
+    )
+    operatorName: str = Field(
+        description="Human-readable name for this new TVC operator"
+    )
+
+
+class v1CreateTvcOperatorRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateTvcOperatorIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1CreateTvcOperatorResult(TurnkeyBaseModel):
+    walletId: str = Field(
+        description="The unique identifier for the wallet containing TVC operator accounts"
+    )
+    operatorId: str = Field(description="The unique identifier for the TVC operator")
+    encryptPublicKey: str = Field(
+        description="Public encryption key for this TVC operator"
+    )
+    signPublicKey: str = Field(description="Public signing key for this TVC operator")
+
+
+class v1CreateTvcQuorumKeyIntent(TurnkeyBaseModel):
+    threshold: int = Field(
+        description="The threshold of operators needed to reassemble this TVC quorum key"
+    )
+    operatorEncryptKeys: List[str] = Field(
+        description="Operator public keys used to encrypt and later approve the generated TVC quorum key shares"
+    )
+
+
+class v1CreateTvcQuorumKeyRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateTvcQuorumKeyIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1CreateTvcQuorumKeyResult(TurnkeyBaseModel):
+    quorumKeyId: str = Field(description="The unique identifier for the TVC quorum key")
+    quorumPublicKey: str = Field(
+        description="Public key for the generated TVC quorum key"
+    )
+    shareIds: List[str] = Field(
+        description="The unique identifier(s) for the generated TVC quorum key shares"
     )
 
 
@@ -1463,6 +2022,10 @@ class v1CreateUsersIntentV3(TurnkeyBaseModel):
     users: List[v1UserParamsV3] = Field(description="A list of Users.")
 
 
+class v1CreateUsersIntentV4(TurnkeyBaseModel):
+    users: List[v1UserParamsV4] = Field(description="A list of Users.")
+
+
 class v1CreateUsersRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -1471,12 +2034,29 @@ class v1CreateUsersRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1CreateUsersIntentV3
+    parameters: v1CreateUsersIntentV4
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
 class v1CreateUsersResult(TurnkeyBaseModel):
     userIds: List[str] = Field(description="A list of User IDs.")
+
+
+class v1CreateVelocityControlIntent(TurnkeyBaseModel):
+    name: str = Field(description="Human-readable name for the Velocity Control.")
+    dataSource: v1VelocityControlDataSource = Field(
+        description="Data source for the Velocity Control."
+    )
+    aggregation: v1VelocityControlAggregation = Field(
+        description="Aggregation expression that the Velocity Control evaluates."
+    )
+    identifier: str = Field(
+        description="Identifier for the Velocity Control. Policies reference it as `controls.<identifier>`. It must be unique within the Organization."
+    )
+
+
+class v1CreateVelocityControlResult(TurnkeyBaseModel):
+    velocityControlId: str
 
 
 class v1CreateWalletAccountsIntent(TurnkeyBaseModel):
@@ -1532,6 +2112,35 @@ class v1CreateWalletRequest(TurnkeyBaseModel):
 class v1CreateWalletResult(TurnkeyBaseModel):
     walletId: str = Field(description="Unique identifier for a Wallet.")
     addresses: List[str] = Field(description="A list of account addresses.")
+
+
+class v1CreateWebhookEndpointIntent(TurnkeyBaseModel):
+    url: str = Field(description="The destination URL for webhook delivery.")
+    name: str = Field(description="Human-readable name for this webhook endpoint.")
+    subscriptions: Optional[List[v1WebhookSubscriptionParams]] = Field(
+        default=None, description="Event subscriptions to create for this endpoint."
+    )
+
+
+class v1CreateWebhookEndpointRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1CreateWebhookEndpointIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1CreateWebhookEndpointResult(TurnkeyBaseModel):
+    endpointId: str = Field(
+        description="Unique identifier of the created webhook endpoint."
+    )
+    webhookEndpoint: v1WebhookEndpointData = Field(
+        description="The created webhook endpoint data."
+    )
 
 
 class v1CredPropsAuthenticationExtensionsClientOutputs(TurnkeyBaseModel):
@@ -1656,6 +2265,26 @@ class v1DeleteInvitationRequest(TurnkeyBaseModel):
 
 class v1DeleteInvitationResult(TurnkeyBaseModel):
     invitationId: str = Field(description="Unique identifier for a given Invitation.")
+
+
+class v1DeleteMfaPolicyIntent(TurnkeyBaseModel):
+    userId: str = Field(description="The ID of the User to delete the MFA Policy from.")
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+
+
+class v1DeleteMfaPolicyRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1DeleteMfaPolicyIntent
+
+
+class v1DeleteMfaPolicyResult(TurnkeyBaseModel):
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
 
 
 class v1DeleteOauth2CredentialIntent(TurnkeyBaseModel):
@@ -1814,6 +2443,29 @@ class v1DeletePrivateKeysResult(TurnkeyBaseModel):
     )
 
 
+class v1DeleteSecretsIntent(TurnkeyBaseModel):
+    secretIds: List[str] = Field(
+        description="Unique identifiers of the secrets to delete. Must contain between 1 and 32 distinct UUIDs. All secrets must belong to the organization."
+    )
+
+
+class v1DeleteSecretsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1DeleteSecretsIntent
+
+
+class v1DeleteSecretsResult(TurnkeyBaseModel):
+    secretIds: List[str] = Field(
+        description="Unique identifiers of the deleted secrets, in the order requested."
+    )
+
+
 class v1DeleteSmartContractInterfaceIntent(TurnkeyBaseModel):
     smartContractInterfaceId: str = Field(
         description="The ID of a Smart Contract Interface intended for deletion."
@@ -1863,6 +2515,52 @@ class v1DeleteSubOrganizationResult(TurnkeyBaseModel):
     )
 
 
+class v1DeleteTvcAppAndDeploymentsIntent(TurnkeyBaseModel):
+    appId: str = Field(
+        description="The unique identifier of the TVC app to delete. The app and all associated deployments will be removed."
+    )
+
+
+class v1DeleteTvcAppAndDeploymentsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1DeleteTvcAppAndDeploymentsIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1DeleteTvcAppAndDeploymentsResult(TurnkeyBaseModel):
+    appId: str = Field(description="The unique identifier of the deleted TVC app.")
+
+
+class v1DeleteTvcDeploymentIntent(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="The unique identifier of the TVC deployment to delete."
+    )
+
+
+class v1DeleteTvcDeploymentRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1DeleteTvcDeploymentIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1DeleteTvcDeploymentResult(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="The unique identifier of the deleted TVC deployment."
+    )
+
+
 class v1DeleteUserTagsIntent(TurnkeyBaseModel):
     userTagIds: List[str] = Field(description="A list of User Tag IDs.")
 
@@ -1902,6 +2600,18 @@ class v1DeleteUsersRequest(TurnkeyBaseModel):
 
 class v1DeleteUsersResult(TurnkeyBaseModel):
     userIds: List[str] = Field(description="A list of User IDs.")
+
+
+class v1DeleteVelocityControlsIntent(TurnkeyBaseModel):
+    velocityControlIds: List[str] = Field(
+        description="List of 1 to 32 unique identifiers for Velocity Controls within an Organization."
+    )
+
+
+class v1DeleteVelocityControlsResult(TurnkeyBaseModel):
+    velocityControlIds: List[str] = Field(
+        description="A list of unique identifiers for the deleted Velocity Controls."
+    )
 
 
 class v1DeleteWalletAccountsIntent(TurnkeyBaseModel):
@@ -1960,6 +2670,44 @@ class v1DeleteWalletsResult(TurnkeyBaseModel):
     )
 
 
+class v1DeleteWebhookEndpointIntent(TurnkeyBaseModel):
+    endpointId: str = Field(
+        description="Unique identifier of the webhook endpoint to delete."
+    )
+
+
+class v1DeleteWebhookEndpointRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1DeleteWebhookEndpointIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1DeleteWebhookEndpointResult(TurnkeyBaseModel):
+    endpointId: str = Field(
+        description="Unique identifier of the deleted webhook endpoint."
+    )
+
+
+class v1DeploymentStatus(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="Unique identifier for this deployment (corresponds to k8s deployment label)"
+    )
+    readyReplicas: int = Field(description="Number of ready replicas")
+    desiredReplicas: int = Field(description="Desired number of replicas")
+    lastUpdatedTime: externaldatav1Timestamp = Field(
+        description="Last time this deployment was updated"
+    )
+    provisioningState: v1ProvisioningState = Field(
+        description="Current quorum-key provisioning state for this deployment"
+    )
+
+
 class v1DisableAuthProxyIntent(TurnkeyBaseModel):
     pass
 
@@ -1974,6 +2722,482 @@ class v1DisablePrivateKeyIntent(TurnkeyBaseModel):
 
 class v1DisablePrivateKeyResult(TurnkeyBaseModel):
     privateKeyId: str = Field(description="Unique identifier for a given Private Key.")
+
+
+class v1EarnClaimRewardsIntent(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="A Turnkey-managed wallet address the rewards are attributed to. The claim transaction is signed by this wallet and the Merkl Distributor transfers every reward token to it."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain to claim rewards on (e.g. 'eip155:8453'). Rewards accrue per chain; see ListEarnRewards."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+
+
+class v1EarnClaimRewardsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1EarnClaimRewardsIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1EarnClaimRewardsResult(TurnkeyBaseModel):
+    claimRequestId: str = Field(
+        description="Identifier to poll claim status and tx hash via GetEarnClaimRewardsStatus."
+    )
+
+
+class v1EarnDeployWrapperIntent(TurnkeyBaseModel):
+    vaultAddress: str = Field(
+        description="Address of the underlying yield vault to wrap (from the ListEarnVaults catalog)."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID the vault lives on (e.g., 'eip155:8453' for Base)."
+    )
+    clientFeeBps: str = Field(
+        description="Your fee on gross yield, in basis points (e.g., '2000' for 20%). Maximum is 4000 (40%)."
+    )
+    clientFeeWallet: str = Field(
+        description="The wallet address that receives the client's fee payouts on-chain. Must be a Turnkey-managed wallet address."
+    )
+
+
+class v1EarnDeployWrapperRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1EarnDeployWrapperIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1EarnDeployWrapperResult(TurnkeyBaseModel):
+    wrapperAddress: str = Field(
+        description="Address of the deployed fee wrapper (the deposit target)."
+    )
+    splitterAddress: str = Field(
+        description="Address of the deployed fee splitter (PaymentSplitter for Morpho, RevenueSplitterOwner for Aave)."
+    )
+    deployRequestId: str = Field(description="Identifier to poll deploy status.")
+
+
+class v1EarnDepositIntent(TurnkeyBaseModel):
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper to deposit into, from ListEarnVaults/ListEarnPositions. Must be one of the org's deployed wrappers."
+    )
+    signWith: str = Field(
+        description="A Wallet account address or Private Key address to deposit from and sign with. Must be an on-chain address; Private Key identifiers are not supported."
+    )
+    assets: str = Field(
+        description="Amount of the underlying asset to deposit, in raw on-chain units (e.g., '1000000' for 1 USDC at 6 decimals)."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID the vault lives on (e.g., 'eip155:8453' for Base)."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+
+
+class v1EarnDepositRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1EarnDepositIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1EarnDepositResult(TurnkeyBaseModel):
+    depositRequestId: str = Field(
+        description="Identifier to poll deposit status and tx hash via GetEarnDepositStatus."
+    )
+
+
+class v1EarnEnabledVault(TurnkeyBaseModel):
+    vaultAddress: Optional[str] = Field(
+        default=None, description="Address of the underlying yield vault."
+    )
+    wrapperAddress: Optional[str] = Field(
+        default=None,
+        description="Address of the deployed fee wrapper (the deposit target).",
+    )
+    provider: Optional[v1EarnProvider] = Field(
+        default=None, description="Yield provider for the vault."
+    )
+    caip19: Optional[str] = Field(
+        default=None,
+        description="CAIP-19 asset ID of the vault's underlying asset (e.g. 'eip155:8453/erc20:0x833589...'); the chain is encoded in the identifier.",
+    )
+    apyPct: Optional[str] = Field(
+        default=None,
+        description="Gross annual percentage yield, expressed as a decimal fraction (before fees).",
+    )
+    totalDeposited: Optional[str] = Field(
+        default=None,
+        description="Total deposited through this wrapper (wrapper TVL), in raw on-chain units of the underlying asset.",
+    )
+    display: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized total-deposited values for display only (usd + crypto). Do not do arithmetic with these; use total_deposited instead.",
+    )
+    netApyPct: Optional[str] = Field(
+        default=None,
+        description="Annual percentage yield net of fees, expressed as a decimal fraction.",
+    )
+    clientFeeBps: Optional[str] = Field(
+        default=None, description="Client fee taken on yield, in basis points."
+    )
+    depositsDisabled: Optional[bool] = Field(
+        default=None,
+        description="When true, deposits to this wrapper are rejected; withdrawals are unaffected. Toggled via EarnSetWrapperState.",
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Human-readable vault name from the provider (e.g. 'Steakhouse Prime USDC' for Morpho; the reserve symbol for Aave).",
+    )
+    curator: Optional[str] = Field(
+        default=None,
+        description="Vault curator name(s), comma-separated when a vault has multiple. Empty for providers without curators (e.g. Aave).",
+    )
+    claimableClientFee: Optional[str] = Field(
+        default=None,
+        description="The client's claimable fee (releasable now), in raw on-chain units of the underlying asset (the caip19 asset). Turnkey's fee is excluded. Only returned to the parent org; unset when a sub-org queries.",
+    )
+    claimableClientFeeDisplay: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized claimable_client_fee for display only (usd + crypto). Do not do arithmetic with these; use claimable_client_fee. Unset when a sub-org queries.",
+    )
+    clientFeeWallet: Optional[str] = Field(
+        default=None,
+        description="The wallet address that receives the client's fee payouts on-chain. Unset when a sub-org queries.",
+    )
+    liquidity: Optional[str] = Field(
+        default=None,
+        description="Assets currently withdrawable from the underlying vault without a reallocation, in raw on-chain units of the underlying asset. This is the vault's liquidity, not the wrapper's balance. Empty when the provider does not report it.",
+    )
+    liquidityDisplay: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized liquidity values for display purposes only (usd + crypto). Do not do arithmetic with these; use liquidity instead.",
+    )
+    exposures: Optional[List[v1EarnVaultExposure]] = Field(
+        default=None,
+        description="The underlying markets the vault allocates into, ranked by supplied amount descending. Only populated when the request sets include_exposure, and only for providers that expose an allocation breakdown (Morpho).",
+    )
+    forceDeallocatableLiquidity: Optional[str] = Field(
+        default=None,
+        description="Additional assets withdrawable from the underlying vault by force-deallocating its non-liquidity adapters at zero penalty, in raw on-chain units of the underlying asset. Additive to liquidity. Empty when the provider does not report it.",
+    )
+    forceDeallocatableLiquidityDisplay: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized force-deallocatable liquidity values for display purposes only (usd + crypto). Do not do arithmetic with these; use force_deallocatable_liquidity instead.",
+    )
+    deployStatus: Optional[str] = Field(
+        default=None,
+        description="On-chain status of the wrapper deployment: PENDING, COMPLETED, or FAILED. Only a COMPLETED wrapper is usable. Empty when no deploy is recorded for the wrapper.",
+    )
+    deployRequestId: Optional[str] = Field(
+        default=None,
+        description="Request id of the wrapper's most recent deploy, for polling GetEarnDeployStatus. Empty when no deploy is recorded.",
+    )
+    deployError: Optional[str] = Field(
+        default=None, description="Failure detail when deploy_status is FAILED."
+    )
+
+
+class v1EarnPosition(TurnkeyBaseModel):
+    vaultAddress: Optional[str] = Field(
+        default=None, description="Address of the underlying yield vault."
+    )
+    wrapperAddress: Optional[str] = Field(
+        default=None, description="Address of the fee wrapper holding the position."
+    )
+    provider: Optional[v1EarnProvider] = Field(
+        default=None, description="Yield provider for the vault."
+    )
+    caip19: Optional[str] = Field(
+        default=None,
+        description="CAIP-19 asset ID of the vault's underlying asset (e.g. 'eip155:8453/erc20:0x833589...'); the chain is encoded in the identifier.",
+    )
+    currentValue: Optional[str] = Field(
+        default=None,
+        description="Current value of the position in the underlying asset, in raw on-chain units (already net of the wrapper fee).",
+    )
+    totalDeposited: Optional[str] = Field(
+        default=None,
+        description="Lifetime total deposited into this position, in raw on-chain units.",
+    )
+    totalWithdrawn: Optional[str] = Field(
+        default=None,
+        description="Lifetime total withdrawn from this position, in raw on-chain units.",
+    )
+    display: Optional[v1EarnPositionDisplay] = Field(
+        default=None,
+        description="USD + crypto renderings for display only. Do not do arithmetic with these.",
+    )
+    depositsDisabled: Optional[bool] = Field(
+        default=None,
+        description="When true, deposits to this wrapper are rejected; withdrawals are unaffected. Toggled via EarnSetWrapperState.",
+    )
+
+
+class v1EarnPositionDisplay(TurnkeyBaseModel):
+    currentValueUsd: Optional[str] = Field(
+        default=None, description="Current value in USD, for display only."
+    )
+    totalDepositedUsd: Optional[str] = Field(
+        default=None, description="Total deposited in USD, for display only."
+    )
+    totalWithdrawnUsd: Optional[str] = Field(
+        default=None, description="Total withdrawn in USD, for display only."
+    )
+    currentValueCrypto: Optional[str] = Field(
+        default=None,
+        description="Current value in the asset's own units, for display only.",
+    )
+    totalDepositedCrypto: Optional[str] = Field(
+        default=None,
+        description="Total deposited in the asset's own units, for display only.",
+    )
+    totalWithdrawnCrypto: Optional[str] = Field(
+        default=None,
+        description="Total withdrawn in the asset's own units, for display only.",
+    )
+
+
+class v1EarnProvider(str, Enum):
+    EARN_PROVIDER_MORPHO = "EARN_PROVIDER_MORPHO"
+    EARN_PROVIDER_AAVE = "EARN_PROVIDER_AAVE"
+    EARN_PROVIDER_KAMINO = "EARN_PROVIDER_KAMINO"
+
+
+class v1EarnReward(TurnkeyBaseModel):
+    caip2: Optional[str] = Field(
+        default=None,
+        description="CAIP-2 chain the reward is claimable on (e.g. 'eip155:8453').",
+    )
+    caip19: Optional[str] = Field(
+        default=None,
+        description="CAIP-19 asset ID of the reward token (e.g. 'eip155:8453/erc20:0xBAa5...'). Reward tokens are campaign-specific and unrelated to the position's underlying asset.",
+    )
+    symbol: Optional[str] = Field(
+        default=None,
+        description="Symbol of the reward token (e.g. 'MORPHO'), as reported by Merkl.",
+    )
+    decimals: Optional[int] = Field(
+        default=None, description="Decimals of the reward token."
+    )
+    claimable: Optional[str] = Field(
+        default=None,
+        description="Amount claimable now, in raw on-chain units of the reward token.",
+    )
+    claimed: Optional[str] = Field(
+        default=None,
+        description="Lifetime amount already claimed, in raw on-chain units of the reward token.",
+    )
+    pending: Optional[str] = Field(
+        default=None,
+        description="Amount accrued but not yet claimable (not yet in a live on-chain merkle root; roots update roughly every 8 hours), in raw on-chain units of the reward token.",
+    )
+    display: Optional[v1EarnRewardDisplay] = Field(
+        default=None,
+        description="USD + crypto renderings for display only. Do not do arithmetic with these.",
+    )
+
+
+class v1EarnRewardDisplay(TurnkeyBaseModel):
+    claimableUsd: Optional[str] = Field(
+        default=None,
+        description="Claimable amount in USD, for display only. Empty when the token is unpriced.",
+    )
+    claimableCrypto: Optional[str] = Field(
+        default=None,
+        description="Claimable amount in the reward token's own units, for display only.",
+    )
+    claimedUsd: Optional[str] = Field(
+        default=None,
+        description="Lifetime claimed amount in USD, for display only. Empty when the token is unpriced.",
+    )
+    claimedCrypto: Optional[str] = Field(
+        default=None,
+        description="Lifetime claimed amount in the reward token's own units, for display only.",
+    )
+    pendingUsd: Optional[str] = Field(
+        default=None,
+        description="Pending amount in USD, for display only. Empty when the token is unpriced.",
+    )
+    pendingCrypto: Optional[str] = Field(
+        default=None,
+        description="Pending amount in the reward token's own units, for display only.",
+    )
+
+
+class v1EarnSetWrapperStateIntent(TurnkeyBaseModel):
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper to update, from ListEarnVaults/ListEarnPositions. Must be one of the org's deployed wrappers."
+    )
+    depositsDisabled: bool = Field(
+        description="When true, deposits to this wrapper are rejected; withdrawals are unaffected. Set to false to re-enable deposits."
+    )
+
+
+class v1EarnSetWrapperStateRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1EarnSetWrapperStateIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1EarnSetWrapperStateResult(TurnkeyBaseModel):
+    wrapperAddress: str = Field(description="Address of the updated Earn wrapper.")
+    depositsDisabled: bool = Field(
+        description="The wrapper's deposit state after this activity."
+    )
+
+
+class v1EarnValueDisplay(TurnkeyBaseModel):
+    usd: Optional[str] = Field(default=None, description="USD value, for display only.")
+    crypto: Optional[str] = Field(
+        default=None,
+        description="Normalized amount in the asset's own units, for display only.",
+    )
+
+
+class v1EarnVault(TurnkeyBaseModel):
+    vaultAddress: Optional[str] = Field(
+        default=None, description="Address of the underlying yield vault."
+    )
+    provider: Optional[v1EarnProvider] = Field(
+        default=None, description="Yield provider for the vault."
+    )
+    caip19: Optional[str] = Field(
+        default=None,
+        description="CAIP-19 asset ID of the vault's underlying asset (e.g. 'eip155:8453/erc20:0x833589...'); the chain is encoded in the identifier.",
+    )
+    tvl: Optional[str] = Field(
+        default=None,
+        description="Total value locked in the vault, in raw on-chain units of the underlying asset. The catalog is sorted by the USD value of this.",
+    )
+    apyPct: Optional[str] = Field(
+        default=None,
+        description="Current annual percentage yield, expressed as a decimal fraction (e.g., '0.0812' for 8.12%).",
+    )
+    enabled: Optional[bool] = Field(
+        default=None, description="Whether the organization has enabled this vault."
+    )
+    display: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized TVL values for display purposes only (usd + crypto). Do not do arithmetic with these; use tvl instead.",
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Human-readable vault name from the provider (e.g. 'Steakhouse Prime USDC' for Morpho; the reserve symbol for Aave).",
+    )
+    curator: Optional[str] = Field(
+        default=None,
+        description="Vault curator name(s), comma-separated when a vault has multiple. Empty for providers without curators (e.g. Aave).",
+    )
+    liquidity: Optional[str] = Field(
+        default=None,
+        description="Assets currently withdrawable from the vault without a reallocation, in raw on-chain units of the underlying asset. Empty when the provider does not report it.",
+    )
+    liquidityDisplay: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized liquidity values for display purposes only (usd + crypto). Do not do arithmetic with these; use liquidity instead.",
+    )
+    forceDeallocatableLiquidity: Optional[str] = Field(
+        default=None,
+        description="Additional assets withdrawable from the vault by force-deallocating its non-liquidity adapters at zero penalty, in raw on-chain units of the underlying asset. Additive to liquidity. Empty when the provider does not report it.",
+    )
+    forceDeallocatableLiquidityDisplay: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized force-deallocatable liquidity values for display purposes only (usd + crypto). Do not do arithmetic with these; use force_deallocatable_liquidity instead.",
+    )
+
+
+class v1EarnVaultExposure(TurnkeyBaseModel):
+    marketId: Optional[str] = Field(
+        default=None,
+        description="Provider-specific identifier for the market (the Morpho Blue market id).",
+    )
+    collateralSymbol: Optional[str] = Field(
+        default=None,
+        description="Symbol of the market's collateral asset (e.g. 'cbBTC'). Empty for an idle/uncollateralized market.",
+    )
+    collateralCaip19: Optional[str] = Field(
+        default=None,
+        description="CAIP-19 asset ID of the market's collateral asset. Empty for an idle/uncollateralized market.",
+    )
+    lltvPct: Optional[str] = Field(
+        default=None,
+        description="The market's liquidation loan-to-value, expressed as a decimal fraction (e.g. '0.86' for 86%).",
+    )
+    supplied: Optional[str] = Field(
+        default=None,
+        description="Assets the vault supplies to this market, in raw on-chain units of the underlying asset.",
+    )
+    display: Optional[v1EarnValueDisplay] = Field(
+        default=None,
+        description="Normalized supplied values for display purposes only (usd + crypto). Do not do arithmetic with these; use supplied instead.",
+    )
+    sharePct: Optional[str] = Field(
+        default=None,
+        description="This market's share of the vault's supplied assets, as a decimal fraction (e.g. '0.997' for 99.7%).",
+    )
+
+
+class v1EarnWithdrawIntent(TurnkeyBaseModel):
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper holding the position to withdraw from, from ListEarnPositions. Must be one of the org's deployed wrappers."
+    )
+    signWith: str = Field(
+        description="A Wallet account address or Private Key address to withdraw to and sign with. Must be an on-chain address; Private Key identifiers are not supported."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID the vault lives on (e.g., 'eip155:8453' for Base)."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+    amountValue: str = Field(
+        description="The amount of the underlying asset to withdraw, in raw on-chain units. Pass 'MAX' to withdraw the entire position."
+    )
+
+
+class v1EarnWithdrawRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1EarnWithdrawIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1EarnWithdrawResult(TurnkeyBaseModel):
+    withdrawRequestId: str = Field(
+        description="Identifier to poll withdrawal status and tx hash via GetEarnWithdrawStatus."
+    )
 
 
 class v1Effect(str, Enum):
@@ -2162,6 +3386,53 @@ class v1EmailCustomizationParamsV2(TurnkeyBaseModel):
     )
 
 
+class v1EmailEvent(TurnkeyBaseModel):
+    id: str = Field(description="Unique identifier for the email event")
+    organizationId: str = Field(
+        description="Unique identifier for the organization associated with the email event"
+    )
+    messageId: str = Field(
+        description="Provider message identifier. Multiple events can share the same message ID"
+    )
+    eventType: str = Field(
+        description="Email event type, such as Send, Delivery, Bounce, or DeliveryDelay"
+    )
+    fromAddress: str = Field(description="Sender email address")
+    toAddress: str = Field(description="Recipient email address")
+    senderTenant: Optional[str] = Field(
+        default=None, description="SES tenant that sent the email, when available"
+    )
+    timestamp: str = Field(description="Event timestamp as millisecond epoch string")
+    createdAt: str = Field(description="Creation timestamp as millisecond epoch string")
+    details: v1EmailEventDetails = Field(
+        description="Parsed email event details. Fields are populated based on event type and available provider metadata"
+    )
+
+
+class v1EmailEventDetails(TurnkeyBaseModel):
+    bounceType: Optional[str] = Field(
+        default=None, description="Bounce type for Bounce events"
+    )
+    bounceSubType: Optional[str] = Field(
+        default=None, description="Bounce subtype for Bounce events"
+    )
+    diagnosticCode: Optional[str] = Field(
+        default=None, description="Diagnostic text for Bounce or DeliveryDelay events"
+    )
+    deliverySmtpResponse: Optional[str] = Field(
+        default=None, description="SMTP response for Delivery events"
+    )
+    deliveryProcessingTimeMillis: Optional[str] = Field(
+        default=None, description="Processing time in milliseconds for Delivery events"
+    )
+    deliveryDelayType: Optional[str] = Field(
+        default=None, description="Delay type for DeliveryDelay events"
+    )
+    complaintFeedbackType: Optional[str] = Field(
+        default=None, description="Feedback type for Complaint events"
+    )
+
+
 class v1EnableAuthProxyIntent(TurnkeyBaseModel):
     pass
 
@@ -2169,6 +3440,23 @@ class v1EnableAuthProxyIntent(TurnkeyBaseModel):
 class v1EnableAuthProxyResult(TurnkeyBaseModel):
     userId: str = Field(
         description="A User ID with permission to initiate authentication."
+    )
+
+
+class v1EthCallParams(TurnkeyBaseModel):
+    to: str = Field(description="Recipient address as a hex string with 0x prefix.")
+    value: Optional[str] = Field(
+        default=None, description="Amount of native asset to send in wei."
+    )
+    data: Optional[str] = Field(
+        default=None, description="Hex-encoded call data for contract interactions."
+    )
+
+
+class v1EthFailureDetails(TurnkeyBaseModel):
+    revertChain: Optional[List[v1RevertChainEntry]] = Field(
+        default=None,
+        description="Ethereum revert chain, ordered from outermost to innermost.",
     )
 
 
@@ -2221,9 +3509,53 @@ class v1EthSendTransactionIntent(TurnkeyBaseModel):
         default=None,
         description="Maximum priority fee (tip) per gas unit in wei. Required for non-sponsored (EIP-1559) transactions. Not used for sponsored transactions.",
     )
+    deadline: Optional[str] = Field(
+        default=None,
+        description="Unix timestamp in seconds for EIP-712 execution deadline. Only used when sponsor=true.",
+    )
     gasStationNonce: Optional[str] = Field(
         default=None,
         description="The gas station delegate contract nonce. Only used when sponsor=true. Include this if you want maximal security posture.",
+    )
+
+
+class v1EthSendTransactionIntentV2(TurnkeyBaseModel):
+    from_: str = Field(
+        alias="from",
+        description="A wallet or private key address to sign with. This does not support private key IDs.",
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None,
+        description="Whether to sponsor this transaction via Gas Station. If false or unset, the EOA pays gas. A single call uses EIP-1559; multiple calls use EIP-7702 batch execution via Gas Station.",
+    )
+    nonce: Optional[str] = Field(
+        default=None, description="Outer transaction nonce. Omit to auto-fetch."
+    )
+    gasLimit: Optional[str] = Field(
+        default=None,
+        description="Maximum amount of gas for the outer transaction. Omit to auto-estimate.",
+    )
+    maxFeePerGas: Optional[str] = Field(
+        default=None,
+        description="Maximum total fee per gas unit (base fee + priority fee) in wei. Omit to auto-estimate.",
+    )
+    maxPriorityFeePerGas: Optional[str] = Field(
+        default=None,
+        description="Maximum priority fee (tip) per gas unit in wei. Omit to auto-estimate.",
+    )
+    deadline: Optional[str] = Field(
+        default=None,
+        description="Unix timestamp in seconds for EIP-712 execution deadline. Only used when sponsor=true.",
+    )
+    gasStationNonce: Optional[str] = Field(
+        default=None,
+        description="The gas station delegate contract nonce used in the BatchExecution EIP-712 message. Valid for sponsored transactions and non-sponsored multi-call batches. Omit to auto-fetch. Use the nonces endpoint for replay protection.",
+    )
+    calls: List[v1EthCallParams] = Field(
+        description="Ordered list of calls to execute. Must contain between 1 and 50 entries. A single entry with sponsor=false uses EIP-1559; multiple entries use EIP-7702 batch execution via Gas Station."
     )
 
 
@@ -2235,7 +3567,7 @@ class v1EthSendTransactionRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1EthSendTransactionIntent
+    parameters: v1EthSendTransactionIntentV2
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
@@ -2245,9 +3577,203 @@ class v1EthSendTransactionResult(TurnkeyBaseModel):
     )
 
 
+class v1EthSendTransactionResultV2(TurnkeyBaseModel):
+    sendTransactionStatusId: str = Field(
+        description="The send_transaction_status ID associated with the transaction submission"
+    )
+
+
 class v1EthSendTransactionStatus(TurnkeyBaseModel):
     txHash: Optional[str] = Field(
         default=None, description="The Ethereum transaction hash, if available."
+    )
+
+
+class v1EthTransactionHistoryItem(TurnkeyBaseModel):
+    transactionHash: str = Field(description="EVM transaction hash.")
+    block: v1TransactionHistoryBlock = Field(
+        description="Block metadata for the transaction."
+    )
+    status: str = Field(description="Transaction confirmation status.")
+    origin: str = Field(
+        description="Origin of the transaction. Examples include TURNKEY."
+    )
+    from_: str = Field(
+        alias="from", description="EVM sender address for the transaction."
+    )
+    to: Optional[str] = Field(
+        default=None,
+        description="EVM transaction destination address, such as the called contract or EVM tx.to. Omitted for contract-creation transactions with no destination. Recipients and payers of value transfers are reflected in transfers[].counterparty.",
+    )
+    fee: v1TransactionHistoryFee = Field(description="Transaction fee information.")
+    transfers: List[v1TransactionHistoryTransfer] = Field(
+        description="Asset transfers associated with the transaction."
+    )
+    turnkey: Optional[v1TransactionHistoryTurnkey] = Field(
+        default=None,
+        description="Turnkey-specific metadata for transactions originated by Turnkey.",
+    )
+    executionFailed: Optional[bool] = Field(
+        default=None,
+        description="Whether the transaction failed during on-chain execution. Omitted when execution outcome is unavailable.",
+    )
+
+
+class v1EthUndelegate7702Intent(TurnkeyBaseModel):
+    from_: str = Field(
+        alias="from",
+        description="A wallet or private key address to undelegate. This does not support private key IDs.",
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
+    )
+    nonce: Optional[str] = Field(
+        default=None, description="Outer transaction nonce. Omit to auto-fetch."
+    )
+    gasLimit: Optional[str] = Field(
+        default=None,
+        description="Maximum amount of gas for the undelegation transaction. Omit to use the fixed undelegation gas limit.",
+    )
+    maxFeePerGas: Optional[str] = Field(
+        default=None,
+        description="Maximum total fee per gas unit (base fee + priority fee) in wei. Omit to auto-estimate.",
+    )
+    maxPriorityFeePerGas: Optional[str] = Field(
+        default=None,
+        description="Maximum priority fee (tip) per gas unit in wei. Omit to auto-estimate.",
+    )
+
+
+class v1EthUndelegate7702Request(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1EthUndelegate7702Intent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1EthUndelegate7702Result(TurnkeyBaseModel):
+    sendTransactionStatusId: str = Field(
+        description="The send_transaction_status ID associated with the undelegation transaction submission"
+    )
+
+
+class v1ExecuteSwapIntent(TurnkeyBaseModel):
+    inputToken: str = Field(
+        description="CAIP-19 asset ID for the input asset. The chain is derived from this value."
+    )
+    outputToken: str = Field(
+        description="CAIP-19 asset ID for the output asset. May be on a different chain than `input_token` for cross-chain swaps."
+    )
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    walletAccount: str = Field(
+        description="Wallet account address to sign and submit the swap transaction from. Cross-wallet swaps are not supported."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None,
+        description="Whether to sponsor the resulting swap transaction via Gas Station when supported by the chain.",
+    )
+    slippage: Optional[str] = Field(
+        default=None, description="Maximum allowed slippage in basis points."
+    )
+    provider: Optional[str] = Field(
+        default=None,
+        description="Swap provider to execute with, as returned by create_swap_quote. When omitted, execution uses the default provider.",
+    )
+    minOutputAmount: str = Field(
+        description="Minimum acceptable base-unit amount of the output asset. Execution fails if the swap provider's quoted minimum output falls below this floor at execution time."
+    )
+
+
+class v1ExecuteSwapIntentV2(TurnkeyBaseModel):
+    quoteId: str = Field(
+        description="Quote identifier returned by create_swap_quote. Execution is bound to this quote; the signer is derived from the quote and must not be resupplied."
+    )
+    inputToken: str = Field(description="CAIP-19 asset ID for the input asset.")
+    inputAmount: str = Field(
+        description="Exact base-unit amount of the input asset committed by the quote."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    quotedOutputAmount: str = Field(
+        description="Exact quoted base-unit output amount committed by the quote."
+    )
+    minOutputAmount: str = Field(
+        description="Exact minimum base-unit output committed by the quote."
+    )
+    sponsor: bool = Field(description="Whether the quoted transaction is sponsored.")
+    evmNonce: Optional[str] = Field(
+        default=None,
+        description="Exact EVM sender (EOA account) nonce. Valid only for a non-sponsored EVM swap. Honored for already-delegated (Type-2) batch swaps and single-call swaps; ignored for not-yet-delegated EIP-7702 (Type-4) batches where the outer nonce is derived from the authorization. Prefer gas_station_nonce for batch replay protection and use the nonces endpoint to fetch it. Omit to auto-fetch.",
+    )
+    recentBlockhash: Optional[str] = Field(
+        default=None,
+        description="Exact Solana recent blockhash. Valid only for a Solana swap, including sponsored swaps. Omit to auto-fetch.",
+    )
+    gasStationNonce: Optional[str] = Field(
+        default=None,
+        description="Exact gas station delegate contract nonce used in the BatchExecution EIP-712 message. Valid for sponsored EVM swaps and non-sponsored EVM swaps that execute as a multi-call batch (for example ERC-20 approve + swap). This is the replay-protection nonce for gas-station batches; use the nonces endpoint to fetch it. Omit to auto-fetch.",
+    )
+
+
+class v1ExecuteSwapIntentV3(TurnkeyBaseModel):
+    quoteId: str = Field(
+        description="Quote identifier returned by create_swap_quote. Execution is bound to this quote; the signer is derived from the quote and must not be resupplied."
+    )
+    inputToken: str = Field(description="CAIP-19 asset ID for the input asset.")
+    inputAmount: str = Field(
+        description="Exact base-unit amount of the input asset committed by the quote."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    quotedOutputAmount: str = Field(
+        description="Exact quoted base-unit output amount committed by the quote."
+    )
+    minOutputAmount: str = Field(
+        description="Exact minimum base-unit output committed by the quote."
+    )
+    sponsor: bool = Field(description="Whether the quoted transaction is sponsored.")
+    evmNonce: Optional[str] = Field(
+        default=None,
+        description="Exact EVM sender (EOA account) nonce. Valid only for a non-sponsored EVM swap. Honored for already-delegated (Type-2) batch swaps and single-call swaps; ignored for not-yet-delegated EIP-7702 (Type-4) batches where the outer nonce is derived from the authorization. Prefer gas_station_nonce for batch replay protection and use the nonces endpoint to fetch it. Omit to auto-fetch.",
+    )
+    recentBlockhash: Optional[str] = Field(
+        default=None,
+        description="Exact Solana recent blockhash. Valid only for a Solana swap, including sponsored swaps. Omit to auto-fetch.",
+    )
+    gasStationNonce: Optional[str] = Field(
+        default=None,
+        description="Exact gas station delegate contract nonce used in the BatchExecution EIP-712 message. Valid for sponsored EVM swaps and non-sponsored EVM swaps that execute as a multi-call batch (for example ERC-20 approve + swap). This is the replay-protection nonce for gas-station batches; use the nonces endpoint to fetch it. Omit to auto-fetch.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None,
+        description="Raw public address that receives the output asset. Required for cross-protocol swaps. The address must match the output token protocol. Wallet account IDs, private key IDs, and CAIP account or asset identifiers are not supported.",
+    )
+
+
+class v1ExecuteSwapRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1ExecuteSwapIntentV3
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1ExecuteSwapResult(TurnkeyBaseModel):
+    swapRequestId: str = Field(
+        description="Identifier to poll swap status via GetSwapStatus."
+    )
+    provider: Optional[str] = Field(
+        default=None, description="Swap provider used to build the transaction."
+    )
+    quoteId: Optional[str] = Field(
+        default=None, description="Quote identifier used for execution, if any."
     )
 
 
@@ -2274,6 +3800,42 @@ class v1ExportPrivateKeyResult(TurnkeyBaseModel):
     privateKeyId: str = Field(description="Unique identifier for a given Private Key.")
     exportBundle: str = Field(
         description="Export bundle containing a private key encrypted to the client's target public key."
+    )
+
+
+class v1ExportSecretParams(TurnkeyBaseModel):
+    secretId: str = Field(description="Unique identifier for the secret to export.")
+    targetPublicKey: str = Field(
+        description="Client-side public key generated by the user, to which the exported secret will be encrypted."
+    )
+    encryptionSuite: v1TransportEncryptionSuite = Field(
+        description="Transport encryption suite used for the exported secret."
+    )
+    requestContext: Optional[List[v1KeyValue]] = Field(
+        default=None, description="Bind metadata to the request."
+    )
+
+
+class v1ExportSecretsIntent(TurnkeyBaseModel):
+    secrets: List[v1ExportSecretParams] = Field(
+        description="A list of secrets to export."
+    )
+
+
+class v1ExportSecretsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1ExportSecretsIntent
+
+
+class v1ExportSecretsResult(TurnkeyBaseModel):
+    secretPayloads: List[str] = Field(
+        description="Encryption suite specific payload containing each secret ciphertext, in the order the params were specified. For enclave encrypt v1 each entry is a JSON-encoded ServerSendMsg."
     )
 
 
@@ -2347,10 +3909,16 @@ class v1FeatureName(str, Enum):
     FEATURE_NAME_SMS_AUTH = "FEATURE_NAME_SMS_AUTH"
     FEATURE_NAME_OTP_EMAIL_AUTH = "FEATURE_NAME_OTP_EMAIL_AUTH"
     FEATURE_NAME_AUTH_PROXY = "FEATURE_NAME_AUTH_PROXY"
+    FEATURE_NAME_SOLANA_RENT_PREFUND_ENABLED = (
+        "FEATURE_NAME_SOLANA_RENT_PREFUND_ENABLED"
+    )
+    FEATURE_NAME_SWAP_CONFIG = "FEATURE_NAME_SWAP_CONFIG"
+    FEATURE_NAME_EARN_CONFIG = "FEATURE_NAME_EARN_CONFIG"
+    FEATURE_NAME_SWAP_FEE_SPONSORSHIP = "FEATURE_NAME_SWAP_FEE_SPONSORSHIP"
+    FEATURE_NAME_SWAP_FIXED_RATE = "FEATURE_NAME_SWAP_FIXED_RATE"
 
 
 class v1FiatOnRampBlockchainNetwork(str, Enum):
-    FIAT_ON_RAMP_BLOCKCHAIN_NETWORK_BITCOIN = "FIAT_ON_RAMP_BLOCKCHAIN_NETWORK_BITCOIN"
     FIAT_ON_RAMP_BLOCKCHAIN_NETWORK_ETHEREUM = (
         "FIAT_ON_RAMP_BLOCKCHAIN_NETWORK_ETHEREUM"
     )
@@ -2468,9 +4036,24 @@ class v1FiatOnRampProvider(str, Enum):
     FIAT_ON_RAMP_PROVIDER_MOONPAY = "FIAT_ON_RAMP_PROVIDER_MOONPAY"
 
 
+class v1GetActivePoliciesRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+
+
+class v1GetActivePoliciesResponse(TurnkeyBaseModel):
+    statuses: List[v1ActivePolicyStatus] = Field(
+        description="The active/inactive status of every policy in the organization."
+    )
+    evaluatedAtMs: str = Field(
+        description="The enclave's trusted timestamp (Unix epoch milliseconds) used to evaluate every policy."
+    )
+
+
 class v1GetActivitiesRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     filterByStatus: Optional[List[v1ActivityStatus]] = Field(
         default=None,
@@ -2491,7 +4074,7 @@ class v1GetActivitiesResponse(TurnkeyBaseModel):
 
 class v1GetActivityRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     activityId: str = Field(
         description="Unique identifier for a given activity object."
@@ -2500,7 +4083,7 @@ class v1GetActivityRequest(TurnkeyBaseModel):
 
 class v1GetApiKeyRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     apiKeyId: str = Field(description="Unique identifier for a given API key.")
 
@@ -2511,7 +4094,7 @@ class v1GetApiKeyResponse(TurnkeyBaseModel):
 
 class v1GetApiKeysRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     userId: Optional[str] = Field(
         default=None, description="Unique identifier for a given user."
@@ -2533,9 +4116,20 @@ class v1GetAppProofsResponse(TurnkeyBaseModel):
     appProofs: List[v1AppProof]
 
 
+class v1GetAppStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    appId: str = Field(description="Unique identifier for a given TVC App.")
+
+
+class v1GetAppStatusResponse(TurnkeyBaseModel):
+    appStatus: v1AppStatus = Field(description="Live runtime status for the TVC App")
+
+
 class v1GetAuthenticatorRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     authenticatorId: str = Field(
         description="Unique identifier for a given authenticator."
@@ -2548,7 +4142,7 @@ class v1GetAuthenticatorResponse(TurnkeyBaseModel):
 
 class v1GetAuthenticatorsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     userId: str = Field(description="Unique identifier for a given user.")
 
@@ -2564,6 +4158,107 @@ class v1GetBootProofRequest(TurnkeyBaseModel):
         description="Unique identifier for a given Organization."
     )
     ephemeralKey: str = Field(description="Hex encoded ephemeral public key.")
+
+
+class v1GetClaimEarnFeesStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    claimRequestId: str = Field(
+        description="The claim_request_id returned by ClaimEarnFees."
+    )
+
+
+class v1GetClaimEarnFeesStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the fee claim.")
+    claimTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the fee claim, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the fee claim transaction failed, when status is FAILED.",
+    )
+
+
+class v1GetEarnClaimRewardsStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    claimRequestId: str = Field(
+        description="The claim_request_id returned by EarnClaimRewards."
+    )
+
+
+class v1GetEarnClaimRewardsStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the rewards claim.")
+    claimTxHash: Optional[str] = Field(
+        default=None,
+        description="Transaction hash of the rewards claim, once available.",
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the rewards claim transaction failed, when status is FAILED.",
+    )
+
+
+class v1GetEarnDeployStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    deployRequestId: str = Field(
+        description="The deploy_request_id returned by EarnDeployWrapper."
+    )
+
+
+class v1GetEarnDeployStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the wrapper deployment.")
+    deployTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the deployment, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the deployment transaction failed, when status is FAILED.",
+    )
+
+
+class v1GetEarnDepositStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    depositRequestId: str = Field(
+        description="The deposit_request_id returned by EarnDeposit."
+    )
+
+
+class v1GetEarnDepositStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the deposit.")
+    depositTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the deposit, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the deposit transaction failed, when status is FAILED.",
+    )
+
+
+class v1GetEarnWithdrawStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    withdrawRequestId: str = Field(
+        description="The withdraw_request_id returned by EarnWithdraw."
+    )
+
+
+class v1GetEarnWithdrawStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the withdrawal.")
+    withdrawTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the withdrawal, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the withdrawal transaction failed, when status is FAILED.",
+    )
 
 
 class v1GetGasUsageRequest(TurnkeyBaseModel):
@@ -2584,11 +4279,71 @@ class v1GetGasUsageResponse(TurnkeyBaseModel):
     )
 
 
+class v1GetIpAllowlistRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="If provided, return only the allowlist for this specific API key.",
+    )
+
+
+class v1GetIpAllowlistResponse(TurnkeyBaseModel):
+    allowlist: v1IpAllowlist
+
+
 class v1GetLatestBootProofRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    appName: str = Field(description="Name of enclave app.")
+    appName: str = Field(description="Unique identifier (UUID) of the enclave app.")
+
+
+class v1GetMfaPoliciesRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    userId: str = Field(description="Unique identifier for a given user.")
+
+
+class v1GetMfaPoliciesResponse(TurnkeyBaseModel):
+    mfaPolicies: List[v1MfaPolicy] = Field(
+        description="A list of multi-factor authentication policies for a user."
+    )
+
+
+class v1GetMfaPolicyRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    userId: str = Field(description="Unique identifier for a given user.")
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA policy.")
+
+
+class v1GetMfaPolicyResponse(TurnkeyBaseModel):
+    mfaPolicy: v1MfaPolicy = Field(
+        description="Multi-factor authentication policy for a user."
+    )
+
+
+class v1GetMfaStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    activityId: str = Field(
+        description="The unique identifier of the activity to get MFA status for."
+    )
+    userId: Optional[str] = Field(
+        default=None,
+        description="Optional user ID to filter MFA status for a specific user.",
+    )
+
+
+class v1GetMfaStatusResponse(TurnkeyBaseModel):
+    mfaStatuses: List[v1MfaStatus] = Field(
+        description="A list of MFA statuses for the activity's votes."
+    )
 
 
 class v1GetNoncesRequest(TurnkeyBaseModel):
@@ -2634,7 +4389,7 @@ class v1GetOauth2CredentialResponse(TurnkeyBaseModel):
 
 class v1GetOauthProvidersRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     userId: Optional[str] = Field(
         default=None, description="Unique identifier for a given user."
@@ -2649,7 +4404,7 @@ class v1GetOauthProvidersResponse(TurnkeyBaseModel):
 
 class v1GetOnRampTransactionStatusRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     transactionId: str = Field(
         description="The unique identifier for the fiat on ramp transaction."
@@ -2668,7 +4423,7 @@ class v1GetOnRampTransactionStatusResponse(TurnkeyBaseModel):
 
 class v1GetOrganizationConfigsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -2680,7 +4435,7 @@ class v1GetOrganizationConfigsResponse(TurnkeyBaseModel):
 
 class v1GetPoliciesRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -2690,7 +4445,7 @@ class v1GetPoliciesResponse(TurnkeyBaseModel):
 
 class v1GetPolicyEvaluationsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     activityId: str = Field(description="Unique identifier for a given activity.")
 
@@ -2701,7 +4456,7 @@ class v1GetPolicyEvaluationsResponse(TurnkeyBaseModel):
 
 class v1GetPolicyRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     policyId: str = Field(description="Unique identifier for a given policy.")
 
@@ -2714,7 +4469,7 @@ class v1GetPolicyResponse(TurnkeyBaseModel):
 
 class v1GetPrivateKeyRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     privateKeyId: str = Field(description="Unique identifier for a given private key.")
 
@@ -2727,7 +4482,7 @@ class v1GetPrivateKeyResponse(TurnkeyBaseModel):
 
 class v1GetPrivateKeysRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -2737,7 +4492,7 @@ class v1GetPrivateKeysResponse(TurnkeyBaseModel):
 
 class v1GetSendTransactionStatusRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     sendTransactionStatusId: str = Field(
         description="The unique identifier of a send transaction request."
@@ -2749,6 +4504,9 @@ class v1GetSendTransactionStatusResponse(TurnkeyBaseModel):
     eth: Optional[v1EthSendTransactionStatus] = Field(
         default=None, description="Ethereum-specific transaction status."
     )
+    solana: Optional[v1SolanaSendTransactionStatus] = Field(
+        default=None, description="Solana-specific transaction status."
+    )
     txError: Optional[str] = Field(
         default=None,
         description="The error encountered when broadcasting or confirming the transaction, if any.",
@@ -2759,9 +4517,36 @@ class v1GetSendTransactionStatusResponse(TurnkeyBaseModel):
     )
 
 
+class v1GetSessionProfileRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    sessionProfileId: str = Field(
+        description="Unique identifier for a session profile."
+    )
+
+
+class v1GetSessionProfileResponse(TurnkeyBaseModel):
+    sessionProfile: v1SessionProfile = Field(
+        description="Session profile for a user, including details about the user's authenticators, Oauth providers, API keys, and MFA policies."
+    )
+
+
+class v1GetSessionProfilesRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+
+
+class v1GetSessionProfilesResponse(TurnkeyBaseModel):
+    sessionProfiles: List[v1SessionProfile] = Field(
+        description="A list of session profiles for users in the organization."
+    )
+
+
 class v1GetSmartContractInterfaceRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     smartContractInterfaceId: str = Field(
         description="Unique identifier for a given smart contract interface."
@@ -2776,7 +4561,7 @@ class v1GetSmartContractInterfaceResponse(TurnkeyBaseModel):
 
 class v1GetSmartContractInterfacesRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -2809,9 +4594,200 @@ class v1GetSubOrgIdsResponse(TurnkeyBaseModel):
     )
 
 
-class v1GetUserRequest(TurnkeyBaseModel):
+class v1GetSwapSponsorshipUsageRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given organization."
+    )
+
+
+class v1GetSwapSponsorshipUsageResponse(TurnkeyBaseModel):
+    feeSponsorship: v1SwapSponsorshipFeature
+    fixedRate: v1SwapSponsorshipFeature
+
+
+class v1GetSwapStatusRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    swapRequestId: str = Field(
+        description="The swap_request_id returned by ExecuteSwap."
+    )
+
+
+class v1GetSwapStatusResponse(TurnkeyBaseModel):
+    status: str = Field(
+        description="Normalized swap status. One of PENDING, COMPLETED, FAILED."
+    )
+    swapKind: str = Field(description="SAME_CHAIN or CROSS_CHAIN.")
+    provider: str = Field(description="Swap provider that executed the swap.")
+    inputToken: str = Field(description="CAIP-19 asset ID for the input asset.")
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    originTxHash: Optional[str] = Field(
+        default=None,
+        description="Final included origin-chain transaction hash, when known.",
+    )
+    destinationTxHashes: Optional[List[str]] = Field(
+        default=None,
+        description="Provider-reported destination-chain transaction hashes; cross-chain COMPLETED only.",
+    )
+    outputAmount: Optional[str] = Field(
+        default=None,
+        description="Actual base-unit output amount on COMPLETED, when known. Unset on FAILED.",
+    )
+    refund: Optional[v1SwapRefund] = Field(
+        default=None,
+        description="Funds returned by the provider after a successful origin transfer and failed cross-chain fill. Omitted for origin transaction failures and same-chain swaps.",
+    )
+    updatedAt: str = Field(
+        description="Timestamp of the last swap status change, as millisecond epoch string."
+    )
+    error: Optional[v1SwapError] = Field(
+        default=None,
+        description="Normalized failure details, present whenever status is FAILED.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None, description="Address that receives the output asset."
+    )
+
+
+class v1GetTvcAppDeploymentsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    appId: str = Field(description="Unique identifier for a given TVC App.")
+
+
+class v1GetTvcAppDeploymentsResponse(TurnkeyBaseModel):
+    tvcDeployments: List[v1TvcDeployment] = Field(
+        description="List of deployments for this TVC App"
+    )
+
+
+class v1GetTvcAppRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    tvcAppId: str = Field(description="Unique identifier for a given TVC App.")
+
+
+class v1GetTvcAppResponse(TurnkeyBaseModel):
+    tvcApp: v1TvcApp = Field(description="Details about a single TVC App")
+
+
+class v1GetTvcAppsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    isLive: Optional[bool] = Field(
+        default=None,
+        description="Filter TVC Apps by whether they have a live deployment. If omitted, all TVC Apps are returned.",
+    )
+
+
+class v1GetTvcAppsResponse(TurnkeyBaseModel):
+    tvcApps: List[v1TvcApp] = Field(description="A list of TVC Apps.")
+
+
+class v1GetTvcDeploymentDebugLogsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    deploymentId: str = Field(
+        description="Unique identifier for a given TVC Deployment. The deployment must be running in debug mode."
+    )
+    tailLines: Optional[int] = Field(
+        default=None,
+        description="Limit returned history to the last N lines per replica. If unset or zero, no tail-line limit is applied.",
+    )
+    sinceSeconds: Optional[str] = Field(
+        default=None,
+        description="Return logs newer than this many seconds ago. If unset or zero, no since-time limit is applied. Useful for clients that poll to follow logs.",
+    )
+
+
+class v1GetTvcDeploymentDebugLogsResponse(TurnkeyBaseModel):
+    entries: List[v1TvcDeploymentDebugLogEntry] = Field(
+        description="Application log entries sorted by platform timestamp."
+    )
+
+
+class v1GetTvcDeploymentProvisioningDetailsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    deploymentId: str = Field(
+        description="Unique identifier for a given TVC Deployment."
+    )
+
+
+class v1GetTvcDeploymentProvisioningDetailsResponse(TurnkeyBaseModel):
+    attestationDocument: Optional[str] = Field(
+        default=None,
+        description="The attestation document of the provisioning enclave. Present only when a deployment is awaiting provisioning.",
+    )
+    manifestEnvelope: Optional[str] = Field(
+        default=None,
+        description="The manifest envelope containing the TVC deployment's manifest and signatures. Present only when a deployment is awaiting provisioning.",
+    )
+    provisioningState: v1ProvisioningState = Field(
+        description="Current provisioning state."
+    )
+
+
+class v1GetTvcDeploymentRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    deploymentId: str = Field(
+        description="Unique identifier for a given TVC Deployment."
+    )
+
+
+class v1GetTvcDeploymentResponse(TurnkeyBaseModel):
+    tvcDeployment: v1TvcDeployment = Field(
+        description="Details about a single TVC Deployment"
+    )
+
+
+class v1GetTvcOperatorsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+
+
+class v1GetTvcOperatorsResponse(TurnkeyBaseModel):
+    tvcOperators: List[v1TvcOperator]
+
+
+class v1GetTvcQosVersionsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+
+
+class v1GetTvcQosVersionsResponse(TurnkeyBaseModel):
+    availableVersions: List[str] = Field(
+        description="QOS versions supported for new TVC deployments."
+    )
+    latestVersion: str = Field(
+        description="Latest recommended QOS version for new TVC deployments."
+    )
+
+
+class v1GetTvcQuorumKeysRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+
+
+class v1GetTvcQuorumKeysResponse(TurnkeyBaseModel):
+    tvcQuorumKeys: List[v1TvcQuorumKey]
+
+
+class v1GetUserRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
     )
     userId: str = Field(description="Unique identifier for a given user.")
 
@@ -2822,7 +4798,7 @@ class v1GetUserResponse(TurnkeyBaseModel):
 
 class v1GetUsersRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -2836,7 +4812,7 @@ class v1GetVerifiedSubOrgIdsRequest(TurnkeyBaseModel):
     )
     filterType: Optional[str] = Field(
         default=None,
-        description="Specifies the type of filter to apply, i.e 'EMAIL', 'PHONE_NUMBER'.",
+        description="Specifies the type of filter to apply, i.e 'EMAIL', 'PHONE_NUMBER', 'OIDC_TOKEN', 'OAUTH_CLAIM', or 'PUBLIC_KEY'",
     )
     filterValue: Optional[str] = Field(
         default=None,
@@ -2855,7 +4831,7 @@ class v1GetVerifiedSubOrgIdsResponse(TurnkeyBaseModel):
 
 class v1GetWalletAccountRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     walletId: str = Field(description="Unique identifier for a given wallet.")
     address: Optional[str] = Field(
@@ -2872,7 +4848,7 @@ class v1GetWalletAccountResponse(TurnkeyBaseModel):
 
 class v1GetWalletAccountsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     walletId: Optional[str] = Field(
         default=None,
@@ -2895,9 +4871,11 @@ class v1GetWalletAccountsResponse(TurnkeyBaseModel):
 
 class v1GetWalletAddressBalancesRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
-    address: str = Field(description="Address corresponding to a wallet account.")
+    address: str = Field(
+        description="Address corresponding to a wallet account. Private key addresses are not supported."
+    )
     caip2: str = Field(
         description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
     )
@@ -2911,7 +4889,7 @@ class v1GetWalletAddressBalancesResponse(TurnkeyBaseModel):
 
 class v1GetWalletRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     walletId: str = Field(description="Unique identifier for a given wallet.")
 
@@ -2924,7 +4902,7 @@ class v1GetWalletResponse(TurnkeyBaseModel):
 
 class v1GetWalletsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -2940,7 +4918,7 @@ class v1GetWhoamiRequest(TurnkeyBaseModel):
 
 class v1GetWhoamiResponse(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     organizationName: str = Field(
         description="Human-readable name for an organization."
@@ -2989,6 +4967,49 @@ class v1ImportPrivateKeyResult(TurnkeyBaseModel):
     )
 
 
+class v1ImportSecretParams(TurnkeyBaseModel):
+    name: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable name for the secret. Names must be unique within an organization when provided.",
+    )
+    secretPayload: str = Field(
+        description="Encryption suite specific payload containing the secret ciphertext. For enclave encrypt v1 this is a JSON-encoded ClientSendMsg."
+    )
+    targetPublicKey: str = Field(
+        description="Targeted transport encryption public key, as returned by InitImportSecrets."
+    )
+    encryptionSuite: v1TransportEncryptionSuite = Field(
+        description="Transport encryption suite used for the ingress secret."
+    )
+    staticProperties: Optional[List[v1KeyValue]] = Field(
+        default=None,
+        description="Policy-visible, static properties to permanently bind to the secret.",
+    )
+
+
+class v1ImportSecretsIntent(TurnkeyBaseModel):
+    secrets: List[v1ImportSecretParams] = Field(
+        description="A list of secrets to import."
+    )
+
+
+class v1ImportSecretsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1ImportSecretsIntent
+
+
+class v1ImportSecretsResult(TurnkeyBaseModel):
+    secretIds: List[str] = Field(
+        description="Unique identifier for each imported secret, in the order the params were specified."
+    )
+
+
 class v1ImportWalletIntent(TurnkeyBaseModel):
     userId: str = Field(description="The ID of the User importing a Wallet.")
     walletName: str = Field(description="Human-readable name for a Wallet.")
@@ -3019,7 +5040,7 @@ class v1ImportWalletResult(TurnkeyBaseModel):
 
 class v1InitFiatOnRampIntent(TurnkeyBaseModel):
     onrampProvider: v1FiatOnRampProvider = Field(
-        description="Enum to specifiy which on-ramp provider to use"
+        description="Enum to specify which on-ramp provider to use"
     )
     walletAddress: str = Field(
         description="Destination wallet address for the buy transaction."
@@ -3105,6 +5126,32 @@ class v1InitImportPrivateKeyResult(TurnkeyBaseModel):
     )
 
 
+class v1InitImportSecretsIntent(TurnkeyBaseModel):
+    encryptionSuite: v1TransportEncryptionSuite = Field(
+        description="Transport encryption suite used for ingress secrets."
+    )
+    numSecrets: int = Field(
+        description="The number of secrets the user intends to import."
+    )
+
+
+class v1InitImportSecretsRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1InitImportSecretsIntent
+
+
+class v1InitImportSecretsResult(TurnkeyBaseModel):
+    enclaveTargetMessages: List[str] = Field(
+        description="Enclave ingress target keys along with metadata specific to the encryption suite. For enclave encrypt v1 this will be ServerTargetMsgV1."
+    )
+
+
 class v1InitImportWalletIntent(TurnkeyBaseModel):
     userId: str = Field(description="The ID of the User importing a Wallet.")
 
@@ -3129,7 +5176,7 @@ class v1InitImportWalletResult(TurnkeyBaseModel):
 
 class v1InitOtpAuthIntent(TurnkeyBaseModel):
     otpType: str = Field(
-        description="Enum to specifiy whether to send OTP via SMS or email"
+        description="Enum to specify whether to send OTP via SMS, email, or WhatsApp"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     emailCustomization: Optional[v1EmailCustomizationParams] = Field(
@@ -3159,7 +5206,7 @@ class v1InitOtpAuthIntent(TurnkeyBaseModel):
 
 class v1InitOtpAuthIntentV2(TurnkeyBaseModel):
     otpType: str = Field(
-        description="Enum to specifiy whether to send OTP via SMS or email"
+        description="Enum to specify whether to send OTP via SMS, email, or WhatsApp"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     otpLength: Optional[int] = Field(
@@ -3196,7 +5243,7 @@ class v1InitOtpAuthIntentV2(TurnkeyBaseModel):
 
 class v1InitOtpAuthIntentV3(TurnkeyBaseModel):
     otpType: str = Field(
-        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+        description="Whether to send OTP via SMS, email, or WhatsApp. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL, OTP_TYPE_WHATSAPP"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     otpLength: Optional[int] = Field(
@@ -3260,7 +5307,7 @@ class v1InitOtpAuthResultV2(TurnkeyBaseModel):
 
 class v1InitOtpIntent(TurnkeyBaseModel):
     otpType: str = Field(
-        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+        description="Whether to send OTP via SMS, email, or WhatsApp. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL, OTP_TYPE_WHATSAPP"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     otpLength: Optional[int] = Field(
@@ -3301,7 +5348,7 @@ class v1InitOtpIntent(TurnkeyBaseModel):
 
 class v1InitOtpIntentV2(TurnkeyBaseModel):
     otpType: str = Field(
-        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+        description="Whether to send OTP via SMS, email, or WhatsApp. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL, OTP_TYPE_WHATSAPP"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     otpLength: Optional[int] = Field(
@@ -3345,7 +5392,7 @@ class v1InitOtpIntentV2(TurnkeyBaseModel):
 
 class v1InitOtpIntentV3(TurnkeyBaseModel):
     otpType: str = Field(
-        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+        description="Whether to send OTP via SMS, email, or WhatsApp. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL, OTP_TYPE_WHATSAPP"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     appName: str = Field(description="The name of the application.")
@@ -3695,6 +5742,106 @@ class v1Intent(TurnkeyBaseModel):
     updateOrganizationNameIntent: Optional[v1UpdateOrganizationNameIntent] = Field(
         default=None
     )
+    createSubOrganizationIntentV8: Optional[v1CreateSubOrganizationIntentV8] = Field(
+        default=None
+    )
+    createOauthProvidersIntentV2: Optional[v1CreateOauthProvidersIntentV2] = Field(
+        default=None
+    )
+    createUsersIntentV4: Optional[v1CreateUsersIntentV4] = Field(default=None)
+    createWebhookEndpointIntent: Optional[v1CreateWebhookEndpointIntent] = Field(
+        default=None
+    )
+    updateWebhookEndpointIntent: Optional[v1UpdateWebhookEndpointIntent] = Field(
+        default=None
+    )
+    deleteWebhookEndpointIntent: Optional[v1DeleteWebhookEndpointIntent] = Field(
+        default=None
+    )
+    setIpAllowlistIntent: Optional[v1SetIpAllowlistIntent] = Field(default=None)
+    removeIpAllowlistIntent: Optional[v1RemoveIpAllowlistIntent] = Field(default=None)
+    updateTvcAppLiveDeploymentIntent: Optional[v1UpdateTvcAppLiveDeploymentIntent] = (
+        Field(default=None)
+    )
+    deleteTvcDeploymentIntent: Optional[v1DeleteTvcDeploymentIntent] = Field(
+        default=None
+    )
+    deleteTvcAppAndDeploymentsIntent: Optional[v1DeleteTvcAppAndDeploymentsIntent] = (
+        Field(default=None)
+    )
+    restoreTvcDeploymentIntent: Optional[v1RestoreTvcDeploymentIntent] = Field(
+        default=None
+    )
+    sparkSignFrostIntent: Optional[v1SparkSignFrostIntent] = Field(default=None)
+    sparkPrepareTransferIntent: Optional[v1SparkPrepareTransferIntent] = Field(
+        default=None
+    )
+    sparkClaimTransferIntent: Optional[v1SparkClaimTransferIntent] = Field(default=None)
+    sparkPrepareLightningReceiveIntent: Optional[
+        v1SparkPrepareLightningReceiveIntent
+    ] = Field(default=None)
+    postTvcQuorumKeyShareIntent: Optional[v1PostTvcQuorumKeyShareIntent] = Field(
+        default=None
+    )
+    ethSendTransactionIntentV2: Optional[v1EthSendTransactionIntentV2] = Field(
+        default=None
+    )
+    createMfaPolicyIntent: Optional[v1CreateMfaPolicyIntent] = Field(default=None)
+    updateMfaPolicyIntent: Optional[v1UpdateMfaPolicyIntent] = Field(default=None)
+    deleteMfaPolicyIntent: Optional[v1DeleteMfaPolicyIntent] = Field(default=None)
+    createSessionProfileIntent: Optional[v1CreateSessionProfileIntent] = Field(
+        default=None
+    )
+    earnDeployWrapperIntent: Optional[v1EarnDeployWrapperIntent] = Field(default=None)
+    earnDepositIntent: Optional[v1EarnDepositIntent] = Field(default=None)
+    earnWithdrawIntent: Optional[v1EarnWithdrawIntent] = Field(default=None)
+    executeSwapIntent: Optional[v1ExecuteSwapIntent] = Field(default=None)
+    upsertSwapConfigIntent: Optional[v1UpsertSwapConfigIntent] = Field(default=None)
+    createTvcOperatorIntent: Optional[v1CreateTvcOperatorIntent] = Field(default=None)
+    createTvcQuorumKeyIntent: Optional[v1CreateTvcQuorumKeyIntent] = Field(default=None)
+    reEncryptTvcQuorumKeyShareIntent: Optional[v1ReEncryptTvcQuorumKeyShareIntent] = (
+        Field(default=None)
+    )
+    initImportSecretsIntent: Optional[v1InitImportSecretsIntent] = Field(default=None)
+    solSendTransactionIntentV2: Optional[v1SolSendTransactionIntentV2] = Field(
+        default=None
+    )
+    claimSwapFeesIntent: Optional[v1ClaimSwapFeesIntent] = Field(default=None)
+    earnSetWrapperStateIntent: Optional[v1EarnSetWrapperStateIntent] = Field(
+        default=None
+    )
+    claimEarnFeesIntent: Optional[v1ClaimEarnFeesIntent] = Field(default=None)
+    updateWalletAccountNameIntent: Optional[v1UpdateWalletAccountNameIntent] = Field(
+        default=None
+    )
+    ethUndelegate7702Intent: Optional[v1EthUndelegate7702Intent] = Field(default=None)
+    executeSwapIntentV2: Optional[v1ExecuteSwapIntentV2] = Field(default=None)
+    createSwapQuoteIntent: Optional[v1CreateSwapQuoteIntent] = Field(default=None)
+    importSecretsIntent: Optional[v1ImportSecretsIntent] = Field(default=None)
+    exportSecretsIntent: Optional[v1ExportSecretsIntent] = Field(default=None)
+    createVelocityControlIntent: Optional[v1CreateVelocityControlIntent] = Field(
+        default=None
+    )
+    deleteVelocityControlsIntent: Optional[v1DeleteVelocityControlsIntent] = Field(
+        default=None
+    )
+    updatePaymentMethodIntent: Optional[billingUpdatePaymentMethodIntent] = Field(
+        default=None
+    )
+    createSwapQuoteIntentV2: Optional[v1CreateSwapQuoteIntentV2] = Field(default=None)
+    executeSwapIntentV3: Optional[v1ExecuteSwapIntentV3] = Field(default=None)
+    deleteSecretsIntent: Optional[v1DeleteSecretsIntent] = Field(default=None)
+    earnClaimRewardsIntent: Optional[v1EarnClaimRewardsIntent] = Field(default=None)
+    createSwapQuoteIntentV3: Optional[v1CreateSwapQuoteIntentV3] = Field(default=None)
+    upsertSwapFeeSponsorshipLimitConfigIntent: Optional[
+        v1UpsertSwapFeeSponsorshipLimitConfigIntent
+    ] = Field(default=None)
+    upsertSwapFixedRateLimitConfigIntent: Optional[
+        v1UpsertSwapFixedRateLimitConfigIntent
+    ] = Field(default=None)
+    createFiatOnRampSessionIntent: Optional[v1CreateFiatOnRampSessionIntent] = Field(
+        default=None
+    )
 
 
 class v1InvitationParams(TurnkeyBaseModel):
@@ -3713,6 +5860,180 @@ class v1InvitationParams(TurnkeyBaseModel):
     senderUserId: str = Field(
         description="Unique identifier for the Sender of an Invitation."
     )
+
+
+class v1IpAllowlist(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for the organization this allowlist belongs to."
+    )
+    rules: List[v1IpAllowlistRule] = Field(
+        description="List of IP allowlist rules with their metadata."
+    )
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="Public key of the API key this allowlist applies to. Null means the allowlist applies to the entire organization.",
+    )
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether the IP allowlist is enabled. Only present for organization-level allowlists. Null for API key-level allowlists (presence of the allowlist implies enablement).",
+    )
+    onEvaluationError: Optional[str] = Field(
+        default=None,
+        description="Behavior when an error occurs during IP allowlist evaluation. Valid values: ALLOW, DENY. Defaults to DENY.",
+    )
+
+
+class v1IpAllowlistIntentRule(TurnkeyBaseModel):
+    cidr: str = Field(
+        description="CIDR block (e.g., '192.168.1.0/24', '2001:db8::/32')."
+    )
+    label: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable label for this rule (e.g., 'Office VPN').",
+    )
+
+
+class v1IpAllowlistRule(TurnkeyBaseModel):
+    cidr: str = Field(description="CIDR block (e.g., '192.168.1.0/24').")
+    label: Optional[str] = Field(
+        default=None, description="Optional human-readable label for this rule."
+    )
+    createdAt: Optional[str] = Field(
+        default=None, description="Creation timestamp as millisecond epoch string."
+    )
+
+
+class v1KeyValue(TurnkeyBaseModel):
+    key: Optional[str] = Field(default=None)
+    value: Optional[str] = Field(default=None)
+
+
+class v1ListEarnEnabledVaultsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    provider: Optional[v1EarnProvider] = Field(
+        default=None,
+        description="Optional filter: only return enabled vaults from this provider. Leave EARN_PROVIDER_UNSPECIFIED to return all providers.",
+    )
+    caip19: Optional[str] = Field(
+        default=None,
+        description="Optional filter: only return enabled vaults whose underlying asset matches this CAIP-19 asset ID (e.g. 'eip155:8453/erc20:0x833589...'). The chain is taken from the CAIP-19 identifier.",
+    )
+    includeExposure: Optional[bool] = Field(
+        default=None,
+        description="When true, populate each vault's exposures (the underlying markets it allocates into). This costs an extra provider query per vault, so leave it off for list views.",
+    )
+
+
+class v1ListEarnEnabledVaultsResponse(TurnkeyBaseModel):
+    enabledVaults: Optional[List[v1EarnEnabledVault]] = Field(
+        default=None, description="The organization's deployed wrappers."
+    )
+
+
+class v1ListEarnPositionsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    walletAddress: str = Field(
+        description="The wallet address to return positions for."
+    )
+
+
+class v1ListEarnPositionsResponse(TurnkeyBaseModel):
+    positions: Optional[List[v1EarnPosition]] = Field(
+        default=None, description="The wallet's active Earn positions."
+    )
+
+
+class v1ListEarnRewardsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    walletAddress: str = Field(description="The wallet address to return rewards for.")
+    caip2: Optional[str] = Field(
+        default=None,
+        description="Optional filter: only return rewards on this chain (e.g. 'eip155:8453'). When unset, every chain the organization has deployed Earn wrappers on is queried.",
+    )
+
+
+class v1ListEarnRewardsResponse(TurnkeyBaseModel):
+    rewards: Optional[List[v1EarnReward]] = Field(
+        default=None,
+        description="The wallet's rewards, one entry per (chain, reward token), sorted by chain then token. Entries where every amount is zero are omitted.",
+    )
+
+
+class v1ListEarnVaultsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization. Annotates which vaults the organization has already enabled."
+    )
+    provider: Optional[v1EarnProvider] = Field(
+        default=None,
+        description="Optional filter: only return vaults from this provider. Leave EARN_PROVIDER_UNSPECIFIED to return all providers.",
+    )
+    caip19: str = Field(
+        description="CAIP-19 asset ID (e.g. 'eip155:8453/erc20:0x833589...') to return vaults for. Only vaults whose underlying asset matches are returned; the chain is taken from the CAIP-19 identifier."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None,
+        description="Pagination over the TVL-sorted catalog. before/after cursors are a vault_address from a prior page.",
+    )
+
+
+class v1ListEarnVaultsResponse(TurnkeyBaseModel):
+    vaults: Optional[List[v1EarnVault]] = Field(
+        default=None,
+        description="The catalog of wrappable vaults, sorted by TVL (USD) descending. To page, pass page_info.end_cursor as the pagination after cursor.",
+    )
+    pageInfo: Optional[v1PageInfo] = Field(
+        default=None,
+        description="Pagination metadata for the returned page. Pass end_cursor as the next request's after cursor (or start_cursor as the before cursor) to page through the catalog. Cursors are opaque; do not parse them.",
+    )
+
+
+class v1ListEmailEventsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given organization"
+    )
+    email: str = Field(description="Recipient email address to list email events for")
+    eventType: Optional[str] = Field(
+        default=None,
+        description="Optional email event type to filter by. Examples include Send, Delivery, Bounce, and DeliveryDelay",
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None, description="Parameters used for cursor-based pagination"
+    )
+
+
+class v1ListEmailEventsResponse(TurnkeyBaseModel):
+    emailEvents: List[v1EmailEvent] = Field(
+        description="Email events matching the requested filters, ordered by most recent event first."
+    )
+
+
+class v1ListEthTransactionHistoryRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    address: str = Field(
+        description="Address corresponding to a wallet account. Private key addresses are not supported."
+    )
+    caip2: str = Field(
+        description="EVM CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None,
+        description="Cursor-based pagination options. Cursors are opaque and valid only for the same address and CAIP-2 query.",
+    )
+
+
+class v1ListEthTransactionHistoryResponse(TurnkeyBaseModel):
+    transactions: List[v1EthTransactionHistoryItem] = Field(
+        description="EVM transactions for the requested address, ordered by most recent first."
+    )
+    pageInfo: Optional[v1PageInfo] = Field(default=None)
 
 
 class v1ListFiatOnRampCredentialsRequest(TurnkeyBaseModel):
@@ -3737,7 +6058,7 @@ class v1ListOauth2CredentialsResponse(TurnkeyBaseModel):
 
 class v1ListPrivateKeyTagsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -3745,9 +6066,47 @@ class v1ListPrivateKeyTagsResponse(TurnkeyBaseModel):
     privateKeyTags: List[datav1Tag] = Field(description="A list of private key tags.")
 
 
+class v1ListSecretsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for the organization or sub-organization whose secrets are listed."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None, description="Parameters used for cursor-based pagination."
+    )
+
+
+class v1ListSecretsResponse(TurnkeyBaseModel):
+    secrets: List[v1SecretMetadata] = Field(
+        description="Metadata for each secret in the organization, ordered by most recently created first."
+    )
+
+
+class v1ListSolTransactionHistoryRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    address: str = Field(
+        description="Address corresponding to a wallet account. Private key addresses are not supported."
+    )
+    caip2: str = Field(
+        description="Solana CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None,
+        description="Cursor-based pagination options. Cursors are opaque and valid only for the same address and CAIP-2 query.",
+    )
+
+
+class v1ListSolTransactionHistoryResponse(TurnkeyBaseModel):
+    transactions: List[v1SolTransactionHistoryItem] = Field(
+        description="Solana transactions for the requested address, ordered by most recent first."
+    )
+    pageInfo: Optional[v1PageInfo] = Field(default=None)
+
+
 class v1ListSupportedAssetsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     caip2: str = Field(
         description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
@@ -3762,7 +6121,7 @@ class v1ListSupportedAssetsResponse(TurnkeyBaseModel):
 
 class v1ListUserTagsRequest(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
 
 
@@ -3770,8 +6129,62 @@ class v1ListUserTagsResponse(TurnkeyBaseModel):
     userTags: List[datav1Tag] = Field(description="A list of user tags.")
 
 
+class v1ListWebhookEndpointsRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+
+
+class v1ListWebhookEndpointsResponse(TurnkeyBaseModel):
+    webhookEndpoints: List[v1WebhookEndpointData]
+
+
+class v1LogLine(TurnkeyBaseModel):
+    content: str = Field(
+        description="One log line, exactly as the application printed it (without the trailing newline)"
+    )
+    ts: Optional[externaldatav1Timestamp] = Field(
+        default=None,
+        description="When the line was logged. Stable across replays, so lines can be chronologically merged across pods",
+    )
+
+
 class v1LoginUsage(TurnkeyBaseModel):
     publicKey: str = Field(description="Public key for authentication")
+
+
+class v1MfaPolicy(TurnkeyBaseModel):
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+    mfaPolicyName: str = Field(description="Human-readable name for an MFA Policy.")
+    condition: str = Field(
+        description="A condition expression that evaluates to true or false, determining when this MFA policy applies."
+    )
+    requiredAuthenticationMethods: List[v1RequiredAuthenticationMethod] = Field(
+        description="An ordered list of authentication requirements. Each requirement must be satisfied sequentially to complete MFA."
+    )
+    order: int = Field(
+        description="The order in which this policy is evaluated relative to other MFA policies."
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable notes added by a User to describe a particular MFA policy.",
+    )
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+
+
+class v1MfaStatus(TurnkeyBaseModel):
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+    userId: str = Field(description="Unique identifier for a given User.")
+    satisfied: bool = Field(
+        description="Whether the MFA policy requirements are currently satisfied."
+    )
+    satisfiedMethods: List[v1AuthenticationMethod] = Field(
+        description="A list of authentication methods already satisfied for this MFA policy."
+    )
+    requiredMethods: List[v1RequiredAuthenticationMethod] = Field(
+        description="An ordered list of authentication requirements needed to satisfy this MFA policy."
+    )
 
 
 class v1MnemonicLanguage(str, Enum):
@@ -3817,9 +6230,8 @@ class v1Oauth2AuthenticateIntent(TurnkeyBaseModel):
     codeVerifier: str = Field(
         description="The code verifier used by OAuth 2.0 PKCE providers"
     )
-    nonce: Optional[str] = Field(
-        default=None,
-        description="An optional nonce used by the client to prevent replay/substitution of an ID token",
+    nonce: str = Field(
+        description="A nonce value set to sha256(publicKey), used to bind the OIDC token to a specific public key"
     )
     bearerTokenTargetPublicKey: Optional[str] = Field(
         default=None,
@@ -3898,6 +6310,10 @@ class v1OauthLoginIntent(TurnkeyBaseModel):
         default=None,
         description="Invalidate all other previously generated Login API keys",
     )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
+    )
 
 
 class v1OauthLoginRequest(TurnkeyBaseModel):
@@ -3939,6 +6355,17 @@ class v1OauthProviderParams(TurnkeyBaseModel):
     oidcToken: str = Field(description="Base64 encoded OIDC token")
 
 
+class v1OauthProviderParamsV2(TurnkeyBaseModel):
+    providerName: str = Field(description="Human-readable name to identify a Provider.")
+    oidcToken: Optional[str] = Field(
+        default=None, description="Base64 encoded OIDC token"
+    )
+    oidcClaims: Optional[v1OidcClaims] = Field(
+        default=None,
+        description="OIDC claims (iss, sub, aud) to uniquely identify the user",
+    )
+
+
 class v1OauthRequest(TurnkeyBaseModel):
     type: str
     timestampMs: str = Field(
@@ -3955,6 +6382,16 @@ class v1OauthResult(TurnkeyBaseModel):
     userId: str = Field(description="Unique identifier for the authenticating User.")
     apiKeyId: str = Field(description="Unique identifier for the created API key.")
     credentialBundle: str = Field(description="HPKE encrypted credential bundle")
+
+
+class v1OidcClaims(TurnkeyBaseModel):
+    iss: str = Field(
+        description="The issuer identifier from the OIDC token (iss claim)"
+    )
+    sub: str = Field(
+        description="The subject identifier from the OIDC token (sub claim)"
+    )
+    aud: str = Field(description="The audience from the OIDC token (aud claim)")
 
 
 class v1Operator(str, Enum):
@@ -4034,6 +6471,10 @@ class v1OtpLoginIntent(TurnkeyBaseModel):
         default=None,
         description="Optional signature proving authorization for this login. The signature is over the verification token ID and the public key. Only required if a public key was provided during the verification step.",
     )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
+    )
 
 
 class v1OtpLoginIntentV2(TurnkeyBaseModel):
@@ -4053,6 +6494,10 @@ class v1OtpLoginIntentV2(TurnkeyBaseModel):
     invalidateExisting: Optional[bool] = Field(
         default=None,
         description="Invalidate all other previously generated Login sessions",
+    )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
     )
 
 
@@ -4081,6 +6526,15 @@ class v1Outcome(str, Enum):
     OUTCOME_REQUIRES_CONSENSUS = "OUTCOME_REQUIRES_CONSENSUS"
     OUTCOME_REJECTED = "OUTCOME_REJECTED"
     OUTCOME_ERROR = "OUTCOME_ERROR"
+    OUTCOME_REQUIRES_AUTHENTICATORS = "OUTCOME_REQUIRES_AUTHENTICATORS"
+    OUTCOME_TIME_INACTIVE = "OUTCOME_TIME_INACTIVE"
+
+
+class v1PageInfo(TurnkeyBaseModel):
+    hasNextPage: Optional[bool] = Field(default=None)
+    hasPreviousPage: Optional[bool] = Field(default=None)
+    startCursor: Optional[str] = Field(default=None)
+    endCursor: Optional[str] = Field(default=None)
 
 
 class v1Pagination(TurnkeyBaseModel):
@@ -4126,6 +6580,38 @@ class v1Policy(TurnkeyBaseModel):
     condition: str = Field(
         description="A condition expression that evalutes to true or false."
     )
+    time: Optional[str] = Field(
+        default=None, description="A time expression that evalutes to true or false."
+    )
+
+
+class v1PostTvcQuorumKeyShareIntent(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="Unique identifier of the TVC deployment receiving quorum key share"
+    )
+    ephemeralPublicKeyHex: str = Field(
+        description="Hex-encoded ephemeral public key used to encrypt the quorum key share"
+    )
+    shareApprovalBundle: v1QuorumKeyShareApprovalBundle = Field(
+        description="Re-encrypted quorum key share and approval"
+    )
+
+
+class v1PostTvcQuorumKeyShareRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1PostTvcQuorumKeyShareIntent
+
+
+class v1PostTvcQuorumKeyShareResult(TurnkeyBaseModel):
+    provisioningShareId: str = Field(
+        description="The unique identifier for the provisioning quorum key share"
+    )
 
 
 class v1PrivateKey(TurnkeyBaseModel):
@@ -4169,6 +6655,12 @@ class v1PrivateKeyResult(TurnkeyBaseModel):
     addresses: Optional[List[immutableactivityv1Address]] = Field(default=None)
 
 
+class v1ProvisioningState(str, Enum):
+    PROVISIONING_STATE_PENDING = "PROVISIONING_STATE_PENDING"
+    PROVISIONING_STATE_AWAITING_PROVISION = "PROVISIONING_STATE_AWAITING_PROVISION"
+    PROVISIONING_STATE_PROVISIONED = "PROVISIONING_STATE_PROVISIONED"
+
+
 class v1PublicKeyCredentialWithAttestation(TurnkeyBaseModel):
     id: str
     type: str
@@ -4176,6 +6668,55 @@ class v1PublicKeyCredentialWithAttestation(TurnkeyBaseModel):
     authenticatorAttachment: Optional[str] = Field(default=None)
     response: v1AuthenticatorAttestationResponse
     clientExtensionResults: v1SimpleClientExtensionResults
+
+
+class v1QuorumKeyShareApprovalBundle(TurnkeyBaseModel):
+    operatorId: str = Field(
+        description="Unique identifier of the operator providing this quorum key share"
+    )
+    reEncryptedShareHex: str = Field(
+        description="Hex-encoded re-encrypted quorum key share"
+    )
+    signature: str = Field(
+        description="Signature from the share set operator approving the manifest"
+    )
+
+
+class v1ReEncryptTvcQuorumKeyShareIntent(TurnkeyBaseModel):
+    attestationDocB64: str = Field(
+        description="Base64-encoded attestation document for the TVC deployment provisioning enclave"
+    )
+    manifestB64: str = Field(
+        description="Base64-encoded manifest for the TVC deployment"
+    )
+    operatorEncryptKey: str = Field(
+        description="Operator encryption public key used to encrypt the hosted TVC quorum key share"
+    )
+    operatorSignKey: str = Field(
+        description="Operator signing public key used to approve the TVC manifest"
+    )
+    deploymentId: str = Field(
+        description="Unique identifier of the TVC deployment receiving the re-encrypted quorum key share"
+    )
+    appQuorumKey: str = Field(description="Quorum key for the TVC application")
+
+
+class v1ReEncryptTvcQuorumKeyShareRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1ReEncryptTvcQuorumKeyShareIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1ReEncryptTvcQuorumKeyShareResult(TurnkeyBaseModel):
+    provisioningShareId: str = Field(
+        description="The unique identifier for the provisioning quorum key share"
+    )
 
 
 class v1RecoverUserIntent(TurnkeyBaseModel):
@@ -4219,6 +6760,29 @@ class v1RejectActivityRequest(TurnkeyBaseModel):
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
+class v1RemoveIpAllowlistIntent(TurnkeyBaseModel):
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="The public component of an API key. If null, removes the organization-level IP allowlist. If set, removes the IP allowlist for this specific API key.",
+    )
+
+
+class v1RemoveIpAllowlistRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1RemoveIpAllowlistIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1RemoveIpAllowlistResult(TurnkeyBaseModel):
+    pass
+
+
 class v1RemoveOrganizationFeatureIntent(TurnkeyBaseModel):
     name: v1FeatureName = Field(description="Name of the feature to remove")
 
@@ -4238,6 +6802,42 @@ class v1RemoveOrganizationFeatureRequest(TurnkeyBaseModel):
 class v1RemoveOrganizationFeatureResult(TurnkeyBaseModel):
     features: List[v1Feature] = Field(
         description="Resulting list of organization features."
+    )
+
+
+class v1RequiredAuthenticationMethod(TurnkeyBaseModel):
+    any: List[v1AuthenticationMethod] = Field(
+        description="A list of authentication methods for this MFA step. If only one method is provided, it is required. If multiple are provided, the user must satisfy ANY one of them."
+    )
+
+
+class v1RequiredAuthenticationMethodParams(TurnkeyBaseModel):
+    any: List[v1AuthenticationMethodParams] = Field(
+        description="A list of authentication methods for this MFA step. If only one method is provided, it is required. If multiple are provided, the user must satisfy ANY one of them."
+    )
+
+
+class v1RestoreTvcDeploymentIntent(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="The unique identifier of the TVC deployment to restore."
+    )
+
+
+class v1RestoreTvcDeploymentRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1RestoreTvcDeploymentIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1RestoreTvcDeploymentResult(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="The unique identifier of the restored TVC deployment."
     )
 
 
@@ -4430,6 +7030,102 @@ class v1Result(TurnkeyBaseModel):
     updateOrganizationNameResult: Optional[v1UpdateOrganizationNameResult] = Field(
         default=None
     )
+    createSubOrganizationResultV8: Optional[v1CreateSubOrganizationResultV8] = Field(
+        default=None
+    )
+    createOauthProvidersResultV2: Optional[v1CreateOauthProvidersResultV2] = Field(
+        default=None
+    )
+    createWebhookEndpointResult: Optional[v1CreateWebhookEndpointResult] = Field(
+        default=None
+    )
+    updateWebhookEndpointResult: Optional[v1UpdateWebhookEndpointResult] = Field(
+        default=None
+    )
+    deleteWebhookEndpointResult: Optional[v1DeleteWebhookEndpointResult] = Field(
+        default=None
+    )
+    setIpAllowlistResult: Optional[v1SetIpAllowlistResult] = Field(default=None)
+    removeIpAllowlistResult: Optional[v1RemoveIpAllowlistResult] = Field(default=None)
+    updateTvcAppLiveDeploymentResult: Optional[v1UpdateTvcAppLiveDeploymentResult] = (
+        Field(default=None)
+    )
+    deleteTvcDeploymentResult: Optional[v1DeleteTvcDeploymentResult] = Field(
+        default=None
+    )
+    deleteTvcAppAndDeploymentsResult: Optional[v1DeleteTvcAppAndDeploymentsResult] = (
+        Field(default=None)
+    )
+    restoreTvcDeploymentResult: Optional[v1RestoreTvcDeploymentResult] = Field(
+        default=None
+    )
+    sparkSignFrostResult: Optional[v1SparkSignFrostResult] = Field(default=None)
+    sparkPrepareTransferResult: Optional[v1SparkPrepareTransferResult] = Field(
+        default=None
+    )
+    sparkClaimTransferResult: Optional[v1SparkClaimTransferResult] = Field(default=None)
+    sparkPrepareLightningReceiveResult: Optional[
+        v1SparkPrepareLightningReceiveResult
+    ] = Field(default=None)
+    postTvcQuorumKeyShareResult: Optional[v1PostTvcQuorumKeyShareResult] = Field(
+        default=None
+    )
+    ethSendTransactionResultV2: Optional[v1EthSendTransactionResultV2] = Field(
+        default=None
+    )
+    createMfaPolicyResult: Optional[v1CreateMfaPolicyResult] = Field(default=None)
+    updateMfaPolicyResult: Optional[v1UpdateMfaPolicyResult] = Field(default=None)
+    deleteMfaPolicyResult: Optional[v1DeleteMfaPolicyResult] = Field(default=None)
+    createSessionProfileResult: Optional[v1CreateSessionProfileResult] = Field(
+        default=None
+    )
+    earnDeployWrapperResult: Optional[v1EarnDeployWrapperResult] = Field(default=None)
+    earnDepositResult: Optional[v1EarnDepositResult] = Field(default=None)
+    earnWithdrawResult: Optional[v1EarnWithdrawResult] = Field(default=None)
+    executeSwapResult: Optional[v1ExecuteSwapResult] = Field(default=None)
+    upsertSwapConfigResult: Optional[v1UpsertSwapConfigResult] = Field(default=None)
+    createTvcOperatorResult: Optional[v1CreateTvcOperatorResult] = Field(default=None)
+    createTvcQuorumKeyResult: Optional[v1CreateTvcQuorumKeyResult] = Field(default=None)
+    reEncryptTvcQuorumKeyShareResult: Optional[v1ReEncryptTvcQuorumKeyShareResult] = (
+        Field(default=None)
+    )
+    initImportSecretsResult: Optional[v1InitImportSecretsResult] = Field(default=None)
+    solSendTransactionResultV2: Optional[v1SolSendTransactionResultV2] = Field(
+        default=None
+    )
+    claimSwapFeesResult: Optional[v1ClaimSwapFeesResult] = Field(default=None)
+    earnSetWrapperStateResult: Optional[v1EarnSetWrapperStateResult] = Field(
+        default=None
+    )
+    claimEarnFeesResult: Optional[v1ClaimEarnFeesResult] = Field(default=None)
+    updateWalletAccountNameResult: Optional[v1UpdateWalletAccountNameResult] = Field(
+        default=None
+    )
+    ethUndelegate7702Result: Optional[v1EthUndelegate7702Result] = Field(default=None)
+    createSwapQuoteResult: Optional[v1CreateSwapQuoteResult] = Field(default=None)
+    importSecretsResult: Optional[v1ImportSecretsResult] = Field(default=None)
+    exportSecretsResult: Optional[v1ExportSecretsResult] = Field(default=None)
+    createVelocityControlResult: Optional[v1CreateVelocityControlResult] = Field(
+        default=None
+    )
+    deleteVelocityControlsResult: Optional[v1DeleteVelocityControlsResult] = Field(
+        default=None
+    )
+    updatePaymentMethodResult: Optional[billingUpdatePaymentMethodResult] = Field(
+        default=None
+    )
+    deleteSecretsResult: Optional[v1DeleteSecretsResult] = Field(default=None)
+    earnClaimRewardsResult: Optional[v1EarnClaimRewardsResult] = Field(default=None)
+    createSwapQuoteResultV2: Optional[v1CreateSwapQuoteResultV2] = Field(default=None)
+    upsertSwapFeeSponsorshipLimitConfigResult: Optional[
+        v1UpsertSwapFeeSponsorshipLimitConfigResult
+    ] = Field(default=None)
+    upsertSwapFixedRateLimitConfigResult: Optional[
+        v1UpsertSwapFixedRateLimitConfigResult
+    ] = Field(default=None)
+    createFiatOnRampSessionResult: Optional[v1CreateFiatOnRampSessionResult] = Field(
+        default=None
+    )
 
 
 class v1RevertChainEntry(TurnkeyBaseModel):
@@ -4519,6 +7215,39 @@ class v1RootUserParamsV4(TurnkeyBaseModel):
     )
 
 
+class v1RootUserParamsV5(TurnkeyBaseModel):
+    userName: str = Field(description="Human-readable name for a User.")
+    userEmail: Optional[str] = Field(
+        default=None, description="The user's email address."
+    )
+    userPhoneNumber: Optional[str] = Field(
+        default=None,
+        description="The user's phone number in E.164 format e.g. +13214567890",
+    )
+    apiKeys: List[v1ApiKeyParamsV2] = Field(
+        description="A list of API Key parameters. This field, if not needed, should be an empty array in your request body."
+    )
+    authenticators: List[v1AuthenticatorParamsV2] = Field(
+        description="A list of Authenticator parameters. This field, if not needed, should be an empty array in your request body."
+    )
+    oauthProviders: List[v1OauthProviderParamsV2] = Field(
+        description="A list of Oauth providers. This field, if not needed, should be an empty array in your request body."
+    )
+
+
+class v1SecretMetadata(TurnkeyBaseModel):
+    secretId: str = Field(description="Unique identifier for the secret.")
+    name: Optional[str] = Field(
+        default=None, description="Optional human-readable name for the secret."
+    )
+    staticProperties: List[v1KeyValue] = Field(
+        description="Policy visible static properties bound to the secret at creation time."
+    )
+    createdAtUnixMs: str = Field(
+        description="Unix timestamp in milliseconds for when the secret was created."
+    )
+
+
 class v1Selector(TurnkeyBaseModel):
     subject: Optional[str] = Field(default=None)
     operator: Optional[v1Operator] = Field(default=None)
@@ -4529,6 +7258,63 @@ class v1SelectorV2(TurnkeyBaseModel):
     subject: Optional[str] = Field(default=None)
     operator: Optional[v1Operator] = Field(default=None)
     targets: Optional[List[str]] = Field(default=None)
+
+
+class v1SessionProfile(TurnkeyBaseModel):
+    sessionProfileId: str = Field(
+        description="Unique identifier for a given Session Profile."
+    )
+    sessionProfileName: str = Field(
+        description="Human-readable name for a Session Profile."
+    )
+    scope: str = Field(
+        description="The specific scope that a session created with this profile is limited to."
+    )
+    expirationSeconds: Optional[str] = Field(
+        default=None,
+        description="Optional window (in seconds) indicating how long sessions created with this profile should last.",
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable notes added by a User to describe a particular Session Profile.",
+    )
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+
+
+class v1SetIpAllowlistIntent(TurnkeyBaseModel):
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="The public component of an API key. If null, the IP allowlist applies at the organization level. If set, it applies only to this specific API key.",
+    )
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether the IP allowlist is enabled. Only meaningful for organization-level allowlists. Omit for API key-level allowlists.",
+    )
+    rules: Optional[List[v1IpAllowlistIntentRule]] = Field(
+        default=None,
+        description="List of IP allowlist rules with CIDR blocks and optional labels.",
+    )
+    onEvaluationError: Optional[str] = Field(
+        default=None,
+        description="Behavior when an error occurs during IP allowlist evaluation. Valid values: ALLOW, DENY. Defaults to DENY.",
+    )
+
+
+class v1SetIpAllowlistRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1SetIpAllowlistIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1SetIpAllowlistResult(TurnkeyBaseModel):
+    pass
 
 
 class v1SetOrganizationFeatureIntent(TurnkeyBaseModel):
@@ -4578,6 +7364,10 @@ class v1SignRawPayloadIntentV2(TurnkeyBaseModel):
     hashFunction: v1HashFunction = Field(
         description="Hash function to apply to payload bytes before signing. This field must be set to HASH_FUNCTION_NOT_APPLICABLE for EdDSA/ed25519 signature requests; configurable payload hashing is not supported by RFC 8032."
     )
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for signing the payload.",
+    )
 
 
 class v1SignRawPayloadRequest(TurnkeyBaseModel):
@@ -4593,9 +7383,13 @@ class v1SignRawPayloadRequest(TurnkeyBaseModel):
 
 
 class v1SignRawPayloadResult(TurnkeyBaseModel):
-    r: str = Field(description="Component of an ECSDA signature.")
-    s: str = Field(description="Component of an ECSDA signature.")
-    v: str = Field(description="Component of an ECSDA signature.")
+    r: str = Field(
+        description="Component of a cryptographic signature, meaning varies based on signing scheme."
+    )
+    s: str = Field(
+        description="Component of a cryptographic signature, meaning varies based on signing scheme."
+    )
+    v: str = Field(description='Recovery ID for ECDSA signatures, "00" otherwise.')
 
 
 class v1SignRawPayloadsIntent(TurnkeyBaseModel):
@@ -4610,6 +7404,10 @@ class v1SignRawPayloadsIntent(TurnkeyBaseModel):
     )
     hashFunction: v1HashFunction = Field(
         description="Hash function to apply to payload bytes before signing. This field must be set to HASH_FUNCTION_NOT_APPLICABLE for EdDSA/ed25519 signature requests; configurable payload hashing is not supported by RFC 8032."
+    )
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for signing the payloads.",
     )
 
 
@@ -4645,6 +7443,10 @@ class v1SignTransactionIntentV2(TurnkeyBaseModel):
         description="Raw unsigned transaction to be signed"
     )
     type: v1TransactionType
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for signing this transaction.",
+    )
 
 
 class v1SignTransactionRequest(TurnkeyBaseModel):
@@ -4671,6 +7473,14 @@ class v1SignupUsage(TurnkeyBaseModel):
     oauthProviders: Optional[List[v1OauthProviderParams]] = Field(default=None)
 
 
+class v1SignupUsageV2(TurnkeyBaseModel):
+    email: Optional[str] = Field(default=None)
+    phoneNumber: Optional[str] = Field(default=None)
+    apiKeys: Optional[List[v1ApiKeyParamsV2]] = Field(default=None)
+    authenticators: Optional[List[v1AuthenticatorParamsV2]] = Field(default=None)
+    oauthProviders: Optional[List[v1OauthProviderParamsV2]] = Field(default=None)
+
+
 class v1SimpleClientExtensionResults(TurnkeyBaseModel):
     appid: Optional[bool] = Field(default=None)
     appidExclude: Optional[bool] = Field(default=None)
@@ -4693,7 +7503,7 @@ class v1SmsCustomizationParams(TurnkeyBaseModel):
 
 class v1SolSendTransactionIntent(TurnkeyBaseModel):
     unsignedTransaction: str = Field(
-        description="Base64-encoded serialized unsigned Solana transaction"
+        description="Hex-encoded serialized unsigned Solana transaction in full wire format. Legacy/V0 transactions allow 1232 bytes. V1 allows 4096 bytes with up to 12 trailing 64-byte signature slots, including the paymaster for sponsored transactions. Fill unsigned slots with zeroes."
     )
     signWith: str = Field(
         description="A wallet or private key address to sign with. This does not support private key IDs."
@@ -4702,11 +7512,30 @@ class v1SolSendTransactionIntent(TurnkeyBaseModel):
         default=None, description="Whether to sponsor this transaction via Gas Station."
     )
     caip2: str = Field(
-        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet)."
+        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
     )
     recentBlockhash: Optional[str] = Field(
         default=None,
         description="user-provided blockhash for replay protection / deadline control. If omitted and sponsor=true, we fetch a fresh blockhash during execution",
+    )
+
+
+class v1SolSendTransactionIntentV2(TurnkeyBaseModel):
+    unsignedTransaction: str = Field(
+        description="Hex-encoded serialized unsigned Solana transaction in full wire format. Legacy/V0 transactions allow 1232 bytes. V1 allows 4096 bytes with up to 12 trailing 64-byte signature slots, including the paymaster for sponsored transactions. Fill unsigned slots with zeroes."
+    )
+    signWiths: List[str] = Field(
+        description="Ordered Solana signer addresses Turnkey signs with. Between 1 and 16 signers for legacy/V0, or up to 12 for V1 (11 when sponsored). For sponsored transactions this must list every required signer of the transaction in transaction order."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+    recentBlockhash: Optional[str] = Field(
+        default=None,
+        description="User-provided blockhash for replay protection / deadline control. If provided, it is used as-is, including for sponsored transactions (the transaction is only broadcastable while the blockhash is current). If omitted and sponsor=true, a fresh blockhash is fetched during execution.",
     )
 
 
@@ -4718,13 +7547,382 @@ class v1SolSendTransactionRequest(TurnkeyBaseModel):
     organizationId: str = Field(
         description="Unique identifier for a given Organization."
     )
-    parameters: v1SolSendTransactionIntent
+    parameters: v1SolSendTransactionIntentV2
     generateAppProofs: Optional[bool] = Field(default=None)
 
 
 class v1SolSendTransactionResult(TurnkeyBaseModel):
     sendTransactionStatusId: str = Field(
         description="The send_transaction_status ID associated with the transaction submission"
+    )
+
+
+class v1SolSendTransactionResultV2(TurnkeyBaseModel):
+    sendTransactionStatusId: str = Field(
+        description="The send_transaction_status ID associated with the transaction submission"
+    )
+
+
+class v1SolTransactionHistoryItem(TurnkeyBaseModel):
+    signature: str = Field(description="Solana transaction signature.")
+    block: v1TransactionHistoryBlock = Field(
+        description="Block metadata for the transaction."
+    )
+    status: str = Field(description="Transaction confirmation status.")
+    origin: str = Field(
+        description="Origin of the transaction. Examples include TURNKEY."
+    )
+    feePayer: str = Field(
+        description="Address that paid the Solana transaction fee. This is the first signer in the transaction message."
+    )
+    signers: List[v1SolTransactionHistorySigner] = Field(
+        description="Addresses that signed the Solana transaction, in message order."
+    )
+    fee: v1TransactionHistoryFee = Field(description="Transaction fee information.")
+    transfers: List[v1TransactionHistoryTransfer] = Field(
+        description="Asset transfers associated with the transaction."
+    )
+    turnkey: Optional[v1TransactionHistoryTurnkey] = Field(
+        default=None,
+        description="Turnkey-specific metadata for transactions originated by Turnkey.",
+    )
+    executionFailed: Optional[bool] = Field(
+        default=None,
+        description="Whether the transaction failed during on-chain execution. Omitted when execution outcome is unavailable.",
+    )
+
+
+class v1SolTransactionHistorySigner(TurnkeyBaseModel):
+    address: str = Field(description="Address of the Solana transaction signer.")
+    writable: bool = Field(
+        description="Whether the signer account was writable in the Solana transaction message."
+    )
+
+
+class v1SolanaConfig(TurnkeyBaseModel):
+    rentPrefundEnabled: Optional[bool] = Field(
+        default=None,
+        description="Whether Solana rent prefunding is enabled for the organization. When omitted, the existing rent-prefund state is left unchanged.",
+    )
+
+
+class v1SolanaFailureDetails(TurnkeyBaseModel):
+    source: Optional[str] = Field(
+        default=None,
+        description="Where the Solana failure occurred, such as simulation or preflight.",
+    )
+    rpcCode: Optional[int] = Field(
+        default=None, description="The Solana JSON-RPC error code, if available."
+    )
+    rpcMessage: Optional[str] = Field(
+        default=None, description="The Solana JSON-RPC error message, if available."
+    )
+    transactionErrorJson: Optional[str] = Field(
+        default=None,
+        description="The raw Solana transaction error object serialized as JSON, if available.",
+    )
+    logs: Optional[List[str]] = Field(
+        default=None,
+        description="Program logs returned by Solana simulation or preflight, if available.",
+    )
+    unitsConsumed: Optional[str] = Field(
+        default=None,
+        description="Compute units consumed during simulation or preflight, if available.",
+    )
+    innerInstructionsJson: Optional[str] = Field(
+        default=None,
+        description="The raw Solana inner instructions payload serialized as JSON, if available.",
+    )
+
+
+class v1SolanaSendTransactionStatus(TurnkeyBaseModel):
+    signature: Optional[str] = Field(
+        default=None, description="The Solana transaction signature, if available."
+    )
+
+
+class v1SparkClaimLeaf(TurnkeyBaseModel):
+    leafId: str = Field(description="Leaf identifier (UUID).")
+    ciphertext: str = Field(
+        description="ECIES ciphertext (hex-encoded) containing the inbound transfer secret. Decrypted inside the enclave using the wallet's Identity key."
+    )
+    senderSignature: str = Field(
+        description="Hex-encoded 64-byte compact ECDSA signature binding (leaf_id, transfer_id, ciphertext) to the sender's identity key. Verified inside the enclave before decryption."
+    )
+
+
+class v1SparkClaimPackage(TurnkeyBaseModel):
+    leaves: List[v1SparkClaimLeaf] = Field(description="Leaves being claimed.")
+    threshold: int = Field(
+        description="Shamir threshold for reconstructing the per-leaf claim secret."
+    )
+    operatorRecipients: List[v1SparkOperatorRecipient] = Field(
+        description="Operators that will receive Shamir shares."
+    )
+    transferId: str = Field(
+        description="Spark transfer identifier (UUID). Used together with each leaf's sender_signature to verify the sender bound this ciphertext to this transfer."
+    )
+    senderIdentityPublicKey: str = Field(
+        description="Sender's compressed secp256k1 identity public key (hex-encoded, 33 bytes). Used to verify the per-leaf sender_signature fields."
+    )
+
+
+class v1SparkClaimTransferIntent(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet."
+    )
+    claim: v1SparkClaimPackage = Field(description="Claim package parameters.")
+
+
+class v1SparkClaimTransferRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1SparkClaimTransferIntent
+
+
+class v1SparkClaimTransferResult(TurnkeyBaseModel):
+    operatorPackages: List[v1SparkEncryptedOperatorPackage] = Field(
+        description="Per-operator ECIES-encrypted packages."
+    )
+    newLeafPublicKeys: List[v1SparkLeafPublicKey] = Field(
+        description="Newly-derived SigningLeaf public keys, one per leaf, in input order."
+    )
+
+
+class v1SparkDepositDerivation(TurnkeyBaseModel):
+    pass
+
+
+class v1SparkEncryptedOperatorPackage(TurnkeyBaseModel):
+    operatorId: str = Field(description="Spark operator identifier (UUID).")
+    encryptedPackage: str = Field(
+        description="ECIES ciphertext (hex-encoded) opaque to Turnkey after emission."
+    )
+
+
+class v1SparkFrostCommitment(TurnkeyBaseModel):
+    id: str = Field(
+        description="FROST participant identifier, hex-encoded (32-byte scalar)."
+    )
+    hiding: str = Field(
+        description="Hiding commitment D, hex-encoded compressed secp256k1 point."
+    )
+    binding: str = Field(
+        description="Binding commitment E, hex-encoded compressed secp256k1 point."
+    )
+
+
+class v1SparkHtlcPreimageDerivation(TurnkeyBaseModel):
+    pass
+
+
+class v1SparkIdentityDerivation(TurnkeyBaseModel):
+    pass
+
+
+class v1SparkKeyDerivation(TurnkeyBaseModel):
+    identity: Optional[v1SparkIdentityDerivation] = Field(
+        default=None, description="Spark identity key derivation."
+    )
+    signingLeaf: Optional[v1SparkSigningLeafDerivation] = Field(
+        default=None,
+        description="Spark signing leaf key derivation, identified by leaf ID.",
+    )
+    deposit: Optional[v1SparkDepositDerivation] = Field(
+        default=None, description="Spark deposit key derivation."
+    )
+    staticDeposit: Optional[v1SparkStaticDepositDerivation] = Field(
+        default=None,
+        description="Spark static deposit key derivation, identified by index.",
+    )
+    htlcPreimage: Optional[v1SparkHtlcPreimageDerivation] = Field(
+        default=None, description="Spark HTLC preimage key derivation."
+    )
+
+
+class v1SparkLeafPublicKey(TurnkeyBaseModel):
+    leafId: str = Field(
+        description="The Spark leaf_id this public key was derived for."
+    )
+    publicKey: str = Field(
+        description="Hex-encoded compressed secp256k1 point (33 bytes) for the SigningLeaf derivation at leaf_id."
+    )
+
+
+class v1SparkLightningReceivePackage(TurnkeyBaseModel):
+    threshold: int = Field(
+        description="Feldman VSS threshold for reconstructing the preimage."
+    )
+    operatorRecipients: List[v1SparkOperatorRecipient] = Field(
+        description="Operators that will receive Feldman shares of the preimage. Order must match the operators' numeric IDs in the Spark operator config - share index is the 1-based position in this list."
+    )
+
+
+class v1SparkOperatorRecipient(TurnkeyBaseModel):
+    operatorId: str = Field(description="Spark operator identifier (UUID).")
+    encryptionPublicKey: str = Field(
+        description="Operator's ECIES encryption pubkey (hex-encoded compressed secp256k1 point)."
+    )
+
+
+class v1SparkPartialSignature(TurnkeyBaseModel):
+    signatureShare: str = Field(description="Hex-encoded FROST partial signature.")
+    hiding: str = Field(
+        description="Turnkey's hiding commitment D (hex-encoded compressed secp256k1 point). Forward to the Spark Operator."
+    )
+    binding: str = Field(
+        description="Turnkey's binding commitment E (hex-encoded compressed secp256k1 point). Forward to the Spark Operator."
+    )
+
+
+class v1SparkPrepareLightningReceiveIntent(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet."
+    )
+    lightningReceive: v1SparkLightningReceivePackage = Field(
+        description="Lightning receive package parameters: threshold and operator recipients."
+    )
+
+
+class v1SparkPrepareLightningReceiveRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1SparkPrepareLightningReceiveIntent
+
+
+class v1SparkPrepareLightningReceiveResult(TurnkeyBaseModel):
+    operatorPackages: List[v1SparkEncryptedOperatorPackage] = Field(
+        description="Per-operator ECIES-encrypted Feldman share packages."
+    )
+    paymentHash: str = Field(
+        description="Hex-encoded SHA256(preimage). Forward to the Lightning node."
+    )
+
+
+class v1SparkPrepareTransferIntent(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet."
+    )
+    transfer: v1SparkTransferPackage = Field(
+        description="Transfer package parameters for HD key tweak splitting."
+    )
+
+
+class v1SparkPrepareTransferRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1SparkPrepareTransferIntent
+
+
+class v1SparkPrepareTransferResult(TurnkeyBaseModel):
+    operatorPackages: List[v1SparkEncryptedOperatorPackage] = Field(
+        description="Per-operator ECIES-encrypted packages."
+    )
+    transferUserSignature: str = Field(
+        description="Hex-encoded ECDSA-DER signature of the TransferPackage signing payload, signed with the wallet's IDENTITY key."
+    )
+    newLeafPublicKeys: List[v1SparkLeafPublicKey] = Field(
+        description="Newly-derived SigningLeaf public keys, one per leaf, in input order."
+    )
+
+
+class v1SparkSignFrostIntent(TurnkeyBaseModel):
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet to sign with."
+    )
+    signatures: List[v1SparkSignatureRequest] = Field(
+        description="Batched sign requests. Each produces a partial signature plus Turnkey's public commitments."
+    )
+
+
+class v1SparkSignFrostRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1SparkSignFrostIntent
+
+
+class v1SparkSignFrostResult(TurnkeyBaseModel):
+    signatures: List[v1SparkPartialSignature] = Field(
+        description="Partial signatures plus Turnkey commitments, one per request, in order."
+    )
+
+
+class v1SparkSignatureRequest(TurnkeyBaseModel):
+    derivation: v1SparkKeyDerivation = Field(description="Which key to sign with.")
+    message: str = Field(description="Hex-encoded 32-byte sighash to sign.")
+    verifyingKey: str = Field(
+        description="Aggregate group verifying key (hex-encoded compressed secp256k1 point), computed as P_ops + P_user. Bound into the nonce HMAC."
+    )
+    operatorCommitments: List[v1SparkFrostCommitment] = Field(
+        description="Commitments for every non-Turnkey participant. MUST NOT include an entry under Turnkey's identifier. Bound into the nonce HMAC."
+    )
+    adaptorPublicKey: Optional[str] = Field(
+        default=None,
+        description="Optional adaptor point T (hex-encoded 33-byte compressed secp256k1 pubkey). When set, Turnkey produces a Schnorr adaptor pre-signature with the FROST challenge bound to `R+T` (where `R` is the aggregate group nonce commitment from FROST). The party holding the discrete log `t` completes the pre-sig to a valid BIP-340 signature by adding `t` (or `-t`, for parity) to the signature scalar `s`. This is primarily used by Spark leaves-swap and other adaptor-bound flows; absent or empty leads to plain FROST signing (the typical case).",
+    )
+
+
+class v1SparkSigningLeafDerivation(TurnkeyBaseModel):
+    leafId: str = Field(description="Unique identifier for the Spark signing leaf.")
+
+
+class v1SparkStaticDepositDerivation(TurnkeyBaseModel):
+    index: int = Field(description="Index used to derive the static deposit key.")
+
+
+class v1SparkTransferLeaf(TurnkeyBaseModel):
+    leafId: str = Field(description="Leaf identifier (UUID).")
+    oldLeafDerivation: v1SparkKeyDerivation = Field(
+        description="Derivation for the existing (pre-transfer) leaf key. Always a SigningLeaf derivation."
+    )
+    newLeafDerivation: v1SparkKeyDerivation = Field(
+        description="Derivation for the new (post-transfer) leaf key. Always a SigningLeaf derivation. The enclave ECIES-encrypts this private key to receiver_public_key as the per-leaf secret_cipher; HD-derived rather than random so the sender can re-derive on retry (Turnkey's enclave is stateless)."
+    )
+    refundSignature: Optional[str] = Field(
+        default=None,
+        description="Client-produced CPFP refund signature (hex-encoded), passed through verbatim into the per-operator SendLeafKeyTweak. Empty omits the field from the operator package.",
+    )
+    directRefundSignature: Optional[str] = Field(
+        default=None,
+        description="Client-produced direct refund signature (hex-encoded). Passed through verbatim.",
+    )
+    directFromCpfpRefundSignature: Optional[str] = Field(
+        default=None,
+        description="Client-produced direct-from-CPFP refund signature (hex-encoded). Passed through verbatim.",
+    )
+
+
+class v1SparkTransferPackage(TurnkeyBaseModel):
+    transferId: str = Field(description="Spark transfer identifier (UUID).")
+    leaves: List[v1SparkTransferLeaf] = Field(description="Leaves being transferred.")
+    threshold: int = Field(
+        description="Feldman VSS threshold for reconstructing the per-leaf tweak scalar."
+    )
+    operatorRecipients: List[v1SparkOperatorRecipient] = Field(
+        description="Operators that will receive Feldman shares of the per-leaf tweak. Order must match the operators' numeric IDs in the Spark operator config - share index is the 1-based position in this list."
+    )
+    receiverPublicKey: str = Field(
+        description="Recipient's identity pubkey (hex-encoded compressed secp256k1 point). Each leaf's new_priv is ECIES-encrypted to this key and embedded in the per-operator package for claim-time delivery."
     )
 
 
@@ -4739,6 +7937,10 @@ class v1StampLoginIntent(TurnkeyBaseModel):
     invalidateExisting: Optional[bool] = Field(
         default=None,
         description="Invalidate all other previously generated Login API keys",
+    )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
     )
 
 
@@ -4760,6 +7962,126 @@ class v1StampLoginResult(TurnkeyBaseModel):
     )
 
 
+class v1SwapError(TurnkeyBaseModel):
+    reason: str = Field(
+        description="Stable machine-readable failure reason. One of ORIGIN_TRANSACTION_FAILED or PROVIDER_FILL_FAILED."
+    )
+    message: str = Field(description="Human-readable description of the swap failure.")
+    originTxError: Optional[v1TxError] = Field(
+        default=None,
+        description="Origin-chain transaction failure details, present when reason is ORIGIN_TRANSACTION_FAILED and details are available.",
+    )
+    providerReason: Optional[str] = Field(
+        default=None,
+        description="Optional detail from the swap provider about why the fill did not complete, when available.",
+    )
+
+
+class v1SwapQuote(TurnkeyBaseModel):
+    quoteId: str = Field(
+        description="Identifier for this provider quote. Pass this value to execute_swap_v2 to bind execution to this exact quote. The signer is derived from the quote; clients do not resupply sign_with on execute."
+    )
+    provider: str = Field(description="Swap provider that produced this quote.")
+    outputAmount: str = Field(
+        description="Estimated base-unit amount of the output asset."
+    )
+    minOutputAmount: str = Field(
+        description="Minimum acceptable base-unit amount of the output asset after slippage."
+    )
+    expiresAt: str = Field(
+        description="Quote expiration as a millisecond epoch string."
+    )
+    slippageBps: Optional[str] = Field(
+        default=None,
+        description="Effective total slippage tolerance in basis points for this quote, taken from the provider response when present. When the request omits input slippage_bps, the provider may calculate this value.",
+    )
+    clientFeeBps: str = Field(
+        description="Client fee in basis points applied for this pair. Informational only; already reflected in output_amount and min_output_amount."
+    )
+    estimatedTimeSeconds: Optional[str] = Field(
+        default=None,
+        description="Provider-estimated completion time in seconds, when available.",
+    )
+
+
+class v1SwapQuoteV2(TurnkeyBaseModel):
+    quoteId: str = Field(
+        description="Identifier for this provider quote. Pass this value to execute_swap_v2 to bind execution to this exact quote. The signer is derived from the quote; clients do not resupply sign_with on execute."
+    )
+    provider: str = Field(description="Swap provider that produced this quote.")
+    outputAmount: str = Field(
+        description="Estimated base-unit amount of the output asset."
+    )
+    minOutputAmount: str = Field(
+        description="Minimum acceptable base-unit amount of the output asset after slippage."
+    )
+    expiresAt: str = Field(
+        description="Quote expiration as a millisecond epoch string."
+    )
+    slippageBps: Optional[str] = Field(
+        default=None,
+        description="Effective total slippage tolerance in basis points for this quote, taken from the provider response when present. When the request omits input slippage_bps, the provider may calculate this value.",
+    )
+    clientFeeBps: str = Field(
+        description="Client fee in basis points applied for this pair. Informational only; already reflected in output_amount and min_output_amount."
+    )
+    estimatedTimeSeconds: Optional[str] = Field(
+        default=None,
+        description="Provider-estimated completion time in seconds, when available.",
+    )
+    feeSponsorship: bool = Field(
+        description="Whether Turnkey pays the provider fees for this quote."
+    )
+    fixedRate: bool = Field(description="Whether this quote uses a 1:1 fixed rate.")
+    estimatedFixedRateAdjustmentUsd: Optional[str] = Field(
+        default=None,
+        description="Estimated USD adjustment for the fixed rate. Present only for fixed-rate quotes. Positive is a cost billed to you; negative is an earning credited against your transaction management charges at the end of the billing period. Informational; the final amount is settled after execution.",
+    )
+
+
+class v1SwapRefund(TurnkeyBaseModel):
+    asset: str = Field(
+        description="CAIP-19 asset returned by the swap provider after a failed cross-chain fill."
+    )
+    amount: str = Field(description="Base-unit amount returned by the swap provider.")
+    txHash: Optional[str] = Field(
+        default=None,
+        description="Transaction that delivered the provider refund, when applicable.",
+    )
+
+
+class v1SwapSpendingWindow(TurnkeyBaseModel):
+    windowDurationMinutes: int = Field(
+        description="Rolling window duration in minutes."
+    )
+    windowLimitUsd: str = Field(
+        description="The parent's window limit, or the per-child limit when queried by a sub-organization."
+    )
+    usageUsd: str = Field(
+        description="Settled spending in the current window. Fixed-rate earnings offset fixed-rate costs, and usage never goes below zero. Fixed-rate usage stays zero until final fixed-rate costs are recorded."
+    )
+    remainingUsd: str = Field(
+        description="Remaining spending capacity, clamped to zero. For children, also capped by remaining parent capacity. Zero when the window is disabled. This is not a reservation or a guarantee of feature eligibility."
+    )
+    enabled: bool = Field(
+        description="Whether the saved spending window permits new swaps."
+    )
+    subOrgWindowLimitUsd: Optional[str] = Field(
+        default=None,
+        description="Configured per-child limit. Returned only when querying the billing parent.",
+    )
+
+
+class v1SwapSponsorshipFeature(TurnkeyBaseModel):
+    permitted: bool = Field(
+        description="Whether the billing parent holds this feature's signed permission. Quotes can use the feature only when it is permitted and its window is enabled."
+    )
+    window: Optional[v1SwapSpendingWindow] = Field(
+        default=None,
+        description="Absent until the billing parent saves a spending window.",
+    )
+
+
 class v1TagType(str, Enum):
     TAG_TYPE_USER = "TAG_TYPE_USER"
     TAG_TYPE_PRIVATE_KEY = "TAG_TYPE_PRIVATE_KEY"
@@ -4770,6 +8092,66 @@ class v1TokenUsage(TurnkeyBaseModel):
     tokenId: str = Field(description="Unique identifier for the verification token")
     signup: Optional[v1SignupUsage] = Field(default=None)
     login: Optional[v1LoginUsage] = Field(default=None)
+    signupV2: Optional[v1SignupUsageV2] = Field(default=None)
+
+
+class v1TransactionHistoryAsset(TurnkeyBaseModel):
+    caip19: str = Field(description="The CAIP-19 asset identifier.")
+    symbol: str = Field(description="The asset symbol.")
+    name: str = Field(description="The asset name.")
+    decimals: int = Field(description="The number of decimals this asset uses.")
+
+
+class v1TransactionHistoryBlock(TurnkeyBaseModel):
+    number: str = Field(description="Block number containing the transaction.")
+    hash: str = Field(description="Block hash containing the transaction.")
+    timestamp: str = Field(description="Block timestamp in RFC 3339 format.")
+
+
+class v1TransactionHistoryDisplay(TurnkeyBaseModel):
+    crypto: Optional[str] = Field(
+        default=None,
+        description="Normalized crypto value for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise.",
+    )
+    usd: Optional[str] = Field(
+        default=None,
+        description="USD value for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise.",
+    )
+
+
+class v1TransactionHistoryFee(TurnkeyBaseModel):
+    amount: str = Field(description="Fee amount in atomic units.")
+    caip19: str = Field(description="The CAIP-19 asset identifier.")
+
+
+class v1TransactionHistoryTransfer(TurnkeyBaseModel):
+    direction: str = Field(
+        description="Transfer direction relative to the queried address."
+    )
+    asset: Optional[v1TransactionHistoryAsset] = Field(
+        default=None,
+        description="Asset metadata for the transfer. Omitted when the asset cannot be determined.",
+    )
+    amount: str = Field(description="Transfer amount in atomic units.")
+    counterparty: str = Field(description="Counterparty address for the transfer.")
+    display: Optional[v1TransactionHistoryDisplay] = Field(
+        default=None,
+        description="Normalized transfer values for display purposes only. Do not do any arithmetic or calculations with these, as the results could be imprecise. Use the amount field instead.",
+    )
+
+
+class v1TransactionHistoryTurnkey(TurnkeyBaseModel):
+    sponsored: bool = Field(
+        description="Whether the transaction fee was sponsored by Turnkey."
+    )
+    activityFingerprint: Optional[str] = Field(
+        default=None,
+        description="Fingerprint of the Turnkey activity that submitted the transaction.",
+    )
+    submittedAt: Optional[str] = Field(
+        default=None,
+        description="Timestamp when Turnkey submitted the transaction, in RFC 3339 format.",
+    )
 
 
 class v1TransactionType(str, Enum):
@@ -4778,6 +8160,121 @@ class v1TransactionType(str, Enum):
     TRANSACTION_TYPE_TRON = "TRANSACTION_TYPE_TRON"
     TRANSACTION_TYPE_BITCOIN = "TRANSACTION_TYPE_BITCOIN"
     TRANSACTION_TYPE_TEMPO = "TRANSACTION_TYPE_TEMPO"
+
+
+class v1TransportEncryptionSuite(str, Enum):
+    TRANSPORT_ENCRYPTION_SUITE_ENCLAVE_ENCRYPT_V1 = (
+        "TRANSPORT_ENCRYPTION_SUITE_ENCLAVE_ENCRYPT_V1"
+    )
+
+
+class v1TvcApp(TurnkeyBaseModel):
+    id: str = Field(description="Unique Identifier for this TVC App.")
+    organizationId: str = Field(
+        description="Unique Identifier of the Organization for this TVC App"
+    )
+    name: str = Field(description="Name for this TVC App.")
+    quorumPublicKey: str = Field(
+        description="Public key for the Quorum Key associated with this TVC App"
+    )
+    manifestSet: v1TvcOperatorSet = Field(
+        description="Manifest Set (people who can approve manifests)"
+    )
+    shareSet: v1TvcOperatorSet = Field(
+        description="Share Set (people who have a share of the Quorum Key)"
+    )
+    enableEgress: bool = Field(
+        description="Whether or not this TVC App has network egress enabled."
+    )
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+    liveDeploymentId: Optional[str] = Field(
+        default=None,
+        description="The deployment currently designated to receive traffic. Null if no deployment for this app is deployed.",
+    )
+    publicDomain: str = Field(
+        description='The public domain for ingress to this TVC App (in the format "app-<ID>.turnkey.cloud").'
+    )
+    enableDebugModeDeployments: bool = Field(
+        description="Whether this app permits debug-mode deployments. Set at app creation via CreateTvcAppIntent.enable_debug_mode_deployments and never updated thereafter. Debug-mode deployments expose logs and emit zero'd attestation PCRs, so remote attestation cannot succeed. The app's quorum key is therefore considered permanently insecure once enabled — a new app with a fresh quorum key must be created to return to a secure posture."
+    )
+
+
+class v1TvcContainerSpec(TurnkeyBaseModel):
+    containerUrl: str = Field(description="The URL for this container image.")
+    path: str = Field(description="The path (in-container) to the executable binary.")
+    args: List[str] = Field(description="The arguments to pass to the executable.")
+    hasPullSecret: bool = Field(
+        description="Whether or not this container requires a pull secret to access."
+    )
+    healthCheckType: v1TvcHealthCheckType = Field(
+        description="The type of health check to perform against this executable."
+    )
+    healthCheckPort: int = Field(
+        description="The port to use for health checks against this executable."
+    )
+    publicIngressPort: int = Field(
+        description="The port to use for public ingress to this executable."
+    )
+
+
+class v1TvcDeployment(TurnkeyBaseModel):
+    id: str = Field(description="Unique Identifier for this TVC Deployment.")
+    organizationId: str = Field(
+        description="Unique Identifier of the Organization for this TVC Deployment"
+    )
+    appId: str = Field(
+        description="Unique Identifier of the TVC App for this deployment"
+    )
+    manifestSet: v1TvcOperatorSet = Field(
+        description="Set of TVC operators who can approve this deployment"
+    )
+    shareSet: v1TvcOperatorSet = Field(
+        description="Set of TVC operators who have a share of the Quorum Key"
+    )
+    manifest: v1TvcManifest = Field(description="The manifest used for this deployment")
+    manifestApprovals: List[v1TvcOperatorApproval] = Field(
+        description="List of operator approvals for this manifest"
+    )
+    qosVersion: str = Field(description="QOS Version used for this deployment")
+    pivotContainer: v1TvcContainerSpec = Field(
+        description="The pivot container spec for this deployment"
+    )
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+    delete: bool = Field(
+        description="Whether or not the user wants this deployment deleted from the cluster."
+    )
+    debugMode: bool = Field(
+        description="Whether this deployment is running in debug mode. Debug-mode deployments expose enclave logs and cannot be remotely attested."
+    )
+    instanceSizeCpus: Optional[int] = Field(
+        default=None, description="The instance cpu count for this enclave."
+    )
+    instanceSizeRam: Optional[int] = Field(
+        default=None, description="The instance memory size in GiB for this enclave."
+    )
+
+
+class v1TvcDeploymentDebugLogEntry(TurnkeyBaseModel):
+    line: v1LogLine = Field(
+        description="Application log line with its platform timestamp."
+    )
+    replicaLabel: str = Field(
+        description="Public replica label that produced this log line, for example 'replica 2/3'."
+    )
+
+
+class v1TvcHealthCheckType(str, Enum):
+    TVC_HEALTH_CHECK_TYPE_HTTP = "TVC_HEALTH_CHECK_TYPE_HTTP"
+    TVC_HEALTH_CHECK_TYPE_GRPC = "TVC_HEALTH_CHECK_TYPE_GRPC"
+
+
+class v1TvcManifest(TurnkeyBaseModel):
+    id: str = Field(description="Unique Identifier for this TVC Manifest.")
+    manifest: str = Field(description="The manifest content (raw UTF-8 JSON bytes)")
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
 
 
 class v1TvcManifestApproval(TurnkeyBaseModel):
@@ -4789,9 +8286,56 @@ class v1TvcManifestApproval(TurnkeyBaseModel):
     )
 
 
+class v1TvcOperator(TurnkeyBaseModel):
+    id: str = Field(description="Unique Identifier for this TVC Operator.")
+    name: str = Field(description="Name of this TVC Operator.")
+    publicKey: str = Field(description="Public key for this TVC Operator.")
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+    encryptPublicKey: str = Field(
+        description="Encryption public key for this TVC Operator."
+    )
+    signPublicKey: str = Field(description="Signing public key for this TVC Operator.")
+    keySource: Optional[str] = Field(
+        default=None,
+        description="Source of the operator keys: EXTERNAL_KEY or ORG_WALLET_ACCOUNT. Absent for legacy operators whose source was not recorded.",
+    )
+
+
+class v1TvcOperatorApproval(TurnkeyBaseModel):
+    id: str = Field(description="Unique ID for this approval")
+    manifestId: str = Field(
+        description="Unique Identifier of the TVC Manifest being approved"
+    )
+    operator: v1TvcOperator = Field(
+        description="The TVC Operator who made this approval"
+    )
+    approval: str = Field(
+        description="Signature of the operator over the deployment manifest"
+    )
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+
+
 class v1TvcOperatorParams(TurnkeyBaseModel):
     name: str = Field(description="The name for this new operator")
     publicKey: str = Field(description="Public key for this operator")
+
+
+class v1TvcOperatorSet(TurnkeyBaseModel):
+    id: str = Field(description="Unique Identifier for this TVC Operator Set.")
+    name: str = Field(description="Name of this TVC Operator Set.")
+    organizationId: str = Field(
+        description="Unique Identifier of the Organization for this TVC Operator Set"
+    )
+    operators: List[v1TvcOperator] = Field(
+        description="List of TVC Operators in this set"
+    )
+    threshold: int = Field(
+        description="Threshold number of operators required for quorum."
+    )
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
 
 
 class v1TvcOperatorSetParams(TurnkeyBaseModel):
@@ -4808,6 +8352,15 @@ class v1TvcOperatorSetParams(TurnkeyBaseModel):
     )
 
 
+class v1TvcQuorumKey(TurnkeyBaseModel):
+    id: str
+    publicKey: str
+    threshold: int
+    operatorIds: List[str]
+    createdAt: externaldatav1Timestamp
+    updatedAt: externaldatav1Timestamp
+
+
 class v1TxError(TurnkeyBaseModel):
     message: Optional[str] = Field(
         default=None,
@@ -4816,6 +8369,13 @@ class v1TxError(TurnkeyBaseModel):
     revertChain: Optional[List[v1RevertChainEntry]] = Field(
         default=None,
         description="Chain of revert errors from nested contract calls, ordered from outermost to innermost.",
+    )
+    solana: Optional[v1SolanaFailureDetails] = Field(
+        default=None,
+        description="Solana-specific failure details for simulation or preflight errors, if available.",
+    )
+    eth: Optional[v1EthFailureDetails] = Field(
+        default=None, description="Ethereum-specific failure details, if available."
     )
 
 
@@ -4894,6 +8454,10 @@ class v1UpdateAuthProxyConfigIntent(TurnkeyBaseModel):
         default=None,
         description="Whitelisted OAuth client IDs for social account linking. When a user authenticates via a social provider with an email matching an existing account, the accounts will be linked if the client ID is in this list and the issuer is considered a trusted provider.",
     )
+    captchaEnabled: Optional[bool] = Field(
+        default=None,
+        description="Whether captcha verification is required on sign up & otp init.",
+    )
 
 
 class v1UpdateAuthProxyConfigResult(TurnkeyBaseModel):
@@ -4944,6 +8508,44 @@ class v1UpdateFiatOnRampCredentialResult(TurnkeyBaseModel):
     )
 
 
+class v1UpdateMfaPolicyIntent(TurnkeyBaseModel):
+    userId: str = Field(description="The ID of the User to update the MFA Policy for.")
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+    mfaPolicyName: Optional[str] = Field(
+        default=None, description="Human-readable name for a Policy."
+    )
+    condition: Optional[str] = Field(
+        default=None,
+        description="A condition expression that evaluates to true or false, determining when this MFA policy applies.",
+    )
+    requiredAuthenticationMethods: Optional[
+        List[v1RequiredAuthenticationMethodParams]
+    ] = Field(
+        default=None,
+        description="An ordered list of authentication requirements. Each requirement must be satisfied sequentially to complete MFA.",
+    )
+    order: Optional[int] = Field(
+        default=None,
+        description="The order in which this MFA policy is evaluated, starting from 0, relative to other MFA policies. Lower order values are evaluated first.",
+    )
+    notes: Optional[str] = Field(default=None, description="Notes for an MFA Policy.")
+
+
+class v1UpdateMfaPolicyRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpdateMfaPolicyIntent
+
+
+class v1UpdateMfaPolicyResult(TurnkeyBaseModel):
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+
+
 class v1UpdateOauth2CredentialIntent(TurnkeyBaseModel):
     oauth2CredentialId: str = Field(
         description="The ID of the OAuth 2.0 credential to update"
@@ -4986,6 +8588,7 @@ class v1UpdateOrganizationNameRequest(TurnkeyBaseModel):
         description="Unique identifier for a given Organization."
     )
     parameters: v1UpdateOrganizationNameIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
 
 
 class v1UpdateOrganizationNameResult(TurnkeyBaseModel):
@@ -5034,6 +8637,10 @@ class v1UpdatePolicyIntentV2(TurnkeyBaseModel):
     )
     policyNotes: Optional[str] = Field(
         default=None, description="Accompanying notes for a Policy (optional)."
+    )
+    time: Optional[str] = Field(
+        default=None,
+        description="The time expression that triggers the Effect (optional).",
     )
 
 
@@ -5113,6 +8720,28 @@ class v1UpdateRootQuorumRequest(TurnkeyBaseModel):
 
 
 class v1UpdateRootQuorumResult(TurnkeyBaseModel):
+    pass
+
+
+class v1UpdateTvcAppLiveDeploymentIntent(TurnkeyBaseModel):
+    deploymentId: str = Field(
+        description="The unique identifier of the TVC deployment to set as live for the app."
+    )
+
+
+class v1UpdateTvcAppLiveDeploymentRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpdateTvcAppLiveDeploymentIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1UpdateTvcAppLiveDeploymentResult(TurnkeyBaseModel):
     pass
 
 
@@ -5259,6 +8888,19 @@ class v1UpdateUserTagResult(TurnkeyBaseModel):
     userTagId: str = Field(description="Unique identifier for a given User Tag.")
 
 
+class v1UpdateWalletAccountNameIntent(TurnkeyBaseModel):
+    walletAccountId: str = Field(
+        description="Unique identifier for a given Wallet Account."
+    )
+    name: str = Field(description="Human-readable name for this Wallet Account.")
+
+
+class v1UpdateWalletAccountNameResult(TurnkeyBaseModel):
+    walletAccountId: str = Field(
+        description="Unique identifier for a given Wallet Account."
+    )
+
+
 class v1UpdateWalletIntent(TurnkeyBaseModel):
     walletId: str = Field(description="Unique identifier for a given Wallet.")
     walletName: Optional[str] = Field(
@@ -5282,6 +8924,43 @@ class v1UpdateWalletResult(TurnkeyBaseModel):
     walletId: str = Field(description="A Wallet ID.")
 
 
+class v1UpdateWebhookEndpointIntent(TurnkeyBaseModel):
+    endpointId: str = Field(
+        description="Unique identifier of the webhook endpoint to update."
+    )
+    url: Optional[str] = Field(
+        default=None, description="Updated destination URL for webhook delivery."
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Updated human-readable name for this webhook endpoint.",
+    )
+    isActive: Optional[bool] = Field(
+        default=None, description="Whether this webhook endpoint is active."
+    )
+
+
+class v1UpdateWebhookEndpointRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpdateWebhookEndpointIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1UpdateWebhookEndpointResult(TurnkeyBaseModel):
+    endpointId: str = Field(
+        description="Unique identifier of the updated webhook endpoint."
+    )
+    webhookEndpoint: v1WebhookEndpointData = Field(
+        description="The updated webhook endpoint data."
+    )
+
+
 class v1UpsertGasUsageConfigIntent(TurnkeyBaseModel):
     orgWindowLimitUsd: str = Field(
         description="Gas sponsorship USD limit for the billing organization window."
@@ -5290,17 +8969,118 @@ class v1UpsertGasUsageConfigIntent(TurnkeyBaseModel):
         description="Gas sponsorship USD limit for sub-organizations under the billing organization."
     )
     windowDurationMinutes: str = Field(
-        description="Rolling sponsorship window duration, expressed in minutes."
+        description="Rolling sponsorship window duration, expressed in minutes. This value can't exceed 30 days (43200 minutes)."
     )
     enabled: Optional[bool] = Field(
         default=None,
         description="Whether gas sponsorship is enabled for the organization.",
+    )
+    solanaConfig: Optional[v1SolanaConfig] = Field(
+        default=None,
+        description="Optional Solana sponsorship settings. If omitted, the existing Solana sponsorship state is left unchanged.",
     )
 
 
 class v1UpsertGasUsageConfigResult(TurnkeyBaseModel):
     gasUsageConfigId: str = Field(
         description="Unique identifier for the gas usage configuration that was created or updated."
+    )
+
+
+class v1UpsertSwapConfigIntent(TurnkeyBaseModel):
+    feeReceiverWalletAddress: Optional[str] = Field(
+        default=None,
+        description="Organization-owned wallet account that receives swap fees. Required when fee_bps is set. Omit together with fee_bps to clear swap fees.",
+    )
+    feeBps: Optional[str] = Field(
+        default=None,
+        description="Client fee in basis points applied to swaps; used for all pairs unless stable_fee_bps is set.",
+    )
+    stableFeeBps: Optional[str] = Field(
+        default=None,
+        description="Optional Enterprise-only override applied when both swap assets are stablecoins; falls back to fee_bps when unset. Non-Enterprise orgs may only set fee_bps.",
+    )
+
+
+class v1UpsertSwapConfigRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpsertSwapConfigIntent
+    generateAppProofs: Optional[bool] = Field(default=None)
+
+
+class v1UpsertSwapConfigResult(TurnkeyBaseModel):
+    feeReceiverWalletAddress: Optional[str] = Field(default=None)
+    feeBps: Optional[str] = Field(default=None)
+    stableFeeBps: Optional[str] = Field(default=None)
+
+
+class v1UpsertSwapFeeSponsorshipLimitConfigIntent(TurnkeyBaseModel):
+    orgWindowLimitUsd: str = Field(
+        description="Positive USD limit shared by the billing parent and its sub-organizations. At most 18 integer and 12 fractional digits."
+    )
+    subOrgWindowLimitUsd: str = Field(
+        description="Positive USD limit for each sub-organization, no greater than the parent limit."
+    )
+    windowDurationMinutes: str = Field(
+        description="Positive rolling window duration in minutes, at most 153722867."
+    )
+    enabled: bool = Field(
+        description="Whether this spending window permits new swaps. Setting false only turns the saved window off and keeps its limits; it doesn't require the signed permission. This does not grant or remove the signed organization permission."
+    )
+
+
+class v1UpsertSwapFeeSponsorshipLimitConfigRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpsertSwapFeeSponsorshipLimitConfigIntent
+
+
+class v1UpsertSwapFeeSponsorshipLimitConfigResult(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier of the organization the limit config was saved for."
+    )
+
+
+class v1UpsertSwapFixedRateLimitConfigIntent(TurnkeyBaseModel):
+    orgWindowLimitUsd: str = Field(
+        description="Positive USD limit shared by the billing parent and its sub-organizations. At most 18 integer and 12 fractional digits."
+    )
+    subOrgWindowLimitUsd: str = Field(
+        description="Positive USD limit for each sub-organization, no greater than the parent limit."
+    )
+    windowDurationMinutes: str = Field(
+        description="Positive rolling window duration in minutes, at most 153722867."
+    )
+    enabled: bool = Field(
+        description="Whether this spending window permits new swaps. Setting false only turns the saved window off and keeps its limits; it doesn't require the signed permission. This does not grant or remove the signed organization permission."
+    )
+
+
+class v1UpsertSwapFixedRateLimitConfigRequest(TurnkeyBaseModel):
+    type: str
+    timestampMs: str = Field(
+        description="Timestamp (in milliseconds) of the request, used to verify liveness of user requests."
+    )
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    parameters: v1UpsertSwapFixedRateLimitConfigIntent
+
+
+class v1UpsertSwapFixedRateLimitConfigResult(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier of the organization the limit config was saved for."
     )
 
 
@@ -5331,6 +9111,9 @@ class v1User(TurnkeyBaseModel):
     )
     createdAt: externaldatav1Timestamp
     updatedAt: externaldatav1Timestamp
+    mfaPolicies: List[v1MfaPolicy] = Field(
+        description="A list of MFA Policies that define multi-factor authentication requirements for this user."
+    )
 
 
 class v1UserParams(TurnkeyBaseModel):
@@ -5389,6 +9172,199 @@ class v1UserParamsV3(TurnkeyBaseModel):
     userTags: List[str] = Field(
         description="A list of User Tag IDs. This field, if not needed, should be an empty array in your request body."
     )
+
+
+class v1UserParamsV4(TurnkeyBaseModel):
+    userName: str = Field(description="Human-readable name for a User.")
+    userEmail: Optional[str] = Field(
+        default=None, description="The user's email address."
+    )
+    userPhoneNumber: Optional[str] = Field(
+        default=None,
+        description="The user's phone number in E.164 format e.g. +13214567890",
+    )
+    apiKeys: List[v1ApiKeyParamsV2] = Field(
+        description="A list of API Key parameters. This field, if not needed, should be an empty array in your request body."
+    )
+    authenticators: List[v1AuthenticatorParamsV2] = Field(
+        description="A list of Authenticator parameters. This field, if not needed, should be an empty array in your request body."
+    )
+    oauthProviders: List[v1OauthProviderParamsV2] = Field(
+        description="A list of Oauth providers. This field, if not needed, should be an empty array in your request body."
+    )
+    userTags: List[str] = Field(
+        description="A list of User Tag IDs. This field, if not needed, should be an empty array in your request body."
+    )
+
+
+class v1ValidateTvcImageRequest(TurnkeyBaseModel):
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    pivotContainerImageUrl: str = Field(description="URL of the container image.")
+    pivotContainerEncryptedPullSecret: Optional[str] = Field(
+        default=None, description="HPKE-encrypted pull secret for private images."
+    )
+
+
+class v1ValidateTvcImageResponse(TurnkeyBaseModel):
+    resolvedImageDigest: Optional[str] = Field(default=None)
+
+
+class v1VelocityControlAggregation(TurnkeyBaseModel):
+    method: v1VelocityControlAggregationMethod = Field(
+        description="Method that aggregates matching data points."
+    )
+    operator: v1VelocityControlAggregationOperator = Field(
+        description="Comparison between the aggregate and the threshold."
+    )
+    threshold: str = Field(
+        description="Non-negative base-10 decimal string with at most 38 total digits and 18 fractional digits."
+    )
+    window: v1VelocityControlAggregationWindow = Field(
+        description="Time window for the aggregation."
+    )
+    groupBy: v1VelocityControlAggregationGroupBy = Field(
+        description="Scope that partitions matching data before aggregation."
+    )
+
+
+class v1VelocityControlAggregationGroupBy(TurnkeyBaseModel):
+    organization: Optional[v1VelocityControlAggregationGroupByOrganization] = Field(
+        default=None, description="Uses one shared bucket for the Organization."
+    )
+    user: Optional[v1VelocityControlAggregationGroupByUser] = Field(
+        default=None, description="Uses one bucket for each User."
+    )
+    wallet: Optional[v1VelocityControlAggregationGroupByWallet] = Field(
+        default=None, description="Uses one bucket for each Wallet."
+    )
+
+
+class v1VelocityControlAggregationGroupByOrganization(TurnkeyBaseModel):
+    pass
+
+
+class v1VelocityControlAggregationGroupByUser(TurnkeyBaseModel):
+    pass
+
+
+class v1VelocityControlAggregationGroupByWallet(TurnkeyBaseModel):
+    pass
+
+
+class v1VelocityControlAggregationMethod(str, Enum):
+    VELOCITY_CONTROL_AGGREGATION_METHOD_SUM = "VELOCITY_CONTROL_AGGREGATION_METHOD_SUM"
+    VELOCITY_CONTROL_AGGREGATION_METHOD_COUNT = (
+        "VELOCITY_CONTROL_AGGREGATION_METHOD_COUNT"
+    )
+
+
+class v1VelocityControlAggregationOperator(str, Enum):
+    VELOCITY_CONTROL_AGGREGATION_OPERATOR_LESS_THAN = (
+        "VELOCITY_CONTROL_AGGREGATION_OPERATOR_LESS_THAN"
+    )
+    VELOCITY_CONTROL_AGGREGATION_OPERATOR_LESS_THAN_OR_EQUAL = (
+        "VELOCITY_CONTROL_AGGREGATION_OPERATOR_LESS_THAN_OR_EQUAL"
+    )
+    VELOCITY_CONTROL_AGGREGATION_OPERATOR_EQUAL = (
+        "VELOCITY_CONTROL_AGGREGATION_OPERATOR_EQUAL"
+    )
+    VELOCITY_CONTROL_AGGREGATION_OPERATOR_GREATER_THAN_OR_EQUAL = (
+        "VELOCITY_CONTROL_AGGREGATION_OPERATOR_GREATER_THAN_OR_EQUAL"
+    )
+    VELOCITY_CONTROL_AGGREGATION_OPERATOR_GREATER_THAN = (
+        "VELOCITY_CONTROL_AGGREGATION_OPERATOR_GREATER_THAN"
+    )
+
+
+class v1VelocityControlAggregationWindow(TurnkeyBaseModel):
+    rolling: Optional[v1VelocityControlAggregationWindowRolling] = Field(
+        default=None, description="Uses a rolling time window."
+    )
+    infinite: Optional[v1VelocityControlAggregationWindowInfinite] = Field(
+        default=None, description="Uses all matching data without a time limit."
+    )
+
+
+class v1VelocityControlAggregationWindowInfinite(TurnkeyBaseModel):
+    pass
+
+
+class v1VelocityControlAggregationWindowRolling(TurnkeyBaseModel):
+    duration: int = Field(description="Duration of the rolling window, in seconds.")
+
+
+class v1VelocityControlDataSource(TurnkeyBaseModel):
+    chainAssetTransfer: Optional[v1VelocityControlDataSourceChainAssetTransfer] = Field(
+        default=None,
+        description="Uses transfers of the listed on-chain assets as input data.",
+    )
+    activityExecution: Optional[v1VelocityControlDataSourceActivityExecution] = Field(
+        default=None, description="Uses executed Turnkey activities as input data."
+    )
+
+
+class v1VelocityControlDataSourceActivityExecution(TurnkeyBaseModel):
+    filter: Optional[v1VelocityControlDataSourceActivityExecutionFilter] = Field(
+        default=None, description="Filters activity executions by type."
+    )
+
+
+class v1VelocityControlDataSourceActivityExecutionFilter(TurnkeyBaseModel):
+    activity: Optional[List[v1VelocityControlDataSourceFilterActivity]] = Field(
+        default=None, description="Activity types whose executions are included."
+    )
+
+
+class v1VelocityControlDataSourceChainAssetTransfer(TurnkeyBaseModel):
+    definition: List[v1VelocityControlDataSourceChainAssetTransferDefinition] = Field(
+        description="Assets whose transfers are included in the data source."
+    )
+    filter: Optional[v1VelocityControlDataSourceChainAssetTransferFilter] = Field(
+        default=None, description="Filters asset transfers by activity type."
+    )
+    phase: Optional[v1VelocityControlDataSourcePhase] = Field(
+        default=None, description="Selects when to measure an asset transfer."
+    )
+
+
+class v1VelocityControlDataSourceChainAssetTransferDefinition(TurnkeyBaseModel):
+    caip19: str = Field(description="CAIP-19 identifier for the asset.")
+    decimals: int = Field(
+        description="Integer between 0 and 255 (inclusive) that specifies the number of decimal places for the asset."
+    )
+
+
+class v1VelocityControlDataSourceChainAssetTransferFilter(TurnkeyBaseModel):
+    activity: Optional[List[v1VelocityControlDataSourceFilterActivity]] = Field(
+        default=None, description="Activity types whose asset transfers are included."
+    )
+
+
+class v1VelocityControlDataSourceFilterActivity(TurnkeyBaseModel):
+    activityType: str = Field(
+        description="Name of an activity type to include, such as `ACTIVITY_TYPE_SOL_SEND_TRANSACTION`."
+    )
+
+
+class v1VelocityControlDataSourcePhase(TurnkeyBaseModel):
+    signature: Optional[v1VelocityControlDataSourcePhaseSignature] = Field(
+        default=None,
+        description="Measures the transfer when Turnkey signs the transaction and returns it to the user.",
+    )
+    submission: Optional[v1VelocityControlDataSourcePhaseSubmission] = Field(
+        default=None,
+        description="Reserved for future use. Measures the transfer after the transaction lands on chain.",
+    )
+
+
+class v1VelocityControlDataSourcePhaseSignature(TurnkeyBaseModel):
+    pass
+
+
+class v1VelocityControlDataSourcePhaseSubmission(TurnkeyBaseModel):
+    pass
 
 
 class v1VerifyOtpIntent(TurnkeyBaseModel):
@@ -5496,6 +9472,14 @@ class v1WalletAccount(TurnkeyBaseModel):
         default=None,
         description="Wallet details for this account. This is only present when include_wallet_details=true.",
     )
+    name: Optional[str] = Field(
+        default=None,
+        description="Human-readable name for this Wallet Account, unique within the organization.",
+    )
+    caip2Prefix: Optional[str] = Field(
+        default=None,
+        description="The CAIP-2 namespace shared by the chains supported by this account (for example, 'eip155' or 'solana').",
+    )
 
 
 class v1WalletAccountParams(TurnkeyBaseModel):
@@ -5508,6 +9492,9 @@ class v1WalletAccountParams(TurnkeyBaseModel):
     path: str = Field(description="Path used to generate a wallet Account.")
     addressFormat: v1AddressFormat = Field(
         description="Address format used to generate a wallet Acccount."
+    )
+    name: Optional[str] = Field(
+        default=None, description="Optional human-readable name for the account."
     )
 
 
@@ -5557,7 +9544,49 @@ class v1WebAuthnStamp(TurnkeyBaseModel):
     )
 
 
+class v1WebhookEndpointData(TurnkeyBaseModel):
+    endpointId: str = Field(description="Unique identifier of the webhook endpoint.")
+    organizationId: str = Field(
+        description="Unique identifier for a given Organization."
+    )
+    url: str = Field(description="The destination URL for webhook delivery.")
+    name: str = Field(description="Human-readable name for this webhook endpoint.")
+    isActive: bool = Field(description="Whether this webhook endpoint is active.")
+    subscriptions: Optional[List[v1WebhookSubscriptionParams]] = Field(
+        default=None, description="Current subscriptions attached to this endpoint."
+    )
+
+
+class v1WebhookSubscriptionParams(TurnkeyBaseModel):
+    eventType: str = Field(
+        description="The event type to subscribe to (for example, ACTIVITY_UPDATES, BALANCE_CONFIRMED_UPDATES, or BALANCE_FINALIZED_UPDATES)."
+    )
+    filtersJson: Optional[str] = Field(
+        default=None, description="JSON-encoded filter criteria for this subscription."
+    )
+    isActive: Optional[bool] = Field(
+        default=None, description="Whether this subscription is active."
+    )
+
+
 # --- API Types from Swagger Paths ---
+
+
+class GetActivePoliciesResponse(TurnkeyBaseModel):
+    statuses: List[v1ActivePolicyStatus] = Field(
+        description="The active/inactive status of every policy in the organization."
+    )
+    evaluatedAtMs: str = Field(
+        description="The enclave's trusted timestamp (Unix epoch milliseconds) used to evaluate every policy."
+    )
+
+
+class GetActivePoliciesBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class GetActivePoliciesInput(TurnkeyBaseModel):
+    body: GetActivePoliciesBody
 
 
 class GetActivityResponse(TurnkeyBaseModel):
@@ -5605,6 +9634,19 @@ class GetApiKeysInput(TurnkeyBaseModel):
     body: GetApiKeysBody
 
 
+class GetAppStatusResponse(TurnkeyBaseModel):
+    appStatus: v1AppStatus = Field(description="Live runtime status for the TVC App")
+
+
+class GetAppStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    appId: str = Field(description="Unique identifier for a given TVC App.")
+
+
+class GetAppStatusInput(TurnkeyBaseModel):
+    body: GetAppStatusBody
+
+
 class GetAuthenticatorResponse(TurnkeyBaseModel):
     authenticator: v1Authenticator = Field(description="An authenticator.")
 
@@ -5648,6 +9690,117 @@ class GetBootProofInput(TurnkeyBaseModel):
     body: GetBootProofBody
 
 
+class GetClaimEarnFeesStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the fee claim.")
+    claimTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the fee claim, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the fee claim transaction failed, when status is FAILED.",
+    )
+
+
+class GetClaimEarnFeesStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    claimRequestId: str = Field(
+        description="The claim_request_id returned by ClaimEarnFees."
+    )
+
+
+class GetClaimEarnFeesStatusInput(TurnkeyBaseModel):
+    body: GetClaimEarnFeesStatusBody
+
+
+class GetEarnClaimRewardsStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the rewards claim.")
+    claimTxHash: Optional[str] = Field(
+        default=None,
+        description="Transaction hash of the rewards claim, once available.",
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the rewards claim transaction failed, when status is FAILED.",
+    )
+
+
+class GetEarnClaimRewardsStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    claimRequestId: str = Field(
+        description="The claim_request_id returned by EarnClaimRewards."
+    )
+
+
+class GetEarnClaimRewardsStatusInput(TurnkeyBaseModel):
+    body: GetEarnClaimRewardsStatusBody
+
+
+class GetEarnDeployStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the wrapper deployment.")
+    deployTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the deployment, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the deployment transaction failed, when status is FAILED.",
+    )
+
+
+class GetEarnDeployStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    deployRequestId: str = Field(
+        description="The deploy_request_id returned by EarnDeployWrapper."
+    )
+
+
+class GetEarnDeployStatusInput(TurnkeyBaseModel):
+    body: GetEarnDeployStatusBody
+
+
+class GetEarnDepositStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the deposit.")
+    depositTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the deposit, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the deposit transaction failed, when status is FAILED.",
+    )
+
+
+class GetEarnDepositStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    depositRequestId: str = Field(
+        description="The deposit_request_id returned by EarnDeposit."
+    )
+
+
+class GetEarnDepositStatusInput(TurnkeyBaseModel):
+    body: GetEarnDepositStatusBody
+
+
+class GetEarnWithdrawStatusResponse(TurnkeyBaseModel):
+    status: str = Field(description="Status of the withdrawal.")
+    withdrawTxHash: Optional[str] = Field(
+        default=None, description="Transaction hash of the withdrawal, once available."
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Reason the withdrawal transaction failed, when status is FAILED.",
+    )
+
+
+class GetEarnWithdrawStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    withdrawRequestId: str = Field(
+        description="The withdraw_request_id returned by EarnWithdraw."
+    )
+
+
+class GetEarnWithdrawStatusInput(TurnkeyBaseModel):
+    body: GetEarnWithdrawStatusBody
+
+
 class GetGasUsageResponse(TurnkeyBaseModel):
     windowDurationMinutes: int = Field(
         description="The window duration (in minutes) for the organization or sub-organization."
@@ -5668,17 +9821,85 @@ class GetGasUsageInput(TurnkeyBaseModel):
     body: GetGasUsageBody
 
 
+class GetIpAllowlistResponse(TurnkeyBaseModel):
+    allowlist: v1IpAllowlist
+
+
+class GetIpAllowlistBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="If provided, return only the allowlist for this specific API key.",
+    )
+
+
+class GetIpAllowlistInput(TurnkeyBaseModel):
+    body: GetIpAllowlistBody
+
+
 class GetLatestBootProofResponse(TurnkeyBaseModel):
     bootProof: v1BootProof
 
 
 class GetLatestBootProofBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
-    appName: str = Field(description="Name of enclave app.")
+    appName: str = Field(description="Unique identifier (UUID) of the enclave app.")
 
 
 class GetLatestBootProofInput(TurnkeyBaseModel):
     body: GetLatestBootProofBody
+
+
+class GetMfaPoliciesResponse(TurnkeyBaseModel):
+    mfaPolicies: List[v1MfaPolicy] = Field(
+        description="A list of multi-factor authentication policies for a user."
+    )
+
+
+class GetMfaPoliciesBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    userId: str = Field(description="Unique identifier for a given user.")
+
+
+class GetMfaPoliciesInput(TurnkeyBaseModel):
+    body: GetMfaPoliciesBody
+
+
+class GetMfaPolicyResponse(TurnkeyBaseModel):
+    mfaPolicy: v1MfaPolicy = Field(
+        description="Multi-factor authentication policy for a user."
+    )
+
+
+class GetMfaPolicyBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    userId: str = Field(description="Unique identifier for a given user.")
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA policy.")
+
+
+class GetMfaPolicyInput(TurnkeyBaseModel):
+    body: GetMfaPolicyBody
+
+
+class GetMfaStatusResponse(TurnkeyBaseModel):
+    mfaStatuses: List[v1MfaStatus] = Field(
+        description="A list of MFA statuses for the activity's votes."
+    )
+
+
+class GetMfaStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    activityId: str = Field(
+        description="The unique identifier of the activity to get MFA status for."
+    )
+    userId: Optional[str] = Field(
+        default=None,
+        description="Optional user ID to filter MFA status for a specific user.",
+    )
+
+
+class GetMfaStatusInput(TurnkeyBaseModel):
+    body: GetMfaStatusBody
 
 
 class GetNoncesResponse(TurnkeyBaseModel):
@@ -5826,6 +10047,9 @@ class GetSendTransactionStatusResponse(TurnkeyBaseModel):
     eth: Optional[v1EthSendTransactionStatus] = Field(
         default=None, description="Ethereum-specific transaction status."
     )
+    solana: Optional[v1SolanaSendTransactionStatus] = Field(
+        default=None, description="Solana-specific transaction status."
+    )
     txError: Optional[str] = Field(
         default=None,
         description="The error encountered when broadcasting or confirming the transaction, if any.",
@@ -5847,6 +10071,37 @@ class GetSendTransactionStatusInput(TurnkeyBaseModel):
     body: GetSendTransactionStatusBody
 
 
+class GetSessionProfileResponse(TurnkeyBaseModel):
+    sessionProfile: v1SessionProfile = Field(
+        description="Session profile for a user, including details about the user's authenticators, Oauth providers, API keys, and MFA policies."
+    )
+
+
+class GetSessionProfileBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    sessionProfileId: str = Field(
+        description="Unique identifier for a session profile."
+    )
+
+
+class GetSessionProfileInput(TurnkeyBaseModel):
+    body: GetSessionProfileBody
+
+
+class GetSessionProfilesResponse(TurnkeyBaseModel):
+    sessionProfiles: List[v1SessionProfile] = Field(
+        description="A list of session profiles for users in the organization."
+    )
+
+
+class GetSessionProfilesBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class GetSessionProfilesInput(TurnkeyBaseModel):
+    body: GetSessionProfilesBody
+
+
 class GetSmartContractInterfaceResponse(TurnkeyBaseModel):
     smartContractInterface: externaldatav1SmartContractInterface = Field(
         description="Object to be used in conjunction with policies to guard transaction signing."
@@ -5862,6 +10117,164 @@ class GetSmartContractInterfaceBody(TurnkeyBaseModel):
 
 class GetSmartContractInterfaceInput(TurnkeyBaseModel):
     body: GetSmartContractInterfaceBody
+
+
+class GetSwapSponsorshipUsageResponse(TurnkeyBaseModel):
+    feeSponsorship: v1SwapSponsorshipFeature
+    fixedRate: v1SwapSponsorshipFeature
+
+
+class GetSwapSponsorshipUsageBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class GetSwapSponsorshipUsageInput(TurnkeyBaseModel):
+    body: GetSwapSponsorshipUsageBody
+
+
+class GetSwapStatusResponse(TurnkeyBaseModel):
+    status: str = Field(
+        description="Normalized swap status. One of PENDING, COMPLETED, FAILED."
+    )
+    swapKind: str = Field(description="SAME_CHAIN or CROSS_CHAIN.")
+    provider: str = Field(description="Swap provider that executed the swap.")
+    inputToken: str = Field(description="CAIP-19 asset ID for the input asset.")
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    originTxHash: Optional[str] = Field(
+        default=None,
+        description="Final included origin-chain transaction hash, when known.",
+    )
+    destinationTxHashes: Optional[List[str]] = Field(
+        default=None,
+        description="Provider-reported destination-chain transaction hashes; cross-chain COMPLETED only.",
+    )
+    outputAmount: Optional[str] = Field(
+        default=None,
+        description="Actual base-unit output amount on COMPLETED, when known. Unset on FAILED.",
+    )
+    refund: Optional[v1SwapRefund] = Field(
+        default=None,
+        description="Funds returned by the provider after a successful origin transfer and failed cross-chain fill. Omitted for origin transaction failures and same-chain swaps.",
+    )
+    updatedAt: str = Field(
+        description="Timestamp of the last swap status change, as millisecond epoch string."
+    )
+    error: Optional[v1SwapError] = Field(
+        default=None,
+        description="Normalized failure details, present whenever status is FAILED.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None, description="Address that receives the output asset."
+    )
+
+
+class GetSwapStatusBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    swapRequestId: str = Field(
+        description="The swap_request_id returned by ExecuteSwap."
+    )
+
+
+class GetSwapStatusInput(TurnkeyBaseModel):
+    body: GetSwapStatusBody
+
+
+class GetTvcAppResponse(TurnkeyBaseModel):
+    tvcApp: v1TvcApp = Field(description="Details about a single TVC App")
+
+
+class GetTvcAppBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    tvcAppId: str = Field(description="Unique identifier for a given TVC App.")
+
+
+class GetTvcAppInput(TurnkeyBaseModel):
+    body: GetTvcAppBody
+
+
+class GetTvcDeploymentResponse(TurnkeyBaseModel):
+    tvcDeployment: v1TvcDeployment = Field(
+        description="Details about a single TVC Deployment"
+    )
+
+
+class GetTvcDeploymentBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="Unique identifier for a given TVC Deployment."
+    )
+
+
+class GetTvcDeploymentInput(TurnkeyBaseModel):
+    body: GetTvcDeploymentBody
+
+
+class GetTvcDeploymentDebugLogsResponse(TurnkeyBaseModel):
+    entries: List[v1TvcDeploymentDebugLogEntry] = Field(
+        description="Application log entries sorted by platform timestamp."
+    )
+
+
+class GetTvcDeploymentDebugLogsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="Unique identifier for a given TVC Deployment. The deployment must be running in debug mode."
+    )
+    tailLines: Optional[int] = Field(
+        default=None,
+        description="Limit returned history to the last N lines per replica. If unset or zero, no tail-line limit is applied.",
+    )
+    sinceSeconds: Optional[str] = Field(
+        default=None,
+        description="Return logs newer than this many seconds ago. If unset or zero, no since-time limit is applied. Useful for clients that poll to follow logs.",
+    )
+
+
+class GetTvcDeploymentDebugLogsInput(TurnkeyBaseModel):
+    body: GetTvcDeploymentDebugLogsBody
+
+
+class GetTvcDeploymentProvisioningDetailsResponse(TurnkeyBaseModel):
+    attestationDocument: Optional[str] = Field(
+        default=None,
+        description="The attestation document of the provisioning enclave. Present only when a deployment is awaiting provisioning.",
+    )
+    manifestEnvelope: Optional[str] = Field(
+        default=None,
+        description="The manifest envelope containing the TVC deployment's manifest and signatures. Present only when a deployment is awaiting provisioning.",
+    )
+    provisioningState: v1ProvisioningState = Field(
+        description="Current provisioning state."
+    )
+
+
+class GetTvcDeploymentProvisioningDetailsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="Unique identifier for a given TVC Deployment."
+    )
+
+
+class GetTvcDeploymentProvisioningDetailsInput(TurnkeyBaseModel):
+    body: GetTvcDeploymentProvisioningDetailsBody
+
+
+class GetTvcQosVersionsResponse(TurnkeyBaseModel):
+    availableVersions: List[str] = Field(
+        description="QOS versions supported for new TVC deployments."
+    )
+    latestVersion: str = Field(
+        description="Latest recommended QOS version for new TVC deployments."
+    )
+
+
+class GetTvcQosVersionsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class GetTvcQosVersionsInput(TurnkeyBaseModel):
+    body: GetTvcQosVersionsBody
 
 
 class GetUserResponse(TurnkeyBaseModel):
@@ -5919,7 +10332,9 @@ class GetWalletAddressBalancesResponse(TurnkeyBaseModel):
 
 class GetWalletAddressBalancesBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
-    address: str = Field(description="Address corresponding to a wallet account.")
+    address: str = Field(
+        description="Address corresponding to a wallet account. Private key addresses are not supported."
+    )
     caip2: str = Field(
         description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet or 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
     )
@@ -5963,6 +10378,146 @@ class GetAppProofsBody(TurnkeyBaseModel):
 
 class GetAppProofsInput(TurnkeyBaseModel):
     body: GetAppProofsBody
+
+
+class ListEarnEnabledVaultsResponse(TurnkeyBaseModel):
+    enabledVaults: Optional[List[v1EarnEnabledVault]] = Field(
+        default=None, description="The organization's deployed wrappers."
+    )
+
+
+class ListEarnEnabledVaultsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    provider: Optional[v1EarnProvider] = Field(
+        default=None,
+        description="Optional filter: only return enabled vaults from this provider. Leave EARN_PROVIDER_UNSPECIFIED to return all providers.",
+    )
+    caip19: Optional[str] = Field(
+        default=None,
+        description="Optional filter: only return enabled vaults whose underlying asset matches this CAIP-19 asset ID (e.g. 'eip155:8453/erc20:0x833589...'). The chain is taken from the CAIP-19 identifier.",
+    )
+    includeExposure: Optional[bool] = Field(
+        default=None,
+        description="When true, populate each vault's exposures (the underlying markets it allocates into). This costs an extra provider query per vault, so leave it off for list views.",
+    )
+
+
+class ListEarnEnabledVaultsInput(TurnkeyBaseModel):
+    body: ListEarnEnabledVaultsBody
+
+
+class ListEarnPositionsResponse(TurnkeyBaseModel):
+    positions: Optional[List[v1EarnPosition]] = Field(
+        default=None, description="The wallet's active Earn positions."
+    )
+
+
+class ListEarnPositionsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    walletAddress: str = Field(
+        description="The wallet address to return positions for."
+    )
+
+
+class ListEarnPositionsInput(TurnkeyBaseModel):
+    body: ListEarnPositionsBody
+
+
+class ListEarnRewardsResponse(TurnkeyBaseModel):
+    rewards: Optional[List[v1EarnReward]] = Field(
+        default=None,
+        description="The wallet's rewards, one entry per (chain, reward token), sorted by chain then token. Entries where every amount is zero are omitted.",
+    )
+
+
+class ListEarnRewardsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    walletAddress: str = Field(description="The wallet address to return rewards for.")
+    caip2: Optional[str] = Field(
+        default=None,
+        description="Optional filter: only return rewards on this chain (e.g. 'eip155:8453'). When unset, every chain the organization has deployed Earn wrappers on is queried.",
+    )
+
+
+class ListEarnRewardsInput(TurnkeyBaseModel):
+    body: ListEarnRewardsBody
+
+
+class ListEarnVaultsResponse(TurnkeyBaseModel):
+    vaults: Optional[List[v1EarnVault]] = Field(
+        default=None,
+        description="The catalog of wrappable vaults, sorted by TVL (USD) descending. To page, pass page_info.end_cursor as the pagination after cursor.",
+    )
+    pageInfo: Optional[v1PageInfo] = Field(
+        default=None,
+        description="Pagination metadata for the returned page. Pass end_cursor as the next request's after cursor (or start_cursor as the before cursor) to page through the catalog. Cursors are opaque; do not parse them.",
+    )
+
+
+class ListEarnVaultsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    provider: Optional[v1EarnProvider] = Field(
+        default=None,
+        description="Optional filter: only return vaults from this provider. Leave EARN_PROVIDER_UNSPECIFIED to return all providers.",
+    )
+    caip19: str = Field(
+        description="CAIP-19 asset ID (e.g. 'eip155:8453/erc20:0x833589...') to return vaults for. Only vaults whose underlying asset matches are returned; the chain is taken from the CAIP-19 identifier."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None,
+        description="Pagination over the TVL-sorted catalog. before/after cursors are a vault_address from a prior page.",
+    )
+
+
+class ListEarnVaultsInput(TurnkeyBaseModel):
+    body: ListEarnVaultsBody
+
+
+class ListEmailEventsResponse(TurnkeyBaseModel):
+    emailEvents: List[v1EmailEvent] = Field(
+        description="Email events matching the requested filters, ordered by most recent event first."
+    )
+
+
+class ListEmailEventsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    email: str = Field(description="Recipient email address to list email events for")
+    eventType: Optional[str] = Field(
+        default=None,
+        description="Optional email event type to filter by. Examples include Send, Delivery, Bounce, and DeliveryDelay",
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None, description="Parameters used for cursor-based pagination"
+    )
+
+
+class ListEmailEventsInput(TurnkeyBaseModel):
+    body: ListEmailEventsBody
+
+
+class ListEthTransactionHistoryResponse(TurnkeyBaseModel):
+    transactions: List[v1EthTransactionHistoryItem] = Field(
+        description="EVM transactions for the requested address, ordered by most recent first."
+    )
+    pageInfo: Optional[v1PageInfo] = Field(default=None)
+
+
+class ListEthTransactionHistoryBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    address: str = Field(
+        description="Address corresponding to a wallet account. Private key addresses are not supported."
+    )
+    caip2: str = Field(
+        description="EVM CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None,
+        description="Cursor-based pagination options. Cursors are opaque and valid only for the same address and CAIP-2 query.",
+    )
+
+
+class ListEthTransactionHistoryInput(TurnkeyBaseModel):
+    body: ListEthTransactionHistoryBody
 
 
 class ListFiatOnRampCredentialsResponse(TurnkeyBaseModel):
@@ -6025,6 +10580,23 @@ class GetPrivateKeysInput(TurnkeyBaseModel):
     body: GetPrivateKeysBody
 
 
+class ListSecretsResponse(TurnkeyBaseModel):
+    secrets: List[v1SecretMetadata] = Field(
+        description="Metadata for each secret in the organization, ordered by most recently created first."
+    )
+
+
+class ListSecretsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None, description="Parameters used for cursor-based pagination."
+    )
+
+
+class ListSecretsInput(TurnkeyBaseModel):
+    body: ListSecretsBody
+
+
 class GetSmartContractInterfacesResponse(TurnkeyBaseModel):
     smartContractInterfaces: List[externaldatav1SmartContractInterface] = Field(
         description="A list of smart contract interfaces."
@@ -6037,6 +10609,31 @@ class GetSmartContractInterfacesBody(TurnkeyBaseModel):
 
 class GetSmartContractInterfacesInput(TurnkeyBaseModel):
     body: GetSmartContractInterfacesBody
+
+
+class ListSolTransactionHistoryResponse(TurnkeyBaseModel):
+    transactions: List[v1SolTransactionHistoryItem] = Field(
+        description="Solana transactions for the requested address, ordered by most recent first."
+    )
+    pageInfo: Optional[v1PageInfo] = Field(default=None)
+
+
+class ListSolTransactionHistoryBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    address: str = Field(
+        description="Address corresponding to a wallet account. Private key addresses are not supported."
+    )
+    caip2: str = Field(
+        description="Solana CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
+    )
+    paginationOptions: Optional[v1Pagination] = Field(
+        default=None,
+        description="Cursor-based pagination options. Cursors are opaque and valid only for the same address and CAIP-2 query.",
+    )
+
+
+class ListSolTransactionHistoryInput(TurnkeyBaseModel):
+    body: ListSolTransactionHistoryBody
 
 
 class GetSubOrgIdsResponse(TurnkeyBaseModel):
@@ -6081,6 +10678,61 @@ class ListSupportedAssetsInput(TurnkeyBaseModel):
     body: ListSupportedAssetsBody
 
 
+class GetTvcAppDeploymentsResponse(TurnkeyBaseModel):
+    tvcDeployments: List[v1TvcDeployment] = Field(
+        description="List of deployments for this TVC App"
+    )
+
+
+class GetTvcAppDeploymentsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    appId: str = Field(description="Unique identifier for a given TVC App.")
+
+
+class GetTvcAppDeploymentsInput(TurnkeyBaseModel):
+    body: GetTvcAppDeploymentsBody
+
+
+class GetTvcAppsResponse(TurnkeyBaseModel):
+    tvcApps: List[v1TvcApp] = Field(description="A list of TVC Apps.")
+
+
+class GetTvcAppsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    isLive: Optional[bool] = Field(
+        default=None,
+        description="Filter TVC Apps by whether they have a live deployment. If omitted, all TVC Apps are returned.",
+    )
+
+
+class GetTvcAppsInput(TurnkeyBaseModel):
+    body: GetTvcAppsBody
+
+
+class GetTvcOperatorsResponse(TurnkeyBaseModel):
+    tvcOperators: List[v1TvcOperator]
+
+
+class GetTvcOperatorsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class GetTvcOperatorsInput(TurnkeyBaseModel):
+    body: GetTvcOperatorsBody
+
+
+class GetTvcQuorumKeysResponse(TurnkeyBaseModel):
+    tvcQuorumKeys: List[v1TvcQuorumKey]
+
+
+class GetTvcQuorumKeysBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class GetTvcQuorumKeysInput(TurnkeyBaseModel):
+    body: GetTvcQuorumKeysBody
+
+
 class ListUserTagsResponse(TurnkeyBaseModel):
     userTags: List[datav1Tag] = Field(description="A list of user tags.")
 
@@ -6115,7 +10767,7 @@ class GetVerifiedSubOrgIdsBody(TurnkeyBaseModel):
     organizationId: Optional[str] = None
     filterType: Optional[str] = Field(
         default=None,
-        description="Specifies the type of filter to apply, i.e 'EMAIL', 'PHONE_NUMBER'.",
+        description="Specifies the type of filter to apply, i.e 'EMAIL', 'PHONE_NUMBER', 'OIDC_TOKEN', 'OAUTH_CLAIM', or 'PUBLIC_KEY'",
     )
     filterValue: Optional[str] = Field(
         default=None,
@@ -6167,9 +10819,37 @@ class GetWalletsInput(TurnkeyBaseModel):
     body: GetWalletsBody
 
 
+class ListWebhookEndpointsResponse(TurnkeyBaseModel):
+    webhookEndpoints: List[v1WebhookEndpointData]
+
+
+class ListWebhookEndpointsBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+
+
+class ListWebhookEndpointsInput(TurnkeyBaseModel):
+    body: ListWebhookEndpointsBody
+
+
+class ValidateTvcImageResponse(TurnkeyBaseModel):
+    resolvedImageDigest: Optional[str] = Field(default=None)
+
+
+class ValidateTvcImageBody(TurnkeyBaseModel):
+    organizationId: Optional[str] = None
+    pivotContainerImageUrl: str = Field(description="URL of the container image.")
+    pivotContainerEncryptedPullSecret: Optional[str] = Field(
+        default=None, description="HPKE-encrypted pull secret for private images."
+    )
+
+
+class ValidateTvcImageInput(TurnkeyBaseModel):
+    body: ValidateTvcImageBody
+
+
 class GetWhoamiResponse(TurnkeyBaseModel):
     organizationId: str = Field(
-        description="Unique identifier for a given organization."
+        description="Unique identifier for a given Organization."
     )
     organizationName: str = Field(
         description="Human-readable name for an organization."
@@ -6200,6 +10880,41 @@ class ApproveActivityBody(TurnkeyBaseModel):
 
 class ApproveActivityInput(TurnkeyBaseModel):
     body: ApproveActivityBody
+
+
+class ClaimEarnFeesResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    claimRequestId: str = Field(
+        description="Identifier to poll claim status and tx hash via GetClaimEarnFeesStatus."
+    )
+
+
+class ClaimEarnFeesBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper to claim fees for. Must be one of the org's deployed wrappers."
+    )
+
+
+class ClaimEarnFeesInput(TurnkeyBaseModel):
+    body: ClaimEarnFeesBody
+
+
+class ClaimSwapFeesResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    requestId: str = Field(
+        description="Relay claim request ID submitted through the permit endpoint."
+    )
+
+
+class ClaimSwapFeesBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+
+
+class ClaimSwapFeesInput(TurnkeyBaseModel):
+    body: ClaimSwapFeesBody
 
 
 class CreateApiKeysResponse(TurnkeyBaseModel):
@@ -6287,6 +11002,32 @@ class CreateInvitationsInput(TurnkeyBaseModel):
     body: CreateInvitationsBody
 
 
+class CreateMfaPolicyResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+
+
+class CreateMfaPolicyBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    userId: str = Field(description="The ID of the User to add the MFA Policy to.")
+    mfaPolicyName: str = Field(description="Human-readable name for a Policy.")
+    condition: str = Field(
+        description="A condition expression that evaluates to true or false, determining when this MFA policy applies."
+    )
+    requiredAuthenticationMethods: List[v1RequiredAuthenticationMethodParams] = Field(
+        description="An ordered list of authentication requirements. Each requirement must be satisfied sequentially to complete MFA."
+    )
+    order: int = Field(
+        description="The order in which this MFA policy is evaluated, starting from 0, relative to other MFA policies. Lower order values are evaluated first."
+    )
+    notes: Optional[str] = Field(default=None, description="Notes for an MFA Policy.")
+
+
+class CreateMfaPolicyInput(TurnkeyBaseModel):
+    body: CreateMfaPolicyBody
+
+
 class CreateOauth2CredentialResponse(TurnkeyBaseModel):
     activity: v1Activity
     oauth2CredentialId: str = Field(
@@ -6319,7 +11060,7 @@ class CreateOauthProvidersBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     userId: str = Field(description="The ID of the User to add an Oauth provider to")
-    oauthProviders: List[v1OauthProviderParams] = Field(
+    oauthProviders: List[v1OauthProviderParamsV2] = Field(
         description="A list of Oauth providers."
     )
 
@@ -6366,6 +11107,9 @@ class CreatePolicyBody(TurnkeyBaseModel):
         default=None, description="The consensus expression that triggers the Effect"
     )
     notes: str = Field(description="Notes for a Policy.")
+    time: Optional[str] = Field(
+        default=None, description="The time expression that triggers the Effect"
+    )
 
 
 class CreatePolicyInput(TurnkeyBaseModel):
@@ -6404,6 +11148,10 @@ class CreatePrivateKeysBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     privateKeys: List[v1PrivateKeyParams] = Field(description="A list of Private Keys.")
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for creating the private keys.",
+    )
 
 
 class CreatePrivateKeysInput(TurnkeyBaseModel):
@@ -6456,7 +11204,8 @@ class CreateReadWriteSessionBody(TurnkeyBaseModel):
         description="Client-side public key generated by the user, to which the read write session bundle (credentials) will be encrypted."
     )
     userId: Optional[str] = Field(
-        default=None, description="Unique identifier for a given User."
+        default=None,
+        description="Optional unique identifier for a given User. If none provided, the read write session will be created for the user who is making the request.",
     )
     apiKeyName: Optional[str] = Field(
         default=None,
@@ -6474,6 +11223,35 @@ class CreateReadWriteSessionBody(TurnkeyBaseModel):
 
 class CreateReadWriteSessionInput(TurnkeyBaseModel):
     body: CreateReadWriteSessionBody
+
+
+class CreateSessionProfileResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    sessionProfileId: str = Field(
+        description="Unique identifier for a given Session Profile."
+    )
+
+
+class CreateSessionProfileBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    sessionProfileName: str = Field(
+        description="Human-readable name for a Session Profile."
+    )
+    scope: str = Field(
+        description="The scope string that defines the permissions for this Session Profile."
+    )
+    expirationSeconds: Optional[str] = Field(
+        default=None,
+        description="The duration in seconds for which sessions created with this Session Profile are valid. If not set, expiration will be determined by the value passed in to the intent of login activities.",
+    )
+    notes: Optional[str] = Field(
+        default=None, description="Notes for a Session Profile."
+    )
+
+
+class CreateSessionProfileInput(TurnkeyBaseModel):
+    body: CreateSessionProfileBody
 
 
 class CreateSmartContractInterfaceResponse(TurnkeyBaseModel):
@@ -6549,6 +11327,246 @@ class CreateSubOrganizationBody(TurnkeyBaseModel):
 
 class CreateSubOrganizationInput(TurnkeyBaseModel):
     body: CreateSubOrganizationBody
+
+
+class CreateSwapQuoteResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    quotes: List[v1SwapQuoteV2] = Field(
+        description="One or more provider quotes for this request. Today this contains a single Relay quote; pass quotes[i].quoteId to execute_swap to bind execution."
+    )
+
+
+class CreateSwapQuoteBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    signWith: str = Field(
+        description="Wallet account address used to price the executable provider quote. Private Key identifiers are not supported."
+    )
+    inputToken: str = Field(
+        description="CAIP-19 asset ID for the input asset. The chain is derived from this value."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    inputAmount: str = Field(description="Base-unit amount of the input asset.")
+    slippageBps: Optional[str] = Field(
+        default=None,
+        description="Provider-neutral maximum allowed slippage in basis points. Turnkey converts this value to each provider's request format. When omitted, each provider applies its default slippage behavior.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None,
+        description="Raw public address that receives the output asset. Required for cross-protocol swaps. The address must match the output token protocol. Wallet account IDs, private key IDs, and CAIP account or asset identifiers are not supported.",
+    )
+    feeSponsorship: Optional[bool] = Field(
+        default=None,
+        description="When true, Turnkey pays the provider fees for this swap and invoices them to the billing parent organization. Requires the FEATURE_NAME_SWAP_FEE_SPONSORSHIP organization feature. Defaults to false.",
+    )
+    fixedRate: Optional[bool] = Field(
+        default=None,
+        description="When true, requests a 1:1 conversion before fees between supported stablecoins. Requires the FEATURE_NAME_SWAP_FIXED_RATE organization feature. Defaults to false.",
+    )
+
+
+class CreateSwapQuoteInput(TurnkeyBaseModel):
+    body: CreateSwapQuoteBody
+
+
+class CreateTvcAppResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    appId: str = Field(description="The unique identifier for the TVC application")
+    manifestSetId: str = Field(
+        description="The unique identifier for the TVC manifest set"
+    )
+    manifestSetOperatorIds: List[str] = Field(
+        description="The unique identifier(s) of the manifest set operators"
+    )
+    manifestSetThreshold: int = Field(
+        description="The required number of approvals for the manifest set"
+    )
+    shareSetId: str = Field(description="The unique identifier for the TVC share set")
+    shareSetOperatorIds: List[str] = Field(
+        description="The unique identifiers of the share set operators"
+    )
+    shareSetThreshold: int = Field(
+        description="The required number of approvals for the share set"
+    )
+
+
+class CreateTvcAppBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    name: str = Field(description="The name of the new TVC application")
+    quorumPublicKey: str = Field(
+        description="Quorum public key to use for this application"
+    )
+    manifestSetId: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for an existing TVC operator set to use as the Manifest Set for this TVC application. If left empty, a new Manifest Set configuration is required",
+    )
+    manifestSetParams: Optional[v1TvcOperatorSetParams] = Field(
+        default=None,
+        description="Configuration to create a new TVC operator set, used as the Manifest Set for this TVC application. If left empty, a Manifest Set ID is required",
+    )
+    shareSetId: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for an existing TVC operator set to use as the Share Set for this TVC application. If left empty, a new Share Set configuration is required",
+    )
+    shareSetParams: Optional[v1TvcOperatorSetParams] = Field(
+        default=None,
+        description="Configuration to create a new TVC operator set, used as the Share Set for this TVC application. If left empty, a Share Set ID is required",
+    )
+    enableEgress: Optional[bool] = Field(
+        default=None,
+        description="Enables network egress for this TVC app. Default if not provided: false.",
+    )
+    enableDebugModeDeployments: Optional[bool] = Field(
+        default=None,
+        description="When true, this app may create deployments in debug-mode. Debug-mode deployments expose logs and emit zero'd attestation PCRs, so remote attestation cannot succeed. Cannot be changed after app creation. Setting this true means the app's quorum key is considered permanently insecure, and a new app with a fresh quorum key must be created. Default if not provided: false.",
+    )
+
+
+class CreateTvcAppInput(TurnkeyBaseModel):
+    body: CreateTvcAppBody
+
+
+class CreateTvcDeploymentResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    deploymentId: str = Field(
+        description="The unique identifier for the TVC deployment"
+    )
+    manifestId: str = Field(description="The unique identifier for the TVC manifest")
+
+
+class CreateTvcDeploymentBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    appId: str = Field(
+        description="The unique identifier of the to-be-deployed TVC application"
+    )
+    qosVersion: str = Field(
+        description="The QuorumOS version to use to deploy this application"
+    )
+    pivotContainerImageUrl: str = Field(
+        description="URL of the container containing the pivot binary"
+    )
+    pivotPath: str = Field(description="Location of the binary in the pivot container")
+    pivotArgs: List[str] = Field(
+        description='Arguments to pass to the pivot binary at startup. Encoded as a list of strings, for example ["--foo", "bar"]'
+    )
+    expectedPivotDigest: str = Field(
+        description="Digest of the pivot binary in the pivot container. This value will be inserted in the QOS manifest to ensure application integrity."
+    )
+    nonce: Optional[int] = Field(
+        default=None,
+        description="Optional nonce to ensure uniqueness of the deployment manifest. If not provided, it defaults to the current Unix timestamp in seconds.",
+    )
+    pivotContainerEncryptedPullSecret: Optional[str] = Field(
+        default=None,
+        description="Optional encrypted pull secret to authorize Turnkey to pull the pivot container image. If your image is public, leave this empty.",
+    )
+    debugMode: Optional[bool] = Field(
+        default=None,
+        description="Optional flag to indicate whether to deploy the TVC app in debug mode, which includes additional logging and debugging tools. Default is false.",
+    )
+    healthCheckType: v1TvcHealthCheckType = Field(
+        description="Health check type (TVC_HEALTH_CHECK_TYPE_HTTP or TVC_HEALTH_CHECK_TYPE_GRPC). HTTP health checks are made with a GET request on /health, and gRPC health checks follow the standard gRPC health checking protocol."
+    )
+    healthCheckPort: int = Field(description="Port to use for health checks.")
+    publicIngressPort: int = Field(description="Port to use for public ingress.")
+    replicas: Optional[int] = Field(
+        default=None, description="Optional desired replica count for this deployment."
+    )
+    instanceSizeCpus: Optional[int] = Field(
+        default=None, description="Optional desired instance cpu count."
+    )
+    instanceSizeRam: Optional[int] = Field(
+        default=None, description="Optional desired instance memory size in GiB."
+    )
+
+
+class CreateTvcDeploymentInput(TurnkeyBaseModel):
+    body: CreateTvcDeploymentBody
+
+
+class CreateTvcManifestApprovalsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    approvalIds: List[str] = Field(
+        description="The unique identifier(s) for the manifest approvals"
+    )
+
+
+class CreateTvcManifestApprovalsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    manifestId: str = Field(
+        description="Unique identifier of the TVC deployment to approve"
+    )
+    approvals: List[v1TvcManifestApproval] = Field(
+        description="List of manifest approvals"
+    )
+
+
+class CreateTvcManifestApprovalsInput(TurnkeyBaseModel):
+    body: CreateTvcManifestApprovalsBody
+
+
+class CreateTvcOperatorResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    walletId: str = Field(
+        description="The unique identifier for the wallet containing TVC operator accounts"
+    )
+    operatorId: str = Field(description="The unique identifier for the TVC operator")
+    encryptPublicKey: str = Field(
+        description="Public encryption key for this TVC operator"
+    )
+    signPublicKey: str = Field(description="Public signing key for this TVC operator")
+
+
+class CreateTvcOperatorBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    walletName: Optional[str] = Field(
+        default=None,
+        description="Human-readable name for a new wallet created for this TVC operator",
+    )
+    walletId: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for an existing wallet to reuse for this TVC operator",
+    )
+    path: str = Field(
+        description="Base derivation path for creating TVC operator wallet accounts"
+    )
+    operatorName: str = Field(
+        description="Human-readable name for this new TVC operator"
+    )
+
+
+class CreateTvcOperatorInput(TurnkeyBaseModel):
+    body: CreateTvcOperatorBody
+
+
+class CreateTvcQuorumKeyResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    quorumKeyId: str = Field(description="The unique identifier for the TVC quorum key")
+    quorumPublicKey: str = Field(
+        description="Public key for the generated TVC quorum key"
+    )
+    shareIds: List[str] = Field(
+        description="The unique identifier(s) for the generated TVC quorum key shares"
+    )
+
+
+class CreateTvcQuorumKeyBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    threshold: int = Field(
+        description="The threshold of operators needed to reassemble this TVC quorum key"
+    )
+    operatorEncryptKeys: List[str] = Field(
+        description="Operator public keys used to encrypt and later approve the generated TVC quorum key shares"
+    )
+
+
+class CreateTvcQuorumKeyInput(TurnkeyBaseModel):
+    body: CreateTvcQuorumKeyBody
 
 
 class CreateUserTagResponse(TurnkeyBaseModel):
@@ -6628,6 +11646,30 @@ class CreateWalletAccountsInput(TurnkeyBaseModel):
     body: CreateWalletAccountsBody
 
 
+class CreateWebhookEndpointResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    endpointId: str = Field(
+        description="Unique identifier of the created webhook endpoint."
+    )
+    webhookEndpoint: v1WebhookEndpointData = Field(
+        description="The created webhook endpoint data."
+    )
+
+
+class CreateWebhookEndpointBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    url: str = Field(description="The destination URL for webhook delivery.")
+    name: str = Field(description="Human-readable name for this webhook endpoint.")
+    subscriptions: Optional[List[v1WebhookSubscriptionParams]] = Field(
+        default=None, description="Event subscriptions to create for this endpoint."
+    )
+
+
+class CreateWebhookEndpointInput(TurnkeyBaseModel):
+    body: CreateWebhookEndpointBody
+
+
 class DeleteApiKeysResponse(TurnkeyBaseModel):
     activity: v1Activity
     apiKeyIds: List[str] = Field(description="A list of API Key IDs.")
@@ -6696,6 +11738,22 @@ class DeleteInvitationBody(TurnkeyBaseModel):
 
 class DeleteInvitationInput(TurnkeyBaseModel):
     body: DeleteInvitationBody
+
+
+class DeleteMfaPolicyResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+
+
+class DeleteMfaPolicyBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    userId: str = Field(description="The ID of the User to delete the MFA Policy from.")
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+
+
+class DeleteMfaPolicyInput(TurnkeyBaseModel):
+    body: DeleteMfaPolicyBody
 
 
 class DeleteOauth2CredentialResponse(TurnkeyBaseModel):
@@ -6812,6 +11870,25 @@ class DeletePrivateKeysInput(TurnkeyBaseModel):
     body: DeletePrivateKeysBody
 
 
+class DeleteSecretsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    secretIds: List[str] = Field(
+        description="Unique identifiers of the deleted secrets, in the order requested."
+    )
+
+
+class DeleteSecretsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    secretIds: List[str] = Field(
+        description="Unique identifiers of the secrets to delete. Must contain between 1 and 32 distinct UUIDs. All secrets must belong to the organization."
+    )
+
+
+class DeleteSecretsInput(TurnkeyBaseModel):
+    body: DeleteSecretsBody
+
+
 class DeleteSmartContractInterfaceResponse(TurnkeyBaseModel):
     activity: v1Activity
     smartContractInterfaceId: str = Field(
@@ -6849,6 +11926,42 @@ class DeleteSubOrganizationBody(TurnkeyBaseModel):
 
 class DeleteSubOrganizationInput(TurnkeyBaseModel):
     body: DeleteSubOrganizationBody
+
+
+class DeleteTvcAppAndDeploymentsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    appId: str = Field(description="The unique identifier of the deleted TVC app.")
+
+
+class DeleteTvcAppAndDeploymentsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    appId: str = Field(
+        description="The unique identifier of the TVC app to delete. The app and all associated deployments will be removed."
+    )
+
+
+class DeleteTvcAppAndDeploymentsInput(TurnkeyBaseModel):
+    body: DeleteTvcAppAndDeploymentsBody
+
+
+class DeleteTvcDeploymentResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    deploymentId: str = Field(
+        description="The unique identifier of the deleted TVC deployment."
+    )
+
+
+class DeleteTvcDeploymentBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="The unique identifier of the TVC deployment to delete."
+    )
+
+
+class DeleteTvcDeploymentInput(TurnkeyBaseModel):
+    body: DeleteTvcDeploymentBody
 
 
 class DeleteUserTagsResponse(TurnkeyBaseModel):
@@ -6928,6 +12041,167 @@ class DeleteWalletsInput(TurnkeyBaseModel):
     body: DeleteWalletsBody
 
 
+class DeleteWebhookEndpointResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    endpointId: str = Field(
+        description="Unique identifier of the deleted webhook endpoint."
+    )
+
+
+class DeleteWebhookEndpointBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    endpointId: str = Field(
+        description="Unique identifier of the webhook endpoint to delete."
+    )
+
+
+class DeleteWebhookEndpointInput(TurnkeyBaseModel):
+    body: DeleteWebhookEndpointBody
+
+
+class EarnClaimRewardsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    claimRequestId: str = Field(
+        description="Identifier to poll claim status and tx hash via GetEarnClaimRewardsStatus."
+    )
+
+
+class EarnClaimRewardsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    signWith: str = Field(
+        description="A Turnkey-managed wallet address the rewards are attributed to. The claim transaction is signed by this wallet and the Merkl Distributor transfers every reward token to it."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain to claim rewards on (e.g. 'eip155:8453'). Rewards accrue per chain; see ListEarnRewards."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+
+
+class EarnClaimRewardsInput(TurnkeyBaseModel):
+    body: EarnClaimRewardsBody
+
+
+class EarnDeployWrapperResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    wrapperAddress: str = Field(
+        description="Address of the deployed fee wrapper (the deposit target)."
+    )
+    splitterAddress: str = Field(
+        description="Address of the deployed fee splitter (PaymentSplitter for Morpho, RevenueSplitterOwner for Aave)."
+    )
+    deployRequestId: str = Field(description="Identifier to poll deploy status.")
+
+
+class EarnDeployWrapperBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    vaultAddress: str = Field(
+        description="Address of the underlying yield vault to wrap (from the ListEarnVaults catalog)."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID the vault lives on (e.g., 'eip155:8453' for Base)."
+    )
+    clientFeeBps: str = Field(
+        description="Your fee on gross yield, in basis points (e.g., '2000' for 20%). Maximum is 4000 (40%)."
+    )
+    clientFeeWallet: str = Field(
+        description="The wallet address that receives the client's fee payouts on-chain. Must be a Turnkey-managed wallet address."
+    )
+
+
+class EarnDeployWrapperInput(TurnkeyBaseModel):
+    body: EarnDeployWrapperBody
+
+
+class EarnDepositResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    depositRequestId: str = Field(
+        description="Identifier to poll deposit status and tx hash via GetEarnDepositStatus."
+    )
+
+
+class EarnDepositBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper to deposit into, from ListEarnVaults/ListEarnPositions. Must be one of the org's deployed wrappers."
+    )
+    signWith: str = Field(
+        description="A Wallet account address or Private Key address to deposit from and sign with. Must be an on-chain address; Private Key identifiers are not supported."
+    )
+    assets: str = Field(
+        description="Amount of the underlying asset to deposit, in raw on-chain units (e.g., '1000000' for 1 USDC at 6 decimals)."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID the vault lives on (e.g., 'eip155:8453' for Base)."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+
+
+class EarnDepositInput(TurnkeyBaseModel):
+    body: EarnDepositBody
+
+
+class EarnSetWrapperStateResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    wrapperAddress: str = Field(description="Address of the updated Earn wrapper.")
+    depositsDisabled: bool = Field(
+        description="The wrapper's deposit state after this activity."
+    )
+
+
+class EarnSetWrapperStateBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper to update, from ListEarnVaults/ListEarnPositions. Must be one of the org's deployed wrappers."
+    )
+    depositsDisabled: bool = Field(
+        description="When true, deposits to this wrapper are rejected; withdrawals are unaffected. Set to false to re-enable deposits."
+    )
+
+
+class EarnSetWrapperStateInput(TurnkeyBaseModel):
+    body: EarnSetWrapperStateBody
+
+
+class EarnWithdrawResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    withdrawRequestId: str = Field(
+        description="Identifier to poll withdrawal status and tx hash via GetEarnWithdrawStatus."
+    )
+
+
+class EarnWithdrawBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    wrapperAddress: str = Field(
+        description="Address of the deployed Earn wrapper holding the position to withdraw from, from ListEarnPositions. Must be one of the org's deployed wrappers."
+    )
+    signWith: str = Field(
+        description="A Wallet account address or Private Key address to withdraw to and sign with. Must be an on-chain address; Private Key identifiers are not supported."
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID the vault lives on (e.g., 'eip155:8453' for Base)."
+    )
+    sponsor: Optional[bool] = Field(
+        default=None, description="Whether to sponsor this transaction via Gas Station."
+    )
+    amountValue: str = Field(
+        description="The amount of the underlying asset to withdraw, in raw on-chain units. Pass 'MAX' to withdraw the entire position."
+    )
+
+
+class EarnWithdrawInput(TurnkeyBaseModel):
+    body: EarnWithdrawBody
+
+
 class EmailAuthResponse(TurnkeyBaseModel):
     activity: v1Activity
     userId: str = Field(description="Unique identifier for the authenticating User.")
@@ -6987,43 +12261,134 @@ class EthSendTransactionBody(TurnkeyBaseModel):
         alias="from",
         description="A wallet or private key address to sign with. This does not support private key IDs.",
     )
-    sponsor: Optional[bool] = Field(
-        default=None, description="Whether to sponsor this transaction via Gas Station."
-    )
     caip2: str = Field(
         description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
     )
-    to: str = Field(description="Recipient address as a hex string with 0x prefix.")
-    value: Optional[str] = Field(
-        default=None, description="Amount of native asset to send in wei."
-    )
-    data: Optional[str] = Field(
-        default=None, description="Hex-encoded call data for contract interactions."
+    sponsor: Optional[bool] = Field(
+        default=None,
+        description="Whether to sponsor this transaction via Gas Station. If false or unset, the EOA pays gas. A single call uses EIP-1559; multiple calls use EIP-7702 batch execution via Gas Station.",
     )
     nonce: Optional[str] = Field(
-        default=None,
-        description="Transaction nonce, for EIP-1559 and Turnkey Gas Station authorizations.",
+        default=None, description="Outer transaction nonce. Omit to auto-fetch."
     )
     gasLimit: Optional[str] = Field(
         default=None,
-        description="Maximum amount of gas to use for this transaction, for EIP-1559 transactions.",
+        description="Maximum amount of gas for the outer transaction. Omit to auto-estimate.",
     )
     maxFeePerGas: Optional[str] = Field(
         default=None,
-        description="Maximum total fee per gas unit (base fee + priority fee) in wei. Required for non-sponsored (EIP-1559) transactions. Not used for sponsored transactions.",
+        description="Maximum total fee per gas unit (base fee + priority fee) in wei. Omit to auto-estimate.",
     )
     maxPriorityFeePerGas: Optional[str] = Field(
         default=None,
-        description="Maximum priority fee (tip) per gas unit in wei. Required for non-sponsored (EIP-1559) transactions. Not used for sponsored transactions.",
+        description="Maximum priority fee (tip) per gas unit in wei. Omit to auto-estimate.",
+    )
+    deadline: Optional[str] = Field(
+        default=None,
+        description="Unix timestamp in seconds for EIP-712 execution deadline. Only used when sponsor=true.",
     )
     gasStationNonce: Optional[str] = Field(
         default=None,
-        description="The gas station delegate contract nonce. Only used when sponsor=true. Include this if you want maximal security posture.",
+        description="The gas station delegate contract nonce used in the BatchExecution EIP-712 message. Valid for sponsored transactions and non-sponsored multi-call batches. Omit to auto-fetch. Use the nonces endpoint for replay protection.",
+    )
+    calls: List[v1EthCallParams] = Field(
+        description="Ordered list of calls to execute. Must contain between 1 and 50 entries. A single entry with sponsor=false uses EIP-1559; multiple entries use EIP-7702 batch execution via Gas Station."
     )
 
 
 class EthSendTransactionInput(TurnkeyBaseModel):
     body: EthSendTransactionBody
+
+
+class EthUndelegate7702Response(TurnkeyBaseModel):
+    activity: v1Activity
+    sendTransactionStatusId: str = Field(
+        description="The send_transaction_status ID associated with the undelegation transaction submission"
+    )
+
+
+class EthUndelegate7702Body(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    from_: str = Field(
+        alias="from",
+        description="A wallet or private key address to undelegate. This does not support private key IDs.",
+    )
+    caip2: str = Field(
+        description="CAIP-2 chain ID (e.g., 'eip155:1' for Ethereum mainnet)."
+    )
+    nonce: Optional[str] = Field(
+        default=None, description="Outer transaction nonce. Omit to auto-fetch."
+    )
+    gasLimit: Optional[str] = Field(
+        default=None,
+        description="Maximum amount of gas for the undelegation transaction. Omit to use the fixed undelegation gas limit.",
+    )
+    maxFeePerGas: Optional[str] = Field(
+        default=None,
+        description="Maximum total fee per gas unit (base fee + priority fee) in wei. Omit to auto-estimate.",
+    )
+    maxPriorityFeePerGas: Optional[str] = Field(
+        default=None,
+        description="Maximum priority fee (tip) per gas unit in wei. Omit to auto-estimate.",
+    )
+
+
+class EthUndelegate7702Input(TurnkeyBaseModel):
+    body: EthUndelegate7702Body
+
+
+class ExecuteSwapResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    swapRequestId: str = Field(
+        description="Identifier to poll swap status via GetSwapStatus."
+    )
+    provider: Optional[str] = Field(
+        default=None, description="Swap provider used to build the transaction."
+    )
+    quoteId: Optional[str] = Field(
+        default=None, description="Quote identifier used for execution, if any."
+    )
+
+
+class ExecuteSwapBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    quoteId: str = Field(
+        description="Quote identifier returned by create_swap_quote. Execution is bound to this quote; the signer is derived from the quote and must not be resupplied."
+    )
+    inputToken: str = Field(description="CAIP-19 asset ID for the input asset.")
+    inputAmount: str = Field(
+        description="Exact base-unit amount of the input asset committed by the quote."
+    )
+    outputToken: str = Field(description="CAIP-19 asset ID for the output asset.")
+    quotedOutputAmount: str = Field(
+        description="Exact quoted base-unit output amount committed by the quote."
+    )
+    minOutputAmount: str = Field(
+        description="Exact minimum base-unit output committed by the quote."
+    )
+    sponsor: bool = Field(description="Whether the quoted transaction is sponsored.")
+    evmNonce: Optional[str] = Field(
+        default=None,
+        description="Exact EVM sender (EOA account) nonce. Valid only for a non-sponsored EVM swap. Honored for already-delegated (Type-2) batch swaps and single-call swaps; ignored for not-yet-delegated EIP-7702 (Type-4) batches where the outer nonce is derived from the authorization. Prefer gas_station_nonce for batch replay protection and use the nonces endpoint to fetch it. Omit to auto-fetch.",
+    )
+    recentBlockhash: Optional[str] = Field(
+        default=None,
+        description="Exact Solana recent blockhash. Valid only for a Solana swap, including sponsored swaps. Omit to auto-fetch.",
+    )
+    gasStationNonce: Optional[str] = Field(
+        default=None,
+        description="Exact gas station delegate contract nonce used in the BatchExecution EIP-712 message. Valid for sponsored EVM swaps and non-sponsored EVM swaps that execute as a multi-call batch (for example ERC-20 approve + swap). This is the replay-protection nonce for gas-station batches; use the nonces endpoint to fetch it. Omit to auto-fetch.",
+    )
+    destinationAddress: Optional[str] = Field(
+        default=None,
+        description="Raw public address that receives the output asset. Required for cross-protocol swaps. The address must match the output token protocol. Wallet account IDs, private key IDs, and CAIP account or asset identifiers are not supported.",
+    )
+
+
+class ExecuteSwapInput(TurnkeyBaseModel):
+    body: ExecuteSwapBody
 
 
 class ExportPrivateKeyResponse(TurnkeyBaseModel):
@@ -7045,6 +12410,25 @@ class ExportPrivateKeyBody(TurnkeyBaseModel):
 
 class ExportPrivateKeyInput(TurnkeyBaseModel):
     body: ExportPrivateKeyBody
+
+
+class ExportSecretsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    secretPayloads: List[str] = Field(
+        description="Encryption suite specific payload containing each secret ciphertext, in the order the params were specified. For enclave encrypt v1 each entry is a JSON-encoded ServerSendMsg."
+    )
+
+
+class ExportSecretsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    secrets: List[v1ExportSecretParams] = Field(
+        description="A list of secrets to export."
+    )
+
+
+class ExportSecretsInput(TurnkeyBaseModel):
+    body: ExportSecretsBody
 
 
 class ExportWalletResponse(TurnkeyBaseModel):
@@ -7121,6 +12505,25 @@ class ImportPrivateKeyInput(TurnkeyBaseModel):
     body: ImportPrivateKeyBody
 
 
+class ImportSecretsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    secretIds: List[str] = Field(
+        description="Unique identifier for each imported secret, in the order the params were specified."
+    )
+
+
+class ImportSecretsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    secrets: List[v1ImportSecretParams] = Field(
+        description="A list of secrets to import."
+    )
+
+
+class ImportSecretsInput(TurnkeyBaseModel):
+    body: ImportSecretsBody
+
+
 class ImportWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     walletId: str = Field(description="Unique identifier for a Wallet.")
@@ -7160,7 +12563,7 @@ class InitFiatOnRampBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     onrampProvider: v1FiatOnRampProvider = Field(
-        description="Enum to specifiy which on-ramp provider to use"
+        description="Enum to specify which on-ramp provider to use"
     )
     walletAddress: str = Field(
         description="Destination wallet address for the buy transaction."
@@ -7222,6 +12625,28 @@ class InitImportPrivateKeyInput(TurnkeyBaseModel):
     body: InitImportPrivateKeyBody
 
 
+class InitImportSecretsResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    enclaveTargetMessages: List[str] = Field(
+        description="Enclave ingress target keys along with metadata specific to the encryption suite. For enclave encrypt v1 this will be ServerTargetMsgV1."
+    )
+
+
+class InitImportSecretsBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    encryptionSuite: v1TransportEncryptionSuite = Field(
+        description="Transport encryption suite used for ingress secrets."
+    )
+    numSecrets: int = Field(
+        description="The number of secrets the user intends to import."
+    )
+
+
+class InitImportSecretsInput(TurnkeyBaseModel):
+    body: InitImportSecretsBody
+
+
 class InitImportWalletResponse(TurnkeyBaseModel):
     activity: v1Activity
     importBundle: str = Field(
@@ -7251,7 +12676,7 @@ class InitOtpBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpType: str = Field(
-        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+        description="Whether to send OTP via SMS, email, or WhatsApp. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL, OTP_TYPE_WHATSAPP"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     appName: str = Field(description="The name of the application.")
@@ -7304,7 +12729,7 @@ class InitOtpAuthBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     otpType: str = Field(
-        description="Whether to send OTP via SMS or email. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL"
+        description="Whether to send OTP via SMS, email, or WhatsApp. Possible values: OTP_TYPE_SMS, OTP_TYPE_EMAIL, OTP_TYPE_WHATSAPP"
     )
     contact: str = Field(description="Email or phone number to send the OTP code to")
     otpLength: Optional[int] = Field(
@@ -7440,9 +12865,8 @@ class Oauth2AuthenticateBody(TurnkeyBaseModel):
     codeVerifier: str = Field(
         description="The code verifier used by OAuth 2.0 PKCE providers"
     )
-    nonce: Optional[str] = Field(
-        default=None,
-        description="An optional nonce used by the client to prevent replay/substitution of an ID token",
+    nonce: str = Field(
+        description="A nonce value set to sha256(publicKey), used to bind the OIDC token to a specific public key"
     )
     bearerTokenTargetPublicKey: Optional[str] = Field(
         default=None,
@@ -7475,6 +12899,10 @@ class OauthLoginBody(TurnkeyBaseModel):
     invalidateExisting: Optional[bool] = Field(
         default=None,
         description="Invalidate all other previously generated Login API keys",
+    )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
     )
 
 
@@ -7548,10 +12976,71 @@ class OtpLoginBody(TurnkeyBaseModel):
         default=None,
         description="Invalidate all other previously generated Login sessions",
     )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
+    )
 
 
 class OtpLoginInput(TurnkeyBaseModel):
     body: OtpLoginBody
+
+
+class PostTvcQuorumKeyShareResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    provisioningShareId: str = Field(
+        description="The unique identifier for the provisioning quorum key share"
+    )
+
+
+class PostTvcQuorumKeyShareBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="Unique identifier of the TVC deployment receiving quorum key share"
+    )
+    ephemeralPublicKeyHex: str = Field(
+        description="Hex-encoded ephemeral public key used to encrypt the quorum key share"
+    )
+    shareApprovalBundle: v1QuorumKeyShareApprovalBundle = Field(
+        description="Re-encrypted quorum key share and approval"
+    )
+
+
+class PostTvcQuorumKeyShareInput(TurnkeyBaseModel):
+    body: PostTvcQuorumKeyShareBody
+
+
+class ReEncryptTvcQuorumKeyShareResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    provisioningShareId: str = Field(
+        description="The unique identifier for the provisioning quorum key share"
+    )
+
+
+class ReEncryptTvcQuorumKeyShareBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    attestationDocB64: str = Field(
+        description="Base64-encoded attestation document for the TVC deployment provisioning enclave"
+    )
+    manifestB64: str = Field(
+        description="Base64-encoded manifest for the TVC deployment"
+    )
+    operatorEncryptKey: str = Field(
+        description="Operator encryption public key used to encrypt the hosted TVC quorum key share"
+    )
+    operatorSignKey: str = Field(
+        description="Operator signing public key used to approve the TVC manifest"
+    )
+    deploymentId: str = Field(
+        description="Unique identifier of the TVC deployment receiving the re-encrypted quorum key share"
+    )
+    appQuorumKey: str = Field(description="Quorum key for the TVC application")
+
+
+class ReEncryptTvcQuorumKeyShareInput(TurnkeyBaseModel):
+    body: ReEncryptTvcQuorumKeyShareBody
 
 
 class RecoverUserResponse(TurnkeyBaseModel):
@@ -7590,6 +13079,23 @@ class RejectActivityInput(TurnkeyBaseModel):
     body: RejectActivityBody
 
 
+class RemoveIpAllowlistResponse(TurnkeyBaseModel):
+    activity: v1Activity
+
+
+class RemoveIpAllowlistBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="The public component of an API key. If null, removes the organization-level IP allowlist. If set, removes the IP allowlist for this specific API key.",
+    )
+
+
+class RemoveIpAllowlistInput(TurnkeyBaseModel):
+    body: RemoveIpAllowlistBody
+
+
 class RemoveOrganizationFeatureResponse(TurnkeyBaseModel):
     activity: v1Activity
     features: List[v1Feature] = Field(
@@ -7605,6 +13111,54 @@ class RemoveOrganizationFeatureBody(TurnkeyBaseModel):
 
 class RemoveOrganizationFeatureInput(TurnkeyBaseModel):
     body: RemoveOrganizationFeatureBody
+
+
+class RestoreTvcDeploymentResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    deploymentId: str = Field(
+        description="The unique identifier of the restored TVC deployment."
+    )
+
+
+class RestoreTvcDeploymentBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="The unique identifier of the TVC deployment to restore."
+    )
+
+
+class RestoreTvcDeploymentInput(TurnkeyBaseModel):
+    body: RestoreTvcDeploymentBody
+
+
+class SetIpAllowlistResponse(TurnkeyBaseModel):
+    activity: v1Activity
+
+
+class SetIpAllowlistBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    publicKey: Optional[str] = Field(
+        default=None,
+        description="The public component of an API key. If null, the IP allowlist applies at the organization level. If set, it applies only to this specific API key.",
+    )
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether the IP allowlist is enabled. Only meaningful for organization-level allowlists. Omit for API key-level allowlists.",
+    )
+    rules: Optional[List[v1IpAllowlistIntentRule]] = Field(
+        default=None,
+        description="List of IP allowlist rules with CIDR blocks and optional labels.",
+    )
+    onEvaluationError: Optional[str] = Field(
+        default=None,
+        description="Behavior when an error occurs during IP allowlist evaluation. Valid values: ALLOW, DENY. Defaults to DENY.",
+    )
+
+
+class SetIpAllowlistInput(TurnkeyBaseModel):
+    body: SetIpAllowlistBody
 
 
 class SetOrganizationFeatureResponse(TurnkeyBaseModel):
@@ -7627,11 +13181,31 @@ class SetOrganizationFeatureInput(TurnkeyBaseModel):
     body: SetOrganizationFeatureBody
 
 
+class UpdateTvcAppLiveDeploymentResponse(TurnkeyBaseModel):
+    activity: v1Activity
+
+
+class UpdateTvcAppLiveDeploymentBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    deploymentId: str = Field(
+        description="The unique identifier of the TVC deployment to set as live for the app."
+    )
+
+
+class UpdateTvcAppLiveDeploymentInput(TurnkeyBaseModel):
+    body: UpdateTvcAppLiveDeploymentBody
+
+
 class SignRawPayloadResponse(TurnkeyBaseModel):
     activity: v1Activity
-    r: str = Field(description="Component of an ECSDA signature.")
-    s: str = Field(description="Component of an ECSDA signature.")
-    v: str = Field(description="Component of an ECSDA signature.")
+    r: str = Field(
+        description="Component of a cryptographic signature, meaning varies based on signing scheme."
+    )
+    s: str = Field(
+        description="Component of a cryptographic signature, meaning varies based on signing scheme."
+    )
+    v: str = Field(description='Recovery ID for ECDSA signatures, "00" otherwise.')
 
 
 class SignRawPayloadBody(TurnkeyBaseModel):
@@ -7646,6 +13220,10 @@ class SignRawPayloadBody(TurnkeyBaseModel):
     )
     hashFunction: v1HashFunction = Field(
         description="Hash function to apply to payload bytes before signing. This field must be set to HASH_FUNCTION_NOT_APPLICABLE for EdDSA/ed25519 signature requests; configurable payload hashing is not supported by RFC 8032."
+    )
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for signing the payload.",
     )
 
 
@@ -7673,6 +13251,10 @@ class SignRawPayloadsBody(TurnkeyBaseModel):
     hashFunction: v1HashFunction = Field(
         description="Hash function to apply to payload bytes before signing. This field must be set to HASH_FUNCTION_NOT_APPLICABLE for EdDSA/ed25519 signature requests; configurable payload hashing is not supported by RFC 8032."
     )
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for signing the payloads.",
+    )
 
 
 class SignRawPayloadsInput(TurnkeyBaseModel):
@@ -7694,6 +13276,10 @@ class SignTransactionBody(TurnkeyBaseModel):
         description="Raw unsigned transaction to be signed"
     )
     type: v1TransactionType
+    externalSignerPubkey: Optional[str] = Field(
+        default=None,
+        description="The public key of the external signer to use for signing this transaction.",
+    )
 
 
 class SignTransactionInput(TurnkeyBaseModel):
@@ -7711,25 +13297,123 @@ class SolSendTransactionBody(TurnkeyBaseModel):
     timestampMs: Optional[str] = None
     organizationId: Optional[str] = None
     unsignedTransaction: str = Field(
-        description="Base64-encoded serialized unsigned Solana transaction"
+        description="Hex-encoded serialized unsigned Solana transaction in full wire format. Legacy/V0 transactions allow 1232 bytes. V1 allows 4096 bytes with up to 12 trailing 64-byte signature slots, including the paymaster for sponsored transactions. Fill unsigned slots with zeroes."
     )
-    signWith: str = Field(
-        description="A wallet or private key address to sign with. This does not support private key IDs."
+    signWiths: List[str] = Field(
+        description="Ordered Solana signer addresses Turnkey signs with. Between 1 and 16 signers for legacy/V0, or up to 12 for V1 (11 when sponsored). For sponsored transactions this must list every required signer of the transaction in transaction order."
     )
     sponsor: Optional[bool] = Field(
         default=None, description="Whether to sponsor this transaction via Gas Station."
     )
     caip2: str = Field(
-        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet)."
+        description="CAIP-2 chain ID (e.g., 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' for Solana mainnet). Human-readable Solana aliases ('solana:mainnet', 'solana:devnet') are also accepted and normalized to canonical CAIP-2 values."
     )
     recentBlockhash: Optional[str] = Field(
         default=None,
-        description="user-provided blockhash for replay protection / deadline control. If omitted and sponsor=true, we fetch a fresh blockhash during execution",
+        description="User-provided blockhash for replay protection / deadline control. If provided, it is used as-is, including for sponsored transactions (the transaction is only broadcastable while the blockhash is current). If omitted and sponsor=true, a fresh blockhash is fetched during execution.",
     )
 
 
 class SolSendTransactionInput(TurnkeyBaseModel):
     body: SolSendTransactionBody
+
+
+class SparkClaimTransferResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    operatorPackages: List[v1SparkEncryptedOperatorPackage] = Field(
+        description="Per-operator ECIES-encrypted packages."
+    )
+    newLeafPublicKeys: List[v1SparkLeafPublicKey] = Field(
+        description="Newly-derived SigningLeaf public keys, one per leaf, in input order."
+    )
+
+
+class SparkClaimTransferBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet."
+    )
+    claim: v1SparkClaimPackage = Field(description="Claim package parameters.")
+
+
+class SparkClaimTransferInput(TurnkeyBaseModel):
+    body: SparkClaimTransferBody
+
+
+class SparkPrepareLightningReceiveResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    operatorPackages: List[v1SparkEncryptedOperatorPackage] = Field(
+        description="Per-operator ECIES-encrypted Feldman share packages."
+    )
+    paymentHash: str = Field(
+        description="Hex-encoded SHA256(preimage). Forward to the Lightning node."
+    )
+
+
+class SparkPrepareLightningReceiveBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet."
+    )
+    lightningReceive: v1SparkLightningReceivePackage = Field(
+        description="Lightning receive package parameters: threshold and operator recipients."
+    )
+
+
+class SparkPrepareLightningReceiveInput(TurnkeyBaseModel):
+    body: SparkPrepareLightningReceiveBody
+
+
+class SparkPrepareTransferResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    operatorPackages: List[v1SparkEncryptedOperatorPackage] = Field(
+        description="Per-operator ECIES-encrypted packages."
+    )
+    transferUserSignature: str = Field(
+        description="Hex-encoded ECDSA-DER signature of the TransferPackage signing payload, signed with the wallet's IDENTITY key."
+    )
+    newLeafPublicKeys: List[v1SparkLeafPublicKey] = Field(
+        description="Newly-derived SigningLeaf public keys, one per leaf, in input order."
+    )
+
+
+class SparkPrepareTransferBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet."
+    )
+    transfer: v1SparkTransferPackage = Field(
+        description="Transfer package parameters for HD key tweak splitting."
+    )
+
+
+class SparkPrepareTransferInput(TurnkeyBaseModel):
+    body: SparkPrepareTransferBody
+
+
+class SparkSignFrostResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    signatures: List[v1SparkPartialSignature] = Field(
+        description="Partial signatures plus Turnkey commitments, one per request, in order."
+    )
+
+
+class SparkSignFrostBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    signWith: str = Field(
+        description="A Spark wallet account address identifying the wallet to sign with."
+    )
+    signatures: List[v1SparkSignatureRequest] = Field(
+        description="Batched sign requests. Each produces a partial signature plus Turnkey's public commitments."
+    )
+
+
+class SparkSignFrostInput(TurnkeyBaseModel):
+    body: SparkSignFrostBody
 
 
 class StampLoginResponse(TurnkeyBaseModel):
@@ -7752,6 +13436,10 @@ class StampLoginBody(TurnkeyBaseModel):
     invalidateExisting: Optional[bool] = Field(
         default=None,
         description="Invalidate all other previously generated Login API keys",
+    )
+    sessionProfileId: Optional[str] = Field(
+        default=None,
+        description="Optional session profile ID to specify which Session Profile to use for this login. If not provided, the default read/write session will be used.",
     )
 
 
@@ -7793,6 +13481,40 @@ class UpdateFiatOnRampCredentialBody(TurnkeyBaseModel):
 
 class UpdateFiatOnRampCredentialInput(TurnkeyBaseModel):
     body: UpdateFiatOnRampCredentialBody
+
+
+class UpdateMfaPolicyResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+
+
+class UpdateMfaPolicyBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    userId: str = Field(description="The ID of the User to update the MFA Policy for.")
+    mfaPolicyId: str = Field(description="Unique identifier for a given MFA Policy.")
+    mfaPolicyName: Optional[str] = Field(
+        default=None, description="Human-readable name for a Policy."
+    )
+    condition: Optional[str] = Field(
+        default=None,
+        description="A condition expression that evaluates to true or false, determining when this MFA policy applies.",
+    )
+    requiredAuthenticationMethods: Optional[
+        List[v1RequiredAuthenticationMethodParams]
+    ] = Field(
+        default=None,
+        description="An ordered list of authentication requirements. Each requirement must be satisfied sequentially to complete MFA.",
+    )
+    order: Optional[int] = Field(
+        default=None,
+        description="The order in which this MFA policy is evaluated, starting from 0, relative to other MFA policies. Lower order values are evaluated first.",
+    )
+    notes: Optional[str] = Field(default=None, description="Notes for an MFA Policy.")
+
+
+class UpdateMfaPolicyInput(TurnkeyBaseModel):
+    body: UpdateMfaPolicyBody
 
 
 class UpdateOauth2CredentialResponse(TurnkeyBaseModel):
@@ -7861,6 +13583,10 @@ class UpdatePolicyBody(TurnkeyBaseModel):
     )
     policyNotes: Optional[str] = Field(
         default=None, description="Accompanying notes for a Policy (optional)."
+    )
+    time: Optional[str] = Field(
+        default=None,
+        description="The time expression that triggers the Effect (optional).",
     )
 
 
@@ -8050,6 +13776,122 @@ class UpdateWalletBody(TurnkeyBaseModel):
 
 class UpdateWalletInput(TurnkeyBaseModel):
     body: UpdateWalletBody
+
+
+class UpdateWebhookEndpointResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    endpointId: str = Field(
+        description="Unique identifier of the updated webhook endpoint."
+    )
+    webhookEndpoint: v1WebhookEndpointData = Field(
+        description="The updated webhook endpoint data."
+    )
+
+
+class UpdateWebhookEndpointBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    endpointId: str = Field(
+        description="Unique identifier of the webhook endpoint to update."
+    )
+    url: Optional[str] = Field(
+        default=None, description="Updated destination URL for webhook delivery."
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Updated human-readable name for this webhook endpoint.",
+    )
+    isActive: Optional[bool] = Field(
+        default=None, description="Whether this webhook endpoint is active."
+    )
+
+
+class UpdateWebhookEndpointInput(TurnkeyBaseModel):
+    body: UpdateWebhookEndpointBody
+
+
+class UpsertSwapConfigResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    feeReceiverWalletAddress: Optional[str] = Field(default=None)
+    feeBps: Optional[str] = Field(default=None)
+    stableFeeBps: Optional[str] = Field(default=None)
+
+
+class UpsertSwapConfigBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    feeReceiverWalletAddress: Optional[str] = Field(
+        default=None,
+        description="Organization-owned wallet account that receives swap fees. Required when fee_bps is set. Omit together with fee_bps to clear swap fees.",
+    )
+    feeBps: Optional[str] = Field(
+        default=None,
+        description="Client fee in basis points applied to swaps; used for all pairs unless stable_fee_bps is set.",
+    )
+    stableFeeBps: Optional[str] = Field(
+        default=None,
+        description="Optional Enterprise-only override applied when both swap assets are stablecoins; falls back to fee_bps when unset. Non-Enterprise orgs may only set fee_bps.",
+    )
+
+
+class UpsertSwapConfigInput(TurnkeyBaseModel):
+    body: UpsertSwapConfigBody
+
+
+class UpsertSwapFeeSponsorshipLimitConfigResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    organizationId: str = Field(
+        description="Unique identifier of the organization the limit config was saved for."
+    )
+
+
+class UpsertSwapFeeSponsorshipLimitConfigBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    orgWindowLimitUsd: str = Field(
+        description="Positive USD limit shared by the billing parent and its sub-organizations. At most 18 integer and 12 fractional digits."
+    )
+    subOrgWindowLimitUsd: str = Field(
+        description="Positive USD limit for each sub-organization, no greater than the parent limit."
+    )
+    windowDurationMinutes: str = Field(
+        description="Positive rolling window duration in minutes, at most 153722867."
+    )
+    enabled: bool = Field(
+        description="Whether this spending window permits new swaps. Setting false only turns the saved window off and keeps its limits; it doesn't require the signed permission. This does not grant or remove the signed organization permission."
+    )
+
+
+class UpsertSwapFeeSponsorshipLimitConfigInput(TurnkeyBaseModel):
+    body: UpsertSwapFeeSponsorshipLimitConfigBody
+
+
+class UpsertSwapFixedRateLimitConfigResponse(TurnkeyBaseModel):
+    activity: v1Activity
+    organizationId: str = Field(
+        description="Unique identifier of the organization the limit config was saved for."
+    )
+
+
+class UpsertSwapFixedRateLimitConfigBody(TurnkeyBaseModel):
+    timestampMs: Optional[str] = None
+    organizationId: Optional[str] = None
+    orgWindowLimitUsd: str = Field(
+        description="Positive USD limit shared by the billing parent and its sub-organizations. At most 18 integer and 12 fractional digits."
+    )
+    subOrgWindowLimitUsd: str = Field(
+        description="Positive USD limit for each sub-organization, no greater than the parent limit."
+    )
+    windowDurationMinutes: str = Field(
+        description="Positive rolling window duration in minutes, at most 153722867."
+    )
+    enabled: bool = Field(
+        description="Whether this spending window permits new swaps. Setting false only turns the saved window off and keeps its limits; it doesn't require the signed permission. This does not grant or remove the signed organization permission."
+    )
+
+
+class UpsertSwapFixedRateLimitConfigInput(TurnkeyBaseModel):
+    body: UpsertSwapFixedRateLimitConfigBody
 
 
 class VerifyOtpResponse(TurnkeyBaseModel):

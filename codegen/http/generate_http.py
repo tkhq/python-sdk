@@ -2,6 +2,7 @@
 """Generate HTTP client from OpenAPI specification."""
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from utils import (
     extract_latest_versions,
     method_type_from_method_name,
     resolve_versioned_activity_type,
+    get_versioned_result_type,
 )
 
 # Get the project root directory
@@ -28,6 +30,65 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 SCHEMA_PATH = PROJECT_ROOT / "schema" / "public_api.swagger.json"
 OUTPUT_DIR = PROJECT_ROOT / "packages" / "http" / "src" / "turnkey_http" / "generated"
 OUTPUT_FILE = OUTPUT_DIR / "client.py"
+
+
+def get_request_activity_type(
+    definitions: Dict[str, Any], operation: Dict[str, Any]
+) -> str | None:
+    """Return the activity type from the request definition's "type" enum, if any."""
+    for param in operation.get("parameters", []):
+        if param.get("in") == "body" and "$ref" in param.get("schema", {}):
+            request_type_name = param["schema"]["$ref"].replace("#/definitions/", "")
+            request_def = definitions.get(request_type_name, {})
+            enum = request_def.get("properties", {}).get("type", {}).get("enum")
+            if enum:
+                return enum[0]
+    return None
+
+
+VERSIONS_FILE = PROJECT_ROOT / "codegen" / "activity_versions.json"
+
+# Filled while generating: snake_case method name -> activity type the client sends.
+SENT_ACTIVITY_TYPES: Dict[str, str] = {}
+
+
+def check_activity_versions(sent: Dict[str, str]) -> None:
+    """Fail when a method's sent activity type differs from codegen/activity_versions.json.
+
+    A regen takes unpinned activity versions from the schema, so a new schema can move a
+    method to a new version with only a one-line change buried in client.py. This makes
+    every such move a visible diff in the snapshot. Set CODEGEN_ACCEPT_VERSION_CHANGES=1
+    to rewrite the snapshot after reviewing the moves.
+    """
+    import os
+
+    previous: Dict[str, str] = {}
+    if VERSIONS_FILE.exists():
+        previous = json.loads(VERSIONS_FILE.read_text())
+    moved = {
+        name: (previous.get(name), sent[name])
+        for name in sorted(sent)
+        if previous.get(name) != sent[name]
+    }
+    if not moved and VERSIONS_FILE.exists():
+        return
+    if (
+        moved
+        and VERSIONS_FILE.exists()
+        and not os.environ.get("CODEGEN_ACCEPT_VERSION_CHANGES")
+    ):
+        lines = [
+            f"  {name}: {old or '(new)'} -> {new}" for name, (old, new) in moved.items()
+        ]
+        raise SystemExit(
+            "Activity versions changed for these methods:\n"
+            + "\n".join(lines)
+            + "\nPin them in codegen/constants.py to keep the old version, or list the moves "
+            "in the PR and rerun with CODEGEN_ACCEPT_VERSION_CHANGES=1 to update "
+            f"{VERSIONS_FILE.name}."
+        )
+    VERSIONS_FILE.write_text(json.dumps(dict(sorted(sent.items())), indent=2) + "\n")
+    print(f"📝 Updated {VERSIONS_FILE} ({len(moved)} change(s))")
 
 
 def generate_sdk_client(swagger: Dict[str, Any]) -> str:
@@ -50,7 +111,7 @@ class TurnkeyClient:
         organization_id: str,
         default_timeout: int = 30,
         polling_interval_ms: int = 1000,
-        max_polling_retries: int = 3
+        max_polling_retries: int = 10
     ):
         \"\"\"Initialize the Turnkey client.
         
@@ -292,18 +353,15 @@ class TurnkeyClient:
             activity_dict = activity.model_dump(by_alias=True, exclude_none=True) if hasattr(activity, 'model_dump') else {}
             payload["activity"] = activity_dict
             
-            # Extract result fields if activity completed successfully
-            if activity.status == "ACTIVITY_STATUS_COMPLETED" and hasattr(activity, 'result') and activity.result:
-                result = activity.result
-                # Find the first result field (e.g., createApiKeysResult, createPolicyResult, etc.)
-                for attr_name in dir(result):
-                    if not attr_name.startswith('_') and attr_name.endswith('Result'):
-                        result_data = getattr(result, attr_name, None)
-                        if result_data and hasattr(result_data, 'model_dump'):
-                            # Flatten result fields into payload
-                            result_dict = result_data.model_dump(by_alias=True, exclude_none=True)
-                            payload.update(result_dict)
-                            break
+            # Flatten the result that is set, whatever its version suffix
+            # (e.g., createPolicyResult, ethSendTransactionResultV2, createSubOrganizationResultV7)
+            result = activity.result
+            if activity.status == "ACTIVITY_STATUS_COMPLETED" and result is not None:
+                for field_name in type(result).model_fields:
+                    result_data = getattr(result, field_name, None)
+                    if result_data is not None:
+                        payload.update(result_data.model_dump(by_alias=True, exclude_none=True))
+                        break
         
         return response_type(**payload) if response_type is not None else payload
 """)
@@ -425,8 +483,36 @@ class TurnkeyClient:
 """)
 
         elif method_type == "activity":
-            result_key = operation_name_without_namespace + "Result"
-            versioned_method_name = latest_versions[result_key]["formatted_key_name"]
+            # Use the activity type from the request definition. A pinned
+            # version in VERSIONED_ACTIVITY_TYPES takes precedence.
+            schema_activity_type = get_request_activity_type(
+                swagger["definitions"], operation
+            )
+            if schema_activity_type:
+                unversioned_activity_type = re.sub(r"_V\d+$", "", schema_activity_type)
+                pinned_activity_type = resolve_versioned_activity_type(
+                    unversioned_activity_type
+                )
+                versioned_activity_type = (
+                    pinned_activity_type
+                    if pinned_activity_type != unversioned_activity_type
+                    else schema_activity_type
+                )
+
+            SENT_ACTIVITY_TYPES[snake_method_name] = versioned_activity_type
+
+            # Use the pinned result type if there is one, else the latest version
+            pinned_result_type = get_versioned_result_type(unversioned_activity_type)
+            if pinned_result_type and pinned_result_type in swagger["definitions"]:
+                pinned_result_key = re.sub(r"^v\d+", "", pinned_result_type)
+                versioned_method_name = (
+                    pinned_result_key[0].lower() + pinned_result_key[1:]
+                )
+            else:
+                result_key = operation_name_without_namespace + "Result"
+                versioned_method_name = latest_versions[result_key][
+                    "formatted_key_name"
+                ]
 
             code_buffer.append(f"""
     def {snake_method_name}(self, input: {input_type}) -> {response_type}:
@@ -555,6 +641,8 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Write output
+    check_activity_versions(SENT_ACTIVITY_TYPES)
+
     with open(OUTPUT_FILE, "w") as f:
         f.write(output)
 
