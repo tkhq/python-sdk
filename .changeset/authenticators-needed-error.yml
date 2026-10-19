@@ -1,6 +1,0 @@
-type: minor
-packages: [ sdk-types ]
-changelog: |-
-  Added an error for activities that need authenticator approval.
-    - `TurnkeyActivityAuthenticatorsNeededError` is the exception raised when an activity is waiting on authenticator approval.
-    - `ACTIVITY_AUTHENTICATORS_NEEDED` is the `TurnkeyErrorCodes` value set on that exception
