@@ -1,8 +1,0 @@
-type: minor
-packages: [ http ]
-changelog: |-
-  Added MFA and consensus handling for activities.
-    - Authenticators-needed stops polling and raises `TurnkeyActivityAuthenticatorsNeededError`.
-    - Added `mfa_polling` and `consensus_polling`.
-      - `mfa_polling` keeps polling an authenticators-needed activity until the status changes or the timeout is reached. The interval doubles on each attempt, up to 5 seconds. Omit it to raise `TurnkeyActivityAuthenticatorsNeededError` immediately.
-      - `consensus_polling` keeps polling a consensus-needed activity until the status changes or the timeout is reached. The interval stays fixed. Omit it to raise `TurnkeyActivityConsensusNeededError` immediately.

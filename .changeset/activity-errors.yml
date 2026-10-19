@@ -1,4 +1,0 @@
-type: patch
-packages: [ http, sdk-types ]
-changelog: |-
-  Typed activity methods now raise `TurnkeyActivityError` or `TurnkeyActivityConsensusNeededError` when an activity does not complete, instead of a pydantic validation error. The errors carry the activity id, status, type, and failure message. `send_signed_request` now unpacks versioned result keys such as `createSubOrganizationResultV7` correctly.
