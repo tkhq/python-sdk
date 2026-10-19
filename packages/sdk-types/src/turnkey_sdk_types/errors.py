@@ -11,6 +11,7 @@ class TurnkeyErrorCodes(str, Enum):
     BAD_RESPONSE = "BAD_RESPONSE"
     ACTIVITY_FAILED = "ACTIVITY_FAILED"
     ACTIVITY_CONSENSUS_NEEDED = "ACTIVITY_CONSENSUS_NEEDED"
+    ACTIVITY_AUTHENTICATORS_NEEDED = "ACTIVITY_AUTHENTICATORS_NEEDED"
     ACTIVITY_RESULT_MISSING = "ACTIVITY_RESULT_MISSING"
 
 
@@ -102,6 +103,10 @@ class TurnkeyActivityConsensusNeededError(TurnkeyActivityError):
 
     The activity is not failed. Store ``activity_id`` and fetch the activity
     again with ``get_activity`` after the required approvals are in place.
+
+    Pass ``consensus_polling`` when creating the client to keep polling until
+    the status changes or the timeout is reached. This error is raised when
+    that config is omitted, or when the poll times out.
     """
 
     def __init__(
@@ -118,3 +123,32 @@ class TurnkeyActivityConsensusNeededError(TurnkeyActivityError):
             message, activity_id, activity_status, activity_type, failure, code, cause
         )
         self.name = "TurnkeyActivityConsensusNeededError"
+
+
+class TurnkeyActivityAuthenticatorsNeededError(TurnkeyActivityError):
+    """Exception raised when an activity needs authenticator approval.
+
+    The activity is not failed. Store ``activity_id`` and fetch the activity
+    again with ``get_activity`` after the required authenticators are in place.
+
+    Pass ``mfa_polling`` when creating the client to keep polling until the
+    status changes or the timeout is reached. This error is raised when that
+    config is omitted, or when the poll times out.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        activity_id: Optional[str] = None,
+        activity_status: Optional[str] = None,
+        activity_type: Optional[str] = None,
+        failure: Optional[str] = None,
+        code: Optional[
+            TurnkeyErrorCodes
+        ] = TurnkeyErrorCodes.ACTIVITY_AUTHENTICATORS_NEEDED,
+        cause: Optional[Any] = None,
+    ):
+        super().__init__(
+            message, activity_id, activity_status, activity_type, failure, code, cause
+        )
+        self.name = "TurnkeyActivityAuthenticatorsNeededError"

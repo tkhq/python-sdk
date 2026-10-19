@@ -41,20 +41,35 @@ print(response)
 
 ## Handling activity outcomes
 
-Activity methods such as `create_wallet` wait for the activity to finish. If it does not complete, they raise an error. `TurnkeyActivityConsensusNeededError` means the activity needs more approvals. `TurnkeyActivityError` means it failed, was rejected, or was still pending when polling stopped. Both errors carry `activity_id`, `activity_status`, `activity_type`, and `failure`.
+Activity methods poll until the activity finishes. If it does not complete, they raise an error. `TurnkeyActivityConsensusNeededError` means the activity needs more approvals. `TurnkeyActivityAuthenticatorsNeededError` means it needs authenticator approval. `TurnkeyActivityError` means it failed, was rejected, or was still pending when polling stopped. These errors carry `activity_id`, `activity_status`, `activity_type`, and `failure`. Catch the subclasses first, because they extend `TurnkeyActivityError`.
+
+Consensus-needed and authenticators-needed each stop the normal activity poll. Pass a `PollingConfig` as `consensus_polling` or `mfa_polling` to keep polling that status. The MFA interval doubles on each attempt, up to 5 seconds. The consensus interval stays fixed. Omit a config to raise that status's error immediately. A timeout raises the same error. Use `activity_id` with `get_activity` after the missing approvals are in place.
 
 ```python
-from turnkey_sdk_types import TurnkeyActivityConsensusNeededError, TurnkeyActivityError
+from turnkey_http import PollingConfig, TurnkeyClient
+from turnkey_sdk_types import (
+    TurnkeyActivityAuthenticatorsNeededError,
+    TurnkeyActivityConsensusNeededError,
+    TurnkeyActivityError,
+)
+
+client = TurnkeyClient(
+    base_url="https://api.turnkey.com",
+    stamper=stamper,
+    organization_id="your-org-id",
+    consensus_polling=PollingConfig(interval_ms=500, timeout_ms=30_000),
+    mfa_polling=PollingConfig(interval_ms=500, timeout_ms=30_000),
+)
 
 try:
-    wallet = client.create_wallet(body)
+    response = ...  # any activity method
 except TurnkeyActivityConsensusNeededError as err:
-    save_for_later(err.activity_id)  # fetch it again with get_activity after approval
+    activity_id = err.activity_id
+except TurnkeyActivityAuthenticatorsNeededError as err:
+    activity_id = err.activity_id
 except TurnkeyActivityError as err:
     print(err.activity_status, err.failure)
 ```
-
-Catch `TurnkeyActivityConsensusNeededError` first, because it is a subclass of `TurnkeyActivityError`.
 
 ## Code Generation
 

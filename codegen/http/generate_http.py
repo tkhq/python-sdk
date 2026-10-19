@@ -101,6 +101,20 @@ def generate_sdk_client(swagger: Dict[str, Any]) -> str:
 
     # Generate class header
     code_buffer.append("""
+@dataclass
+class PollingConfig:
+    \"\"\"Interval and timeout for an optional approval poll.
+    
+    Both values are milliseconds. Pass one as ``mfa_polling`` or
+    ``consensus_polling``. The poll stays off when the config is omitted, or
+    when either value is ``0``. The MFA poll doubles its interval on each
+    attempt, up to 5 seconds. The consensus poll keeps this interval.
+    \"\"\"
+    
+    interval_ms: int
+    timeout_ms: int
+
+
 class TurnkeyClient:
     \"\"\"Turnkey API HTTP client with auto-generated methods.\"\"\"
     
@@ -111,7 +125,9 @@ class TurnkeyClient:
         organization_id: str,
         default_timeout: int = 30,
         polling_interval_ms: int = 1000,
-        max_polling_retries: int = 10
+        max_polling_retries: int = 10,
+        mfa_polling: Optional[PollingConfig] = None,
+        consensus_polling: Optional[PollingConfig] = None,
     ):
         \"\"\"Initialize the Turnkey client.
         
@@ -122,6 +138,10 @@ class TurnkeyClient:
             default_timeout: Default request timeout in seconds
             polling_interval_ms: Polling interval for activity status in milliseconds
             max_polling_retries: Maximum number of polling retries
+            mfa_polling: Optional authenticators-needed poll. Omit it to raise
+                TurnkeyActivityAuthenticatorsNeededError immediately.
+            consensus_polling: Optional consensus-needed poll. Omit it to raise
+                TurnkeyActivityConsensusNeededError immediately.
         \"\"\"
         self.base_url = base_url.rstrip("/")
         self.stamper = stamper
@@ -129,6 +149,8 @@ class TurnkeyClient:
         self.default_timeout = default_timeout
         self.polling_interval_ms = polling_interval_ms
         self.max_polling_retries = max_polling_retries
+        self.mfa_polling = mfa_polling
+        self.consensus_polling = consensus_polling
     
     def _serialize_body(self, body: Any) -> str:
         \"\"\"Serialize request body, handling Pydantic models recursively.
@@ -240,6 +262,8 @@ class TurnkeyClient:
             
         Raises:
             TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
+            TurnkeyActivityAuthenticatorsNeededError: If the activity needs authenticator
+                approval.
             TurnkeyActivityError: If the activity failed, was rejected, or polling
                 stopped before it reached a terminal status.
         \"\"\"
@@ -254,6 +278,15 @@ class TurnkeyClient:
         if status == "ACTIVITY_STATUS_CONSENSUS_NEEDED":
             raise TurnkeyActivityConsensusNeededError(
                 f"Consensus needed for activity {activity.id}",
+                activity_id=activity.id,
+                activity_status=status,
+                activity_type=activity_type,
+                failure=failure_message,
+            )
+        
+        if status == "ACTIVITY_STATUS_AUTHENTICATORS_NEEDED":
+            raise TurnkeyActivityAuthenticatorsNeededError(
+                f"Authenticators needed for activity {activity.id}",
                 activity_id=activity.id,
                 activity_status=status,
                 activity_type=activity_type,
@@ -277,6 +310,94 @@ class TurnkeyClient:
             failure=failure_message,
         )
     
+    def _poll_while_status(
+        self,
+        activity: Any,
+        watched_status: str,
+        interval_ms: int,
+        timeout_ms: int,
+        backoff: bool,
+    ) -> Any:
+        \"\"\"Poll while an activity stays in one approval status.
+        
+        Disabled unless interval and timeout are both greater than zero. If the
+        timeout is reached first, the latest activity is returned so the caller can
+        raise. If the status changes, normal activity polling resumes. A later
+        approval status is not handed to the other approval poll.
+        
+        Args:
+            activity: Activity already in ``watched_status``.
+            watched_status: Status to keep polling.
+            interval_ms: Delay before each fetch, in milliseconds.
+            timeout_ms: How long to keep polling, in milliseconds.
+            backoff: When true, double the delay each attempt, up to 5 seconds.
+            
+        Returns:
+            The latest activity.
+        \"\"\"
+        status = getattr(activity.status, "value", activity.status)
+        if status != watched_status:
+            return activity
+        if interval_ms <= 0 or timeout_ms <= 0:
+            return activity
+        
+        deadline = time.monotonic() + (timeout_ms / 1000.0)
+        delay_ms = interval_ms
+        while True:
+            remaining_s = deadline - time.monotonic()
+            if remaining_s <= 0:
+                return activity
+            
+            time.sleep(min(delay_ms / 1000.0, remaining_s))
+            if time.monotonic() >= deadline:
+                return activity
+            
+            poll_response = self.get_activity(GetActivityBody(activityId=activity.id))
+            activity = poll_response.activity
+            status = getattr(activity.status, "value", activity.status)
+            if status != watched_status:
+                return self._poll_for_completion(activity)
+            
+            if backoff:
+                delay_ms = min(delay_ms * 2, 5000)
+    
+    def _poll_mfa(self, activity: Any) -> Any:
+        \"\"\"Poll an authenticators-needed activity on its own interval and timeout.\"\"\"
+        interval_ms, timeout_ms = self._polling_bounds(self.mfa_polling)
+        return self._poll_while_status(
+            activity,
+            "ACTIVITY_STATUS_AUTHENTICATORS_NEEDED",
+            interval_ms,
+            timeout_ms,
+            True,
+        )
+    
+    def _poll_consensus(self, activity: Any) -> Any:
+        \"\"\"Poll a consensus-needed activity on its own interval and timeout.\"\"\"
+        interval_ms, timeout_ms = self._polling_bounds(self.consensus_polling)
+        return self._poll_while_status(
+            activity,
+            "ACTIVITY_STATUS_CONSENSUS_NEEDED",
+            interval_ms,
+            timeout_ms,
+            False,
+        )
+    
+    def _polling_bounds(self, polling: Optional[PollingConfig]) -> tuple[int, int]:
+        \"\"\"Return an interval and timeout, or zeros when the poll is off.\"\"\"
+        if polling is None:
+            return 0, 0
+        return polling.interval_ms, polling.timeout_ms
+    
+    def _poll_approval_if_needed(self, activity: Any) -> Any:
+        \"\"\"Run the consensus or MFA poll once, when that poll is enabled.\"\"\"
+        status = getattr(activity.status, "value", activity.status)
+        if status == "ACTIVITY_STATUS_CONSENSUS_NEEDED":
+            return self._poll_consensus(activity)
+        if status == "ACTIVITY_STATUS_AUTHENTICATORS_NEEDED":
+            return self._poll_mfa(activity)
+        return activity
+    
     def _activity(self, url: str, body: Dict[str, Any], result_key: str, response_type: type) -> Any:
         \"\"\"Execute an activity and poll for completion.
         
@@ -291,6 +412,8 @@ class TurnkeyClient:
             
         Raises:
             TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
+            TurnkeyActivityAuthenticatorsNeededError: If the activity needs authenticator
+                approval.
             TurnkeyActivityError: If the activity did not complete, or completed
                 without the expected result.
             TurnkeyNetworkError: If a request fails.
@@ -298,8 +421,9 @@ class TurnkeyClient:
         # Make initial request, we parse as activity response without result fields
         initial_response = self._request(url, body, GetActivityResponse)
         
-        # Poll for completion
+        # Poll for completion. Consensus and authenticators each have their own poll.
         activity = self._poll_for_completion(initial_response.activity)
+        activity = self._poll_approval_if_needed(activity)
         self._raise_for_activity_status(activity)
         
         # Get the versioned result (e.g., 'createApiKeysResultV2') and flatten its fields into the response
@@ -356,6 +480,8 @@ class TurnkeyClient:
             
         Raises:
             TurnkeyActivityConsensusNeededError: If the activity needs more approvals.
+            TurnkeyActivityAuthenticatorsNeededError: If the activity needs authenticator
+                approval.
             TurnkeyActivityError: If response_type is given and the activity did not complete.
             TurnkeyNetworkError: If the request fails.
         \"\"\"
@@ -400,6 +526,7 @@ class TurnkeyClient:
         if signed_request.type == RequestType.ACTIVITY:
             activity_response = GetActivityResponse(**payload)
             activity = self._poll_for_completion(activity_response.activity)
+            activity = self._poll_approval_if_needed(activity)
             
             # Update payload with polled activity
             activity_dict = activity.model_dump(by_alias=True, exclude_none=True) if hasattr(activity, 'model_dump') else {}
@@ -685,7 +812,7 @@ def main():
 
     # Build full output
     output = f"{COMMENT_HEADER}\n\n"
-    output += "import json\nimport time\nfrom typing import Any, Callable, Dict, Optional, TypeVar, overload\nimport requests\n"
+    output += "import json\nimport time\nfrom dataclasses import dataclass\nfrom typing import Any, Callable, Dict, Optional, TypeVar, overload\nimport requests\n"
     output += "from turnkey_api_key_stamper import ApiKeyStamper\n"
     output += "from turnkey_sdk_types import *\n"
     output += "from ..version import VERSION\n\n"
