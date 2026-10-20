@@ -7,7 +7,7 @@ name = "turnkey-http"
 version = "0.2.0"
 description = "HTTP client for Turnkey API"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
@@ -17,11 +17,10 @@ keywords = ["turnkey", "api", "http", "client", "sdk"]
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "requests>=2.31.0",

@@ -1,0 +1,4 @@
+type: minor
+packages: [ http, sdk-types, api-key-stamper ]
+changelog: |-
+  BREAKING: minimum supported Python is now 3.11 (`requires-python = ">=3.11"`). Python 3.8 and 3.10 are end-of-life and 3.9 is unsupported; 3.11 through 3.14 are tested in CI.
