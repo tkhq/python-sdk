@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-10-20
+
+### Patch Changes
+- Require certifi>=2026.10.19 to use the corrected CA bundle for the October 2026 eMudhra intermediate CA compromise. Applications that override Requests' CA bundle must update their custom trust store separately.
+
 ## 0.2.0 — 2026-10-19
 
 ### Minor Changes

@@ -1,3 +1,5 @@
+PYTHON ?= $(shell command -v python3 >/dev/null 2>&1 && echo python3 || echo python)
+
 .PHONY: generate generate-types generate-http test format format-check typecheck install clean help changeset changeset-status changeset-version changeset-changelog build prepare-release
 
 help:
@@ -23,11 +25,11 @@ generate: generate-types generate-http
 
 generate-types:
 	@echo "🔧 Generating types..."
-	@python codegen/types/generate_types.py
+	@$(PYTHON) codegen/types/generate_types.py
 
 generate-http:
 	@echo "🔧 Generating HTTP client..."
-	@python codegen/http/generate_http.py
+	@$(PYTHON) codegen/http/generate_http.py
 
 test:
 	@echo "🧪 Running tests..."
@@ -61,7 +63,7 @@ build:
 	@for pkg in packages/*/; do \
 		if [ -f "$$pkg/pyproject.toml" ]; then \
 			echo "Building $$pkg..."; \
-			python -m build "$$pkg"; \
+			$(PYTHON) -m build "$$pkg"; \
 		fi \
 	done
 	@echo "✅ All packages built"
@@ -76,16 +78,16 @@ clean:
 
 # Changeset management
 changeset:
-	@python changesets/manage.py new
+	@$(PYTHON) changesets/manage.py new
 
 changeset-status:
-	@python changesets/manage.py status
+	@$(PYTHON) changesets/manage.py status
 
 changeset-version:
-	@python changesets/manage.py version
+	@$(PYTHON) changesets/manage.py version
 
 changeset-changelog:
-	@python changesets/manage.py changelog
+	@$(PYTHON) changesets/manage.py changelog
 
 prepare-release: changeset-version changeset-changelog build
 	@echo "✅ Release preparation complete"
