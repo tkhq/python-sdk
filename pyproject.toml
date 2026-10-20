@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "turnkey-oss"
 version = "0.1.0"
 description = "Turnkey Python SDK - monorepo workspace"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 
 [project.optional-dependencies]
 dev = [
@@ -22,7 +22,7 @@ dev = [
 extend-exclude = ["*.md"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false

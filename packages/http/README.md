@@ -111,7 +111,7 @@ http/
 
 ## Dependencies
 
-- Python >= 3.8
+- Python >= 3.11
 - requests >= 2.31.0
 - turnkey-api-key-stamper
 - turnkey-sdk-types
