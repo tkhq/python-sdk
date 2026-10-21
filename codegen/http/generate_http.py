@@ -231,6 +231,19 @@ class TurnkeyClient:
         response_data = response.json()
         return response_type(**response_data)
     
+    def _poll_body(self, activity: Any) -> GetActivityBody:
+        \"\"\"Build the get_activity body to poll an activity in its own organization.
+        
+        Args:
+            activity: Activity object with id and organizationId attributes.
+            
+        Returns:
+            GetActivityBody for the activity's organization. Falls back to the
+            client's default organization if the activity has none.
+        \"\"\"
+        organization_id = getattr(activity, "organizationId", None) or self.organization_id
+        return GetActivityBody(organizationId=organization_id, activityId=activity.id)
+    
     def _poll_for_completion(self, activity: Any) -> Any:
         \"\"\"Poll until activity reaches terminal status.
         
@@ -246,7 +259,7 @@ class TurnkeyClient:
         attempts = 0
         while attempts < self.max_polling_retries:
             time.sleep(self.polling_interval_ms / 1000.0)
-            poll_response = self.get_activity(GetActivityBody(activityId=activity.id))
+            poll_response = self.get_activity(self._poll_body(activity))
             activity = poll_response.activity
             if activity.status in TERMINAL_ACTIVITY_STATUSES:
                 break
@@ -352,7 +365,7 @@ class TurnkeyClient:
             if time.monotonic() >= deadline:
                 return activity
             
-            poll_response = self.get_activity(GetActivityBody(activityId=activity.id))
+            poll_response = self.get_activity(self._poll_body(activity))
             activity = poll_response.activity
             status = getattr(activity.status, "value", activity.status)
             if status != watched_status:

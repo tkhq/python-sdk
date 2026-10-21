@@ -1,0 +1,4 @@
+type: patch
+packages: [ http ]
+changelog: |-
+  Activity polling now queries the organization of the submitted activity. Before, it used the client's default organization, so polls for sub-organization activities failed.

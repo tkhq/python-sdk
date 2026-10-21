@@ -5,6 +5,7 @@ credentials and make no network calls. They do not use the fixtures in
 ``conftest.py``.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -25,6 +26,7 @@ from turnkey_http.generated.client import PollingConfig, TurnkeyClient
 
 ACTIVITY_ID = "activity-123"
 ORG_ID = "org-123"
+SUB_ORG_ID = "sub-org-456"
 
 
 class StubStamper:
@@ -49,10 +51,11 @@ def activity_payload(
     result: Optional[Dict[str, Any]] = None,
     failure: Optional[Dict[str, Any]] = None,
     activity_type: str = "ACTIVITY_TYPE_CREATE_WALLET",
+    organization_id: str = ORG_ID,
 ) -> Dict[str, Any]:
     activity: Dict[str, Any] = {
         "id": ACTIVITY_ID,
-        "organizationId": ORG_ID,
+        "organizationId": organization_id,
         "status": status,
         "type": activity_type,
         "intent": {},
@@ -553,3 +556,62 @@ def test_raw_path_unpacks_versioned_result_key(client, mock_post):
 
     assert payload["subOrganizationId"] == "sub-1"
     assert payload["activity"]["status"] == "ACTIVITY_STATUS_COMPLETED"
+
+
+def poll_bodies(calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        json.loads(call["data"])
+        for call in calls
+        if call["url"].endswith("/public/v1/query/get_activity")
+    ]
+
+
+def create_sub_org_wallet(client: TurnkeyClient):
+    return client.create_wallet(
+        CreateWalletBody(organizationId=SUB_ORG_ID, walletName="w", accounts=[])
+    )
+
+
+def completed_sub_org_wallet_payload() -> Dict[str, Any]:
+    return activity_payload(
+        "ACTIVITY_STATUS_COMPLETED",
+        result={"createWalletResult": {"walletId": "w-1", "addresses": ["0xabc"]}},
+        organization_id=SUB_ORG_ID,
+    )
+
+
+def test_pending_poll_uses_activity_organization(client, mock_post):
+    calls = mock_post(
+        activity_payload("ACTIVITY_STATUS_PENDING", organization_id=SUB_ORG_ID),
+        completed_sub_org_wallet_payload(),
+    )
+
+    response = create_sub_org_wallet(client)
+
+    assert response.walletId == "w-1"
+    assert json.loads(calls[0]["data"])["organizationId"] == SUB_ORG_ID
+    bodies = poll_bodies(calls)
+    assert len(bodies) == 1
+    assert bodies[0] == {"organizationId": SUB_ORG_ID, "activityId": ACTIVITY_ID}
+
+
+@pytest.mark.parametrize(
+    ("status", "enable"),
+    [
+        ("ACTIVITY_STATUS_AUTHENTICATORS_NEEDED", enable_mfa_polling),
+        ("ACTIVITY_STATUS_CONSENSUS_NEEDED", enable_consensus_polling),
+    ],
+)
+def test_approval_poll_uses_activity_organization(client, mock_post, status, enable):
+    calls = mock_post(
+        activity_payload(status, organization_id=SUB_ORG_ID),
+        completed_sub_org_wallet_payload(),
+    )
+    enable(client)
+
+    response = create_sub_org_wallet(client)
+
+    assert response.walletId == "w-1"
+    bodies = poll_bodies(calls)
+    assert len(bodies) == 1
+    assert bodies[0]["organizationId"] == SUB_ORG_ID
