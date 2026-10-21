@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — 2026-10-20
+
+### Patch Changes
+- Require Python 3.10 or newer, matching what the generated code already needed. `turnkey-http` now requires `turnkey-sdk-types>=0.2.0` and `turnkey-api-key-stamper>=0.1.0`, so a resolver cannot pair it with the 0.1.0 types that lack the activity error classes.
+
 ## 0.2.1 — 2026-10-20
 
 ### Patch Changes
