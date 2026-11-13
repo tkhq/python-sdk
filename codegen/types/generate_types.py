@@ -441,10 +441,15 @@ def main():
     output += "from __future__ import annotations\n"
     output += "from typing import Any, Dict, List, Optional\n"
     output += "from enum import Enum\n"
+    output += "from pydantic import VERSION as _PYDANTIC_VERSION\n"
     output += "from pydantic import BaseModel, Field, ConfigDict\n\n"
+    output += (
+        "# Build models on first use, not at import. Needs Pydantic 2.5+.\n"
+        '_DEFER_BUILD = tuple(int(p) for p in _PYDANTIC_VERSION.split(".")[:2]) >= (2, 5)\n\n'
+    )
     output += "\n# Base class with shared configuration\n"
     output += "class TurnkeyBaseModel(BaseModel):\n"
-    output += "    model_config = ConfigDict(populate_by_name=True)\n\n"
+    output += "    model_config = ConfigDict(populate_by_name=True, defer_build=_DEFER_BUILD)\n\n"
 
     # --- Base Types ---
     output += "# --- Base Types from Swagger Definitions ---\n\n"
