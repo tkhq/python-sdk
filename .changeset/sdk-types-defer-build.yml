@@ -1,0 +1,10 @@
+type: minor
+packages: [ sdk-types ]
+changelog: |-
+  Importing `turnkey_sdk_types` is much faster and uses much less memory: each generated model now builds its validator and serializer the first time it's used, instead of all of them at import (Pydantic `defer_build`). On Pydantic 2.14, import takes about 0.2s instead of 2-3s, and memory after import drops from about 276MB to about 50MB.
+
+  This is only enabled on Pydantic 2.5 and later. Behavior is unchanged, with a few things to know:
+  - The first use of each model takes slightly longer, usually a few milliseconds. Activity response models take about 20ms.
+  - A process that uses most of the activity response types builds a separate copy of the activity schema for each, so its peak memory can be higher than before (about 520MB with every model built, compared with about 280MB).
+  - On Pydantic 2.10 and earlier, `Model.model_fields[...].annotation` can show an unresolved `ForwardRef` until the model is first used. Field names, aliases, and defaults are unaffected. Call `Model.model_rebuild()` first if you inspect annotations right after import.
+  - A model that can't be built would now fail on first use instead of at import. Every current model builds.

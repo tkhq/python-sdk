@@ -3,12 +3,16 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from enum import Enum
+from pydantic import VERSION as _PYDANTIC_VERSION
 from pydantic import BaseModel, Field, ConfigDict
+
+# Build models on first use, not at import. Needs Pydantic 2.5+.
+_DEFER_BUILD = tuple(int(p) for p in _PYDANTIC_VERSION.split(".")[:2]) >= (2, 5)
 
 
 # Base class with shared configuration
 class TurnkeyBaseModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, defer_build=_DEFER_BUILD)
 
 
 # --- Base Types from Swagger Definitions ---
