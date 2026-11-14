@@ -35,3 +35,6 @@ jobs:
 
       - name: Run type checking
         run: make typecheck
+
+      - name: Run sdk-types tests
+        run: pytest packages/sdk-types/tests -v
