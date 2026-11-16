@@ -13,68 +13,69 @@ from pydantic import BaseModel
 
 import turnkey_sdk_types.generated.types as T
 
-# Heaviest models (activity and result types) plus every Nth model by name.
+# Every 25th model plus the heaviest ones: 58 of 1,326 (about 4%).
 HEAVY = ["v1Activity", "v1ActivityResponse", "v1Result", "v1Intent"]
 SAMPLE_EVERY = 25
 
-_LIST_MODELS = """
-import inspect
-from pydantic import BaseModel
-import turnkey_sdk_types.generated.types as T
-models = sorted(
-    (n, o) for n, o in vars(T).items()
-    if inspect.isclass(o) and issubclass(o, BaseModel) and o.__module__ == T.__name__
+needs_defer = pytest.mark.skipif(
+    not T._DEFER_BUILD, reason="defer_build is off below Pydantic 2.5"
 )
-"""
 
 
 def _models():
-    return sorted(
-        (n, o)
-        for n, o in vars(T).items()
-        if inspect.isclass(o)
-        and issubclass(o, BaseModel)
-        and o.__module__ == T.__name__
-    )
-
-
-def _run(code: str, *args: str) -> dict:
-    out = subprocess.run(
-        [sys.executable, "-c", code, *args], capture_output=True, text=True, check=True
-    )
-    return json.loads(out.stdout)
-
-
-def test_every_model_builds():
-    # Definition order, so dependencies are usually built before the models using them.
-    models = [
+    """Generated models, in definition order."""
+    return [
         (n, o)
         for n, o in vars(T).items()
         if inspect.isclass(o)
         and issubclass(o, BaseModel)
         and o.__module__ == T.__name__
     ]
-    for name, cls in models:
+
+
+def _run(code, stdin_obj, *args):
+    out = subprocess.run(
+        [sys.executable, "-c", code, *args],
+        input=json.dumps(stdin_obj),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def test_every_model_builds():
+    # Definition order, so dependencies are usually built before the models using them.
+    for name, cls in _models():
         cls.model_rebuild(force=True)
         assert cls.__pydantic_complete__, name
 
 
+@needs_defer
+def test_models_unbuilt_after_import():
+    code = """
+import json, sys
+import turnkey_sdk_types.generated.types as T
+names = json.load(sys.stdin)
+print(json.dumps([n for n in names if getattr(T, n).__pydantic_complete__]))
+"""
+    assert _run(code, [n for n, _ in _models()]) == []
+
+
 def test_serialize_before_validate():
     # Pydantic 2.1-2.2 crashed here with deferred building.
-    code = (
-        _LIST_MODELS
-        + """
-import json
+    code = """
+import json, sys
+import turnkey_sdk_types.generated.types as T
 failed = []
-for n, cls in models:
+for n in json.load(sys.stdin):
     try:
-        cls.model_construct().model_dump(warnings=False)
+        getattr(T, n).model_construct().model_dump(warnings=False)
     except Exception as e:
         failed.append([n, type(e).__name__, str(e)[:200]])
-print(json.dumps({"failed": failed}))
+print(json.dumps(failed))
 """
-    )
-    assert _run(code)["failed"] == []
+    assert _run(code, [n for n, _ in _models()]) == []
 
 
 def _sample(schema, defs, seen=()):
@@ -110,7 +111,10 @@ _COMPARE = """
 import json, sys
 import pydantic
 if sys.argv[1] == "off":
-    pydantic.VERSION = "2.4.0"  # makes _DEFER_BUILD False
+    # _DEFER_BUILD is computed from pydantic.VERSION when types.py is imported.
+    # Reporting a version below 2.5 turns deferral off, giving a baseline to
+    # compare against in the same environment.
+    pydantic.VERSION = "2.4.0"
 from pydantic import ValidationError
 import turnkey_sdk_types.generated.types as T
 
@@ -121,9 +125,8 @@ def errors(cls, data):
         return [[d["type"], list(d["loc"]), d["msg"]] for d in e.errors()]
     return None
 
-samples = json.load(sys.stdin)
 out = {"defer": T.TurnkeyBaseModel.model_config.get("defer_build"), "models": {}}
-for n, data in samples.items():
+for n, data in json.load(sys.stdin).items():
     cls = getattr(T, n)
     r = {}
     try:
@@ -145,26 +148,16 @@ print(json.dumps(out))
 """
 
 
-@pytest.mark.skipif(not T._DEFER_BUILD, reason="defer_build is off below Pydantic 2.5")
+@needs_defer
 def test_same_behavior_with_defer_off():
     names = [n for i, (n, _) in enumerate(_models()) if i % SAMPLE_EVERY == 0]
-    names += HEAVY
+    names += [n for n in HEAVY if n not in names]
     samples = {}
     for n in names:
         schema = getattr(T, n).model_json_schema(by_alias=True)
         samples[n] = _sample(schema, schema.get("$defs", {}))
 
-    def run(mode):
-        out = subprocess.run(
-            [sys.executable, "-c", _COMPARE, mode],
-            input=json.dumps(samples),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return json.loads(out.stdout)
-
-    on, off = run("on"), run("off")
+    on, off = _run(_COMPARE, samples, "on"), _run(_COMPARE, samples, "off")
     assert on["defer"] is True
     assert off["defer"] is False
 
