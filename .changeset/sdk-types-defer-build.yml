@@ -1,9 +1,6 @@
 type: minor
 packages: [ sdk-types ]
 changelog: |-
-  Importing `turnkey_sdk_types` is much faster and uses much less memory: each generated model now builds its validator and serializer the first time it's used, instead of all of them at import (Pydantic `defer_build`).
+  Adds optional deferred model building. Set `TURNKEY_SDK_DEFER_BUILD=1` before importing the SDK to build each Pydantic model on first use instead of at import, which makes import much faster and uses much less memory. Off by default; existing applications are unchanged. Requires Pydantic 2.5+.
 
-  This is only enabled on Pydantic 2.5 and later. Behavior is the same, with a few things to know:
-  - Peak memory depends on the order models are first used. A process that uses nearly every model can end up above today's level (about 520MB in the worst order we measured, compared with about 280MB). Typical use, which touches a few models, stays well below it.
-  - The first use of each model takes a little longer: usually a few milliseconds, and tens of milliseconds for activity response models.
-  - On Pydantic 2.10 and earlier, `Model.model_fields[...].annotation` can show an unresolved `ForwardRef` until the model is first used. Field names, aliases, and defaults are unaffected. Call `Model.model_rebuild()` first if you inspect annotations right after import.
+  When enabled, each model's first use is a little slower, and a process that uses nearly every model can use more memory than the default. On Pydantic 2.5–2.10, call `Model.model_rebuild()` before inspecting `model_fields[...].annotation`.

@@ -32,6 +32,49 @@ OUTPUT_DIR = (
 )
 OUTPUT_FILE = OUTPUT_DIR / "types.py"
 
+# Imports and TurnkeyBaseModel for the generated module.
+BASE_MODEL_HEADER = '''import os as _os
+import warnings as _warnings
+from pydantic import VERSION as _PYDANTIC_VERSION
+from pydantic import BaseModel, Field, ConfigDict
+
+
+def _defer_build_enabled() -> bool:
+    """Opt-in: TURNKEY_SDK_DEFER_BUILD=1 builds each model on first use, not at import.
+
+    Read once, when this module is first imported.
+    """
+    raw = _os.environ.get("TURNKEY_SDK_DEFER_BUILD", "")
+    value = raw.strip().lower()
+    if value in ("", "0", "false"):
+        return False
+    if value not in ("1", "true"):
+        _warnings.warn(
+            f"Ignoring TURNKEY_SDK_DEFER_BUILD={raw!r}: expected 1, true, 0 or false."
+        )
+        return False
+    if tuple(int(p) for p in _PYDANTIC_VERSION.split(".")[:2]) < (2, 5):
+        _warnings.warn(
+            f"TURNKEY_SDK_DEFER_BUILD needs Pydantic 2.5+ (found {_PYDANTIC_VERSION}); "
+            "building models at import."
+        )
+        return False
+    return True
+
+
+# When off, leave defer_build out so the config is unchanged from before.
+_MODEL_CONFIG = ConfigDict(populate_by_name=True)
+if _defer_build_enabled():
+    _MODEL_CONFIG["defer_build"] = True
+
+
+# Base class with shared configuration
+class TurnkeyBaseModel(BaseModel):
+    model_config = _MODEL_CONFIG
+
+
+'''
+
 
 def swagger_type_to_python(swagger_type: str, schema: Dict[str, Any]) -> str:
     """Convert Swagger type to Python type hint."""
@@ -441,15 +484,7 @@ def main():
     output += "from __future__ import annotations\n"
     output += "from typing import Any, Dict, List, Optional\n"
     output += "from enum import Enum\n"
-    output += "from pydantic import VERSION as _PYDANTIC_VERSION\n"
-    output += "from pydantic import BaseModel, Field, ConfigDict\n\n"
-    output += (
-        "# Build models on first use, not at import. Needs Pydantic 2.5+.\n"
-        '_DEFER_BUILD = tuple(int(p) for p in _PYDANTIC_VERSION.split(".")[:2]) >= (2, 5)\n\n'
-    )
-    output += "\n# Base class with shared configuration\n"
-    output += "class TurnkeyBaseModel(BaseModel):\n"
-    output += "    model_config = ConfigDict(populate_by_name=True, defer_build=_DEFER_BUILD)\n\n"
+    output += BASE_MODEL_HEADER
 
     # --- Base Types ---
     output += "# --- Base Types from Swagger Definitions ---\n\n"

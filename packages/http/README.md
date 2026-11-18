@@ -71,6 +71,12 @@ except TurnkeyActivityError as err:
     print(err.activity_status, err.failure)
 ```
 
+## Faster imports (optional)
+
+Set `TURNKEY_SDK_DEFER_BUILD=1` to build each model on first use instead of at import. Requires Pydantic 2.5+. It's read once at first import, so set it in your environment or before any Turnkey import.
+
+When enabled, each model's first use is a little slower, and a process that uses nearly every model can use more memory than the default. On Pydantic 2.5–2.10, call `Model.model_rebuild()` before inspecting `model_fields[...].annotation`.
+
 ## Code Generation
 
 This package uses code generation to create HTTP client methods from the OpenAPI specification located in `schema/public_api.swagger.json`.

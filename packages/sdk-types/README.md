@@ -37,6 +37,8 @@ from turnkey_sdk_types import (
 )
 ```
 
+To build models on first use instead of at import, see [Faster imports (optional)](../http/README.md#faster-imports-optional).
+
 ## Code Generation
 
 This package uses code generation to create type definitions from the OpenAPI specification located in `schema/public_api.swagger.json`.
