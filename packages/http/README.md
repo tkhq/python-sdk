@@ -73,7 +73,7 @@ except TurnkeyActivityError as err:
 
 ## Faster imports (optional)
 
-Set `TURNKEY_SDK_DEFER_BUILD=1` to build each model on first use instead of at import. Requires Pydantic 2.5+. It's read once at first import, so set it in your environment or before any Turnkey import.
+Set `TURNKEY_SDK_DEFER_BUILD=1` to build each model on first use instead of at import. Requires `turnkey-sdk-types` 0.3.0+ and Pydantic 2.5+. It's read once at first import, so set it in your environment or before any Turnkey import.
 
 When enabled, each model's first use is a little slower, and a process that uses nearly every model can use more memory than the default. On Pydantic 2.5–2.10, call `Model.model_rebuild()` before inspecting `model_fields[...].annotation`.
 

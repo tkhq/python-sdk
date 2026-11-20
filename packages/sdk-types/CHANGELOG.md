@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — 2026-11-20
+
+### Minor Changes
+- Adds optional deferred model building. Set `TURNKEY_SDK_DEFER_BUILD=1` before importing the SDK to build each Pydantic model on first use instead of at import, which makes import much faster and uses much less memory. Off by default; existing applications are unchanged. Requires Pydantic 2.5+.
+
+  When enabled, each model's first use is a little slower, and a process that uses nearly every model can use more memory than the default. On Pydantic 2.5–2.10, call `Model.model_rebuild()` before inspecting `model_fields[...].annotation`.
+
 ## 0.2.1 — 2026-10-20
 
 ### Patch Changes
