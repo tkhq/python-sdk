@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 — 2026-11-20
+
+### Patch Changes
+- The README documents the optional `TURNKEY_SDK_DEFER_BUILD` setting from `turnkey-sdk-types`. The fix for polling sub-organization activities shipped in 0.2.2.
+
 ## 0.2.2 — 2026-10-20
 
 ### Patch Changes
